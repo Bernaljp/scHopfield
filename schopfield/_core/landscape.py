@@ -2,7 +2,7 @@ import numpy as np
 import pandas as pd
 import anndata as ad
 import umap
-from typing import Union, List, Optional, Tuple
+from typing import Union, List, Optional
 from scipy.spatial import KDTree
 from scipy.sparse import issparse
 import logging
@@ -69,8 +69,7 @@ class Landscape:
 
         Raises:
             TypeError: If adata is not an AnnData object.
-            ValueError: If keys are not found in adata, scaffold has incorrect shape, or
-                       bias_regularization is negative.
+            ValueError: If keys are not found in adata, scaffold has incorrect, or bias_regularization is negative.
         """
         logger.info("Initializing Landscape object")
         
@@ -82,7 +81,7 @@ class Landscape:
         if velocity_key not in adata.layers:
             raise ValueError(f"velocity_key '{velocity_key}' not found in adata.layers")
         if gamma_key not in adata.var:
-            raise ValueError(f"gamma_key '{gamma_key}' not found in adata.var")
+            raise KeyError(f"gamma_key '{gamma_key}' not found in adata.var")
         if cluster_key is not None and cluster_key not in adata.obs:
             raise ValueError(f"cluster_key '{cluster_key}' not found in adata.obs")
         if bias_regularization < 0:
@@ -93,35 +92,29 @@ class Landscape:
         self.spliced_matrix_key = spliced_matrix_key
         self.velocity_key = velocity_key
         self.gamma_key = gamma_key
-
         # Gene selection
         self.genes = self.gene_parser(genes) if genes is not None else np.arange(adata.n_vars)
         self.gene_names = adata.var.index[self.genes]
-
         # Validate scaffold shape
         if scaffold is not None:
             n_genes = len(self.genes)
             if scaffold.shape != (n_genes, n_genes):
                 raise ValueError(f"scaffold shape {scaffold.shape} must be ({n_genes}, {n_genes})")
         self.scaffold = scaffold
-
         # Cluster configuration
         self.cluster_key = cluster_key
-
         # Model parameters
         self.refit_gamma = refit_gamma
         self.bias_regularization = bias_regularization
-
         # Sigmoid parameters (set by schopfield.tools.fitting.fit_sigmoids)
         self.threshold = None
         self.exponent = None
-
         # Interaction and bias parameters (set by schopfield.tools.fitting.fit_interactions)
         self.W = {}
         self.I = {}
         self.gamma = {}
-
-        # Embedding model (set by schopfield.preprocessing.embedding.compute_embedding)
+        # Embedding model (set by
+        # schopfield.preprocessing.embedding.compute_embedding)
         self.embedding = None
 
     @property
