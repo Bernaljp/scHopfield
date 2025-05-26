@@ -131,10 +131,23 @@ def fit_interactions(
     """
     logger.info("Fitting interaction matrices and biases")
     
-    # Validate inputs
-    if landscape.cluster_key is None and not skip_all:
-        raise ValueError("cluster_key must be set unless skip_all is True")
-    
+    # Validate input: must have cluster_key unless skip_all is False
+    if landscape.cluster_key is None and skip_all:
+        raise ValueError("cluster_key must be set unless skip_all is False")
+
+    # Determine clusters to process
+    if landscape.cluster_key is None:
+        clusters = ['all']
+    else:
+        try:
+            clusters = landscape.adata.obs[landscape.cluster_key].unique()
+        except KeyError:
+            if skip_all:
+                raise ValueError(f"cluster_key '{landscape.cluster_key}' not found in adata.obs")
+            else:
+                print(f"Warning: cluster_key '{landscape.cluster_key}' not found, using all cells as 'all' cluster")
+                clusters = ['all']
+        
     # Get data
     x = to_numpy(get_matrix(landscape.adata, landscape.spliced_matrix_key, genes=landscape.genes))
     v = to_numpy(get_matrix(landscape.adata, landscape.velocity_key, genes=landscape.genes))
@@ -147,15 +160,6 @@ def fit_interactions(
     landscape.gamma = {}
     if w_scaffold is not None:
         landscape.adata.uns['models'] = {}
-    
-    # Get clusters
-    try:
-        clusters = landscape.adata.obs[landscape.cluster_key].unique()
-    except KeyError:
-        raise ValueError(f"cluster_key '{landscape.cluster_key}' not found in adata.obs")
-    
-    if not skip_all:
-        clusters = np.append(clusters, 'all')
     
     # Fit for each cluster
     for ct in clusters:

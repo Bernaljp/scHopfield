@@ -22,7 +22,7 @@ def test_get_matrix(sample_adata):
     matrix = get_matrix(sample_adata, "Ms", genes=[0, 1])
     assert matrix.shape == (100, 2)
     
-    with pytest.raises(ValueError):
+    with pytest.raises(KeyError):
         get_matrix(sample_adata, "invalid_key")
 
 def test_write_property(sample_adata):

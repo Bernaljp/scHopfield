@@ -32,21 +32,21 @@ def test_landscape_init_invalid(sample_adata):
 def test_gene_parser(sample_adata):
     """Test gene_parser method."""
     landscape = Landscape(sample_adata)
-    
+
     # Test gene names
     genes = ["Gene_0", "Gene_1"]
     indices = landscape.gene_parser(genes)
     assert np.array_equal(indices, [0, 1])
-    
+
     # Test indices
     indices = landscape.gene_parser([2, 3])
     assert np.array_equal(indices, [2, 3])
-    
+
     # Test boolean mask
-    mask = [True, False] + [False] * 8
+    mask = np.array([True, False] + [False] * 8)
     indices = landscape.gene_parser(mask)
-    assert np.array_equal(indices, [0])
-    
+    assert np.array_equal(indices, np.array([0]))
+
     # Test invalid inputs
     with pytest.raises(ValueError):
         landscape.gene_parser(["Invalid_Gene"])
