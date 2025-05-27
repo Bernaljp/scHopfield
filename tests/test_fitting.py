@@ -17,7 +17,7 @@ def test_fit_sigmoids(sample_adata):
 
 def test_fit_interactions(sample_adata):
     """Test fit_interactions function with mocked optimizer."""
-    landscape = Landscape(sample_adata)
+    landscape = Landscape(sample_adata, cluster_key="cluster")
     landscape.threshold = np.ones(10)
     landscape.exponent = np.ones(10) * 2.0
     

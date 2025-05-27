@@ -54,5 +54,5 @@ def test_write_energies(sample_adata):
         "bias": {"all": np.random.rand(100)}
     }
     write_energies(landscape, energies)
-    assert "Total_energy" in sample_adata.obs
-    assert sample_adata.obs["Total_energy"].shape == (100,)
+    assert "total_energy" in landscape._adata.obs
+    assert landscape._adata.obs["total_energy"].shape == (100,)

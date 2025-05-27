@@ -146,7 +146,7 @@ class Landscape:
         if genes is None:
             return np.arange(self.adata.n_vars)
         
-        if not genes:
+        if len(genes)==0:
             raise ValueError("Genes list cannot be empty")
 
         if isinstance(genes[0], str):
@@ -159,12 +159,12 @@ class Landscape:
             if len(set(genes)) != len(genes):
                 raise ValueError("Duplicate gene names provided")
             return gene_indices
-        elif isinstance(genes[0], (int, np.integer)):
+        elif type(genes[0]) in (int, np.integer):
             gene_indices = np.array(genes)
             if np.any((gene_indices < 0) | (gene_indices >= self.adata.n_vars)):
                 raise ValueError("Gene indices out of bounds")
             return gene_indices
-        elif isinstance(genes[0], (bool, np.bool_)):
+        elif type(genes[0]) in (bool, np.bool_):
             if len(genes) != self.adata.n_vars:
                 raise ValueError("Boolean gene list must match number of genes in adata")
             return np.where(genes)[0]
@@ -265,8 +265,8 @@ class Landscape:
             raise ValueError(f"Input x must have {len(self.genes)} genes, got {x.shape[1]}")
 
         # Adjust sigmoid parameters for broadcasting
-        ex = self.exponent[:, None] if x.shape[0] > 1 else self.exponent
-        th = self.threshold[:, None] if x.shape[0] > 1 else self.threshold
+        ex = self.exponent[None, :] if x.shape[0] > 1 else self.exponent
+        th = self.threshold[None, :] if x.shape[0] > 1 else self.threshold
 
         # Compute sigmoid values
         sig = compute_sigmoid(x, th, ex)

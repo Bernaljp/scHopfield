@@ -47,7 +47,7 @@ def write_energies(landscape: 'Landscape', energies: Dict[str, Dict[str, np.ndar
     """Write energy components to adata.obs."""
     for e_type, clusters in energies.items():
         for cluster, values in clusters.items():
-            key = f"{e_type.capitalize()}_energy"
+            key = f"{e_type.lower()}_energy"
             if cluster == "all":
                 landscape.adata.obs[key] = values
             else:

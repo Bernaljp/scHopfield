@@ -31,7 +31,7 @@ class MaskedLinearLayer(nn.Module):
         self.linear = nn.Linear(input_size, output_size, bias=False, device=device)
         self.register_buffer('mask', torch.tensor(mask, dtype=torch.float32, device=device))
 
-        n_in_mask = (mask.sum(dim=0) > 0).sum().sqrt()
+        n_in_mask = np.sqrt((mask.sum(axis=0) > 0).sum()) if isinstance(mask, np.ndarray) else (mask.sum(dim=0) > 0).sum().sqrt()
         if pre_initialized_W is None:
             nn.init.uniform_(self.linear.weight, -1 / n_in_mask, 1 / n_in_mask)
         else:

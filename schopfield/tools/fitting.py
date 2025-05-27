@@ -10,79 +10,57 @@ from schopfield.optimization.optimizer import ScaffoldOptimizer, CustomDataset
 
 logger = logging.getLogger(__name__)
 
-def fit_sigmoids(landscape: 'Landscape', min_th: float = 0.05) -> None:
-    """Fit sigmoid functions to gene expression data for all selected genes.
+import numpy as np
+import scipy.optimize as opt
+from typing import Optional, Dict
+import logging
+from anndata import AnnData
+import torch
+from scipy.sparse import issparse
+from . import analysis
+from ..utils.data import to_numpy, get_matrix, write_sigmoids, write_property
+from ..optimization.optimizer import ScaffoldOptimizer, CustomDataset
 
-    Fits a sigmoid curve to each gene’s expression data, storing parameters in adata.var
-    and updating landscape.threshold and landscape.exponent.
+logger = logging.getLogger(__name__)
 
-    Args:
-        landscape: Landscape object containing adata and genes.
-        min_th: Threshold for zero expression as a percentage of max expression per gene.
-
-    Stores:
-        adata.var['sigmoid_threshold']: Sigmoid threshold parameters.
-        adata.var['sigmoid_exponent']: Sigmoid exponent parameters.
-        adata.var['sigmoid_offset']: Offset values for each gene.
-        adata.var['sigmoid_mse']: Mean squared error of sigmoid fits.
-        adata.layers['sigmoid']: Sigmoid activations for all cells and genes.
-
-    Raises:
-        ValueError: If spliced_matrix_key is not found in adata.layers.
-    """
-    logger.info("Fitting sigmoid functions to gene expression data")
+def fit_sigmoids(landscape: 'Landscape', min_th: float = 0.05, max_th: float = 5.0) -> None:
+    """Fit sigmoid parameters for each gene."""
+    logger.info("Fitting sigmoid parameters")
     
-    # Retrieve expression data
-    x = to_numpy(get_matrix(landscape.adata, landscape.spliced_matrix_key, genes=landscape.genes).T)
+    x = get_matrix(landscape.adata, landscape.spliced_matrix_key, genes=landscape.genes)
+    v = get_matrix(landscape.adata, landscape.velocity_key, genes=landscape.genes)
+    g = landscape.adata.var[landscape.gamma_key].iloc[landscape.genes].values
     
-    # Fit sigmoid to each gene
-    results = np.array([_fit_sigmoid(g, min_th=min_th) for g in x])
-    threshold, exponent, offset, mse = results.T
+    n = len(landscape.genes)
+    landscape.threshold = np.zeros(n)
+    landscape.exponent = np.zeros(n)
+    offset = np.zeros(n)
+    mse = np.zeros(n)
     
-    # Store in Landscape
-    landscape.threshold = threshold
-    landscape.exponent = exponent
+    for i in range(n):
+        th, n, c, err = _fit_sigmoid(x[:, i], v[:, i], g[i], min_th, max_th)
+        landscape.threshold[i] = th
+        landscape.exponent[i] = n
+        offset[i] = c
+        mse[i] = err
     
-    # Store in adata
-    write_property(landscape.adata, 'sigmoid_threshold', threshold[landscape.genes])
-    write_property(landscape.adata, 'sigmoid_exponent', exponent[landscape.genes])
-    write_property(landscape.adata, 'sigmoid_offset', offset[landscape.genes])
-    write_property(landscape.adata, 'sigmoid_mse', mse[landscape.genes])
-    
-    # Compute and store sigmoid activations
-    from schopfield.utils.data import write_sigmoids
+    write_property(landscape.adata, "sigmoid_threshold", landscape.threshold)
+    write_property(landscape.adata, "sigmoid_exponent", landscape.exponent)
+    write_property(landscape.adata, "sigmoid_offset", offset)
+    write_property(landscape.adata, "sigmoid_mse", mse)
     write_sigmoids(landscape)
 
-def _fit_sigmoid(g: np.ndarray, min_th: float = 0.05) -> tuple:
-    """Fit a sigmoid curve to a single gene’s expression data.
-
-    Args:
-        g: Expression data for a single gene.
-        min_th: Threshold for zero expression as a percentage of max expression.
-
-    Returns:
-        tuple: (threshold, exponent, offset, mse) parameters of the fitted sigmoid.
-    """
-    length = len(g)
-    min_th *= np.max(g)
-    offset = np.sum(g < min_th) / length
-    valid_data = g[g > min_th]
+def _fit_sigmoid(x: np.ndarray, v: np.ndarray, g: float, min_th: float, max_th: float) -> tuple:
+    """Fit a single sigmoid function."""
+    def err(p: np.ndarray) -> float:
+        s, n, c = p
+        y = x**n / (x**n + s**n)
+        y = np.clip(y, 1e-10, 1 - 1e-10)
+        ty = np.log(y / (1 - y))
+        return np.mean((ty - (v + c) / g)**2)
     
-    # Fast fit
-    x = np.sort(valid_data)
-    y = np.linspace(0, 1, len(valid_data))
-    tx = np.log(x)
-    ty = np.log(y / (1 - y))
-    
-    valid = np.isfinite(tx) & np.isfinite(ty)
-    tx, ty = tx[valid], ty[valid]
-    
-    A = np.vstack([tx, np.ones(len(tx))]).T
-    n, b = np.linalg.lstsq(A, ty, rcond=None)[0]
-    threshold = np.exp(-b / n)
-    mse = np.mean((compute_sigmoid(x, threshold, n) - y) ** 2)
-    
-    return threshold, n, offset, mse
+    res = opt.minimize(err, [0.5 * (min_th + max_th), 2.0, 0.0], bounds=[(min_th, max_th), (0.1, 10.0), (-1.0, 1.0)])
+    return res.x[0], res.x[1], res.x[2], res.fun
 
 def fit_interactions(
     landscape: 'Landscape',
@@ -104,9 +82,9 @@ def fit_interactions(
     get_plots: bool = False,
 ) -> None:
     """Fit interaction matrices and biases for each cluster.
-
+    
     Updates landscape.W, landscape.I, and landscape.gamma with fitted parameters.
-
+    
     Args:
         landscape: Landscape object containing adata and parameters.
         w_threshold: Threshold for zeroing small weights in W and I.
@@ -121,37 +99,20 @@ def fit_interactions(
         criterion: Loss criterion for optimization ("L2" or other).
         batch_size: Batch size for training.
         device: Device for PyTorch ("cpu" or "cuda").
-        skip_all: Skip fitting for 'all' cluster.
+        skip_all: If True, skip fitting for a synthetic 'all' cluster; otherwise, include it.
         use_scheduler: Use learning rate scheduler.
         scheduler_kws: Keyword arguments for scheduler.
         get_plots: Generate training plots.
-
+    
     Raises:
-        ValueError: If required keys are missing or clusters are not defined.
+        ValueError: If cluster_key is missing when required.
     """
     logger.info("Fitting interaction matrices and biases")
     
-    # Validate input: must have cluster_key unless skip_all is False
-    if landscape.cluster_key is None and skip_all:
-        raise ValueError("cluster_key must be set unless skip_all is False")
-
-    # Determine clusters to process
-    if landscape.cluster_key is None:
-        clusters = ['all']
-    else:
-        try:
-            clusters = landscape.adata.obs[landscape.cluster_key].unique()
-        except KeyError:
-            if skip_all:
-                raise ValueError(f"cluster_key '{landscape.cluster_key}' not found in adata.obs")
-            else:
-                print(f"Warning: cluster_key '{landscape.cluster_key}' not found, using all cells as 'all' cluster")
-                clusters = ['all']
-        
-    # Get data
+    # Validate inputs
     x = to_numpy(get_matrix(landscape.adata, landscape.spliced_matrix_key, genes=landscape.genes))
     v = to_numpy(get_matrix(landscape.adata, landscape.velocity_key, genes=landscape.genes))
-    g = landscape.adata.var[landscape.gamma_key][landscape.genes].values.astype(x.dtype)
+    g = landscape.adata.var[landscape.gamma_key].iloc[landscape.genes].values.astype(x.dtype)
     sig = get_matrix(landscape.adata, "sigmoid", genes=landscape.genes)
     
     # Initialize dictionaries
@@ -161,32 +122,26 @@ def fit_interactions(
     if w_scaffold is not None:
         landscape.adata.uns['models'] = {}
     
-    # Fit for each cluster
-    for ct in clusters:
-        logger.info(f"Fitting interactions for cluster '{ct}'")
-        idx = slice(None) if ct == 'all' else (landscape.adata.obs[landscape.cluster_key] == ct)
-        _fit_interactions_for_group(
-            landscape=landscape,
-            group=ct,
-            x=x[idx, :],
-            v=v[idx, :],
-            sig=sig[idx, :],
-            g=g,
-            w_threshold=w_threshold,
-            w_scaffold=w_scaffold,
-            scaffold_regularization=scaffold_regularization,
-            only_TFs=only_TFs,
-            infer_I=infer_I,
-            bias_regularization=bias_regularization,
-            refit_gamma=refit_gamma,
-            pre_initialize_W=pre_initialize_W,
-            n_epochs=n_epochs,
-            criterion=criterion,
-            batch_size=batch_size,
-            device=device,
-            use_scheduler=use_scheduler,
-            scheduler_kws=scheduler_kws,
-            get_plots=get_plots,
+    # Get clusters
+    clusters = []
+    if landscape.cluster_key is not None:
+        try:
+            clusters = landscape.adata.obs[landscape.cluster_key].unique().tolist()
+        except KeyError:
+            raise ValueError(f"cluster_key '{landscape.cluster_key}' not found in adata.obs")
+    if not skip_all or not clusters:
+        clusters.append('all')
+    
+    for cluster in clusters:
+        if cluster == 'all':
+            idx = np.arange(len(x))
+        else:
+            idx = np.where(landscape.adata.obs[landscape.cluster_key] == cluster)[0]
+        
+        _fit_interactions_for_group(landscape, cluster,
+            x[idx], v[idx], sig[idx], g, w_threshold, w_scaffold, scaffold_regularization, only_TFs,
+            infer_I, bias_regularization, refit_gamma, pre_initialize_W, n_epochs,
+            criterion, batch_size, device, use_scheduler, scheduler_kws, get_plots
         )
 
 def _fit_interactions_for_group(
