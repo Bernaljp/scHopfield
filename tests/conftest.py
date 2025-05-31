@@ -2,6 +2,7 @@ import pytest
 import numpy as np
 import anndata as ad
 import pandas as pd
+from schopfield._core.landscape import Landscape
 
 @pytest.fixture
 def sample_adata():
@@ -40,3 +41,22 @@ def sample_adata():
     adata.layers["sigmoid"] = 1 / (1 + np.exp(-Ms))  # Mock sigmoid layer
     
     return adata
+
+@pytest.fixture
+def sample_landscape(sample_adata):
+    """Create a sample Landscape object for testing."""
+    landscape = Landscape(sample_adata, cluster_key='cluster')
+    landscape.W = {"all": np.eye(10)}
+    landscape.I = {"all": np.zeros(10)}
+    landscape.gamma = {"all": np.ones(10)}
+
+    for cluster in sample_adata.obs['cluster'].unique():
+        landscape.W[cluster] = np.eye(10) * 0.1
+        landscape.I[cluster] = np.zeros(10)
+        landscape.gamma[cluster] = np.ones(10) * 0.1
+        
+
+    landscape.threshold = np.ones(10)
+    landscape.exponent = np.ones(10) * 2.0
+    
+    return landscape
