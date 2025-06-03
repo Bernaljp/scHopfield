@@ -14,6 +14,7 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 class Landscape:
+    
     """Core class for managing single-cell data and Hopfield model computations in scHopfield.
 
     This class serves as the primary interface for data storage (via AnnData) and core model
