@@ -1,6 +1,9 @@
 import numpy as np
 from scipy.special import hyp2f1
-from typing import Union
+from typing import Union, Optional
+from scipy.signal import convolve2d
+import logging
+logger = logging.getLogger(__name__)
 
 def compute_sigmoid(x: np.ndarray, threshold: Union[np.ndarray, float], exponent: Union[np.ndarray, float]) -> np.ndarray:
     """Compute the sigmoid function for given input x, threshold, and exponent.
@@ -63,3 +66,32 @@ def int_sig_act_inv(x: np.ndarray, threshold: np.ndarray, exponent: np.ndarray, 
         logger.debug(f"z1: {z1}")
     
     return z1 - z
+
+def soften(z: np.ndarray, n_filt: int = 5) -> np.ndarray:
+    """
+    Apply a softening filter to a 2D array, using a uniform filter with a zeroed center.
+
+    Args:
+        z: Input 2D array to be softened.
+        n_filt: Size of the square filter (must be odd). Defaults to 5.
+
+    Returns:
+        np.ndarray: Softened 2D array.
+
+    Raises:
+        ValueError: If n_filt is even or z is not 2D.
+    """
+    logger.info(f"Applying softening filter with n_filt={n_filt}")
+
+    if n_filt % 2 == 0:
+        raise ValueError("n_filt must be an odd number")
+    if z.ndim != 2:
+        raise ValueError("Input array z must be 2D")
+
+    # Create uniform filter
+    filt = np.ones((n_filt, n_filt)) / (n_filt**2 - 1)
+    filt[n_filt // 2, n_filt // 2] = 0
+
+    # Apply convolution
+    softened_z = convolve2d(z, filt, mode='same')
+    return softened_z
