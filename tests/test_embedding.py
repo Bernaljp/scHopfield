@@ -10,10 +10,11 @@ import os
 def test_energy_embedding(sample_landscape):
     landscape = sample_landscape
     energy_embedding(landscape, which='UMAP', resolution=10, n_neighbors=5)
-    assert hasattr(landscape, 'grid_X') and len(landscape.grid_X) == 2
+
+    assert hasattr(landscape, 'grid_X') and len(landscape.grid_X) == 3
     assert 'A' in landscape.grid_energy
     assert landscape.grid_energy['A'].shape == (10, 10)
-    assert f'X_UMAP' in landscape.adata.obsm
+    assert f'X_umap' in landscape.adata.obsm
 
 def test_save_load_embedding(sample_landscape, tmp_path):
     landscape = sample_landscape
@@ -25,7 +26,7 @@ def test_save_load_embedding(sample_landscape, tmp_path):
     new_landscape = Landscape(
         landscape.adata.copy(),
         spliced_matrix_key='Ms',
-        velocity_key='velocity',
+        velocity_key='velocity_S',
         gamma_key='gamma',
         cluster_key='cluster',
         genes=np.arange(10)

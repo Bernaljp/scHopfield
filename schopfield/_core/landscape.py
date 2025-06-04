@@ -149,7 +149,7 @@ class Landscape:
         
         if len(genes)==0:
             raise ValueError("Genes list cannot be empty")
-
+        print(type(genes[0]), type(genes[0]) in (int,np.integer))
         if isinstance(genes[0], str):
             if not all(isinstance(g, str) for g in genes):
                 raise ValueError("All elements in genes must be strings if gene names are provided")
@@ -160,7 +160,7 @@ class Landscape:
             if len(set(genes)) != len(genes):
                 raise ValueError("Duplicate gene names provided")
             return gene_indices
-        elif type(genes[0]) in (int, np.integer):
+        elif type(genes[0]) in (int, np.int64, np.int32, np.int16, np.int8):
             gene_indices = np.array(genes)
             if np.any((gene_indices < 0) | (gene_indices >= self.adata.n_vars)):
                 raise ValueError("Gene indices out of bounds")

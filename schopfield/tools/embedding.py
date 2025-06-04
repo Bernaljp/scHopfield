@@ -4,14 +4,14 @@ import logging
 import pickle
 from anndata import AnnData
 from schopfield._core.landscape import Landscape
-from schopfield.utils.data import to_numpy
+from schopfield.utils.data import to_numpy, get_matrix
 from schopfield.preprocessing.embedding import get_embedding
 from schopfield.tools.analysis import compute_energies
 from schopfield.utils.math import soften
 
 logger = logging.getLogger(__name__)
 
-def energy_embedding(landscape: 'Landscape', which: str = 'UMAP', resolution: int = 50, **kwargs) -> None:
+def energy_embedding(landscape: 'Landscape', which: str = 'umap', resolution: int = 50, get_velocity: bool = False, **kwargs) -> None:
     """Compute and visualize the energy embedding for the dataset.
 
     Generates a grid-based energy landscape for each cluster using the specified embedding method,
@@ -20,9 +20,9 @@ def energy_embedding(landscape: 'Landscape', which: str = 'UMAP', resolution: in
 
     Args:
         landscape: Landscape object containing adata, W, and parameters.
-        which: The embedding method used (e.g., 'UMAP', 'PCA'). Defaults to 'UMAP'.
+        which: The embedding method used (e.g., 'umap', 'PCA'). Defaults to 'umap'.
         resolution: Resolution of the grid for energy computation (higher values mean finer grids). Defaults to 50.
-        **kwargs: Additional keyword arguments for the embedding method (e.g., n_neighbors for UMAP).
+        **kwargs: Additional keyword arguments for the embedding method (e.g., n_neighbors for umap).
 
     Raises:
         ValueError: If W, spliced_matrix_key, velocity_key, or cluster_key are not initialized.
@@ -35,6 +35,7 @@ def energy_embedding(landscape: 'Landscape', which: str = 'UMAP', resolution: in
         Depends on get_embedding from schopfield.preprocessing.embedding and compute_energies
         from schopfield.tools.analysis.
     """
+    which = which.lower()
     logger.info(f"Computing energy embedding with method: {which}, resolution: {resolution}")
 
     # Validate parameters
@@ -44,12 +45,13 @@ def energy_embedding(landscape: 'Landscape', which: str = 'UMAP', resolution: in
         raise ValueError("Required keys (spliced_matrix_key, velocity_key, cluster_key) not initialized")
 
     # Compute the embedding
-    get_embedding(landscape, which=which, **kwargs)
+    get_embedding(landscape, method=which, **kwargs)
 
     # Initialize dictionaries for grid coordinates
     grid_X, grid_Y = {}, {}
 
     # Retrieve 2D coordinates from the embedding
+
     cells2d = landscape.adata.obsm[f'X_{which}']
 
     # Generate grids for each cluster
@@ -61,8 +63,8 @@ def energy_embedding(landscape: 'Landscape', which: str = 'UMAP', resolution: in
         grid_X[k], grid_Y[k] = np.mgrid[minx:maxx:resolution*1j, miny:maxy:resolution*1j]
 
     # Transform grid points to high-dimensional space
-    grid_points = np.vstack([grid_X[k].ravel() for k in landscape.W] +
-                           [grid_Y[k].ravel() for k in landscape.W]).T
+    grid_points = np.vstack((list(grid_X.values()), list(grid_Y.values()))).reshape(-1, 2)
+
     try:
         highD_grid = landscape.embedding.inverse_transform(grid_points)
     except AttributeError:
@@ -94,20 +96,22 @@ def energy_embedding(landscape: 'Landscape', which: str = 'UMAP', resolution: in
     landscape.grid_energy_interaction = inters
     landscape.grid_energy_degradation = degs
     landscape.grid_energy_bias = biases
-
-    # Compute cell velocities
-    try:
-        import dynamo as dyn
-        dyn.tl.cell_velocities(
-            landscape.adata,
-            X=landscape.adata.layers[landscape.spliced_matrix_key],
-            V=landscape.adata.layers[landscape.velocity_key],
-            X_embedding=landscape.adata.obsm[f'X_{which}'],
-            add_velocity_key=f'velocity_{which}'
-        )
-    except ImportError:
-        logger.warning("Dynamo not installed; skipping cell velocity computation")
-        raise ImportError("Install dynamo with 'pip install dynamo' for velocity computation")
+    
+    if get_velocity:
+        logger.info("Computing cell velocities using dynamo")
+        # Compute cell velocities
+        try:
+            import dynamo as dyn
+            dyn.tl.cell_velocities(
+                landscape.adata,
+                X=landscape.adata.layers[landscape.spliced_matrix_key],
+                V=landscape.adata.layers[landscape.velocity_key],
+                X_embedding=landscape.adata.obsm[f'X_{which}'],
+                add_velocity_key=f'velocity_{which}'
+            )
+        except ImportError:
+            logger.warning("Dynamo not installed; skipping cell velocity computation")
+            raise ImportError("Install dynamo with 'pip install dynamo' for velocity computation")
 
 def save_embedding(landscape: 'Landscape', filename: str) -> None:
     """Save the embedding and grid coordinates to a pickle file.
@@ -128,8 +132,10 @@ def save_embedding(landscape: 'Landscape', filename: str) -> None:
     logger.info(f"Saving embedding to file: {filename}")
 
     # Validate attributes
-    if not hasattr(landscape, 'embedding') or not all([landscape.grid_X, landscape.grid_Y, landscape.highD_grid]):
-        raise ValueError("Embedding or grid attributes not initialized; run energy_embedding first")
+    if (not hasattr(landscape, 'embedding') or 
+        not all(x is not None for x in [landscape.grid_X, landscape.grid_Y, landscape.highD_grid])
+    ):
+        raise ValueError("Missing embedding or required grid attributes.")
 
     # Create dictionary to save
     emb = {
@@ -173,7 +179,7 @@ def load_embedding(landscape: 'Landscape', filename: str, which: str = 'UMAP', r
     logger.info(f"Loading embedding from file: {filename}")
 
     # Validate parameters
-    if not landscape.W or not landscape.spliced_matrix_key or not landscape.genes:
+    if landscape.W is None or landscape.spliced_matrix_key is None or landscape.genes is None:
         raise ValueError("Required parameters (W, spliced_matrix_key, genes) not initialized")
 
     # Load the embedding

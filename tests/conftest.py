@@ -39,6 +39,25 @@ def sample_adata():
     adata.layers["Ms"] = Ms
     adata.layers["velocity_S"] = velocity
     adata.layers["sigmoid"] = 1 / (1 + np.exp(-Ms))  # Mock sigmoid layer
+
+    adata.uns['dynamics'] = {'filter_gene_mode': 'final',
+                            't': None,
+                            'group': None,
+                            'X_data': None,
+                            'X_fit_data': None,
+                            'asspt_mRNA': 'ss',
+                            'experiment_type': 'conventional',
+                            'normalized': True,
+                            'model': 'stochastic',
+                            'est_method': 'gmm',
+                            'has_splicing': True,
+                            'has_labeling': False,
+                            'splicing_labeling': False,
+                            'has_protein': False,
+                            'use_smoothed': True,
+                            'NTR_vel': False,
+                            'log_unnormalized': True,
+                            'fraction_for_deg': False}
     
     return adata
 
