@@ -1,0 +1,1 @@
+# Optimization functionality for scHopfield package
