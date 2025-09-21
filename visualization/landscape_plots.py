@@ -9,7 +9,13 @@ import pandas as pd
 from typing import Optional, List, Dict, Union, Any
 from mpl_toolkits.mplot3d import Axes3D
 
-from ..utils.utilities import to_numpy, sigmoid, fit_sigmoid
+try:
+    from ..utils.utilities import to_numpy, sigmoid, fit_sigmoid
+except ImportError:
+    import sys
+    import os
+    sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    from utils.utilities import to_numpy, sigmoid, fit_sigmoid
 
 
 class LandscapePlotter:

@@ -8,9 +8,17 @@ from typing import Dict, List, Optional, Tuple, Any
 from scipy.integrate import odeint
 from scipy.optimize import minimize
 
-from ..core.base_models import BaseSimulator
-from ..utils.utilities import to_numpy, sigmoid
-from .ode_solver import ODESolver
+try:
+    from ..core.base_models import BaseSimulator
+    from ..utils.utilities import to_numpy, sigmoid
+    from .ode_solver import ODESolver
+except ImportError:
+    import sys
+    import os
+    sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    from core.base_models import BaseSimulator
+    from utils.utilities import to_numpy, sigmoid
+    from simulation.ode_solver import ODESolver
 
 
 class AttractorAnalyzer(BaseSimulator):

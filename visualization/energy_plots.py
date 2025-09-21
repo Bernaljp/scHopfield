@@ -10,7 +10,13 @@ import seaborn as sns
 from typing import Optional, List, Dict, Union, Any
 from mpl_toolkits.mplot3d import Axes3D
 
-from ..utils.utilities import soften
+try:
+    from ..utils.utilities import soften
+except ImportError:
+    import sys
+    import os
+    sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    from utils.utilities import soften
 
 
 class EnergyPlotter:

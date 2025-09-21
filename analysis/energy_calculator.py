@@ -6,8 +6,15 @@ Contains classes and methods for computing various types of energy in the landsc
 import numpy as np
 from typing import Dict, Optional, Tuple, Any
 
-from ..core.base_models import BaseEnergyCalculator
-from ..utils.utilities import to_numpy, int_sig_act_inv
+try:
+    from ..core.base_models import BaseEnergyCalculator
+    from ..utils.utilities import to_numpy, int_sig_act_inv
+except ImportError:
+    import sys
+    import os
+    sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    from core.base_models import BaseEnergyCalculator
+    from utils.utilities import to_numpy, int_sig_act_inv
 
 
 class EnergyCalculator(BaseEnergyCalculator):
