@@ -14,15 +14,8 @@ import torch
 from tqdm import tqdm
 from typing import Union, List, Optional, Tuple, Dict, Any
 
-try:
-    from ..core.base_models import BaseAnalyzer, ValidationMixin
-    from ..utils.utilities import to_numpy, sigmoid, fit_sigmoid, soften, int_sig_act_inv
-except ImportError:
-    import sys
-    import os
-    sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-    from core.base_models import BaseAnalyzer, ValidationMixin
-    from utils.utilities import to_numpy, sigmoid, fit_sigmoid, soften, int_sig_act_inv
+from ..core.base_models import BaseAnalyzer, ValidationMixin
+from ..utils.utilities import to_numpy, sigmoid, fit_sigmoid, soften, int_sig_act_inv
 
 
 class LandscapeAnalyzer(BaseAnalyzer, ValidationMixin):

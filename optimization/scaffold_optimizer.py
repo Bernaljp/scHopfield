@@ -11,13 +11,7 @@ from tqdm import tqdm
 import matplotlib.pyplot as plt
 from typing import Optional, Callable, Dict, Any
 
-try:
-    from ..core.base_models import BaseOptimizer
-except ImportError:
-    import sys
-    import os
-    sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-    from core.base_models import BaseOptimizer
+from ..core.base_models import BaseOptimizer
 
 
 class MaskedLinearLayer(nn.Module):

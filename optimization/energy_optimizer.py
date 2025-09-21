@@ -8,15 +8,8 @@ import torch
 from scipy.optimize import minimize
 from typing import Callable, Optional, Union, Dict, Any
 
-try:
-    from ..core.base_models import BaseOptimizer
-    from ..utils.utilities import to_numpy
-except ImportError:
-    import sys
-    import os
-    sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-    from core.base_models import BaseOptimizer
-    from utils.utilities import to_numpy
+from ..core.base_models import BaseOptimizer
+from ..utils.utilities import to_numpy
 
 
 class EnergyOptimizer(BaseOptimizer):
