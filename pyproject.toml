@@ -73,11 +73,11 @@ Repository = "https://github.com/schopfield/scHopfield"
 
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["scHopfield*"]
+include = ["core*", "analysis*", "optimization*", "simulation*", "utils*", "visualization*"]
 exclude = ["tests*", "docs*", "examples*"]
 
 [tool.setuptools.package-data]
-scHopfield = ["py.typed"]
+"*" = ["py.typed"]
 
 [tool.black]
 line-length = 88
