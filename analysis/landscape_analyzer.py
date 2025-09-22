@@ -541,9 +541,13 @@ class LandscapeAnalyzer(BaseAnalyzer, ValidationMixin):
             cells1 = self.adata.obs[self.cluster_key] == k1
             cells2 = self.adata.obs[self.cluster_key] == k2
 
+            # Convert to numpy boolean arrays for consistent indexing
+            cells1_bool = cells1.values
+            cells2_bool = cells2.values
+
             # Extract expression data for each cluster
-            X1 = to_numpy(counts[cells1].T)  # genes x cells
-            X2 = to_numpy(counts[cells2].T)  # genes x cells
+            X1 = to_numpy(counts[cells1_bool].T)  # genes x cells
+            X2 = to_numpy(counts[cells2_bool].T)  # genes x cells
 
             # Compute mean expression profiles
             mean1 = np.mean(X1, axis=1)
