@@ -79,30 +79,46 @@ def prepare_scaffold_matrix(adata, base_GRN: pd.DataFrame) -> pd.DataFrame:
     Returns:
         Scaffold matrix as DataFrame
     """
-    # Get genes to use (preserve original order/case)
+    # Get the list of genes to use (keep the original names for later)
     genes = adata.var.index[adata.var['use_for_dynamics']]
     genes_lower = genes.str.lower()
 
-    # Lowercase the relevant base_GRN data and columns for case-insensitive matching
-    grn = base_GRN.copy()
-    grn['gene_short_name'] = grn['gene_short_name'].str.lower()
-    grn.columns = [c.lower() if c != 'gene_short_name' else c for c in grn.columns]
-
-    # Filter only TF columns (not gene_short_name) that are present in the genes list
-    tf_cols = [c for c in grn.columns if c != 'gene_short_name' and c in genes_lower.values]
-    grn = grn[grn['gene_short_name'].isin(genes_lower.values)]
-
-    # Scaffold initialized as zeros
+    # Prepare scaffold matrix with original names as index/columns
     scaffold = pd.DataFrame(0, index=genes, columns=genes)
-    # Reindex grn to match scaffold's index/column order (using lowercase for matching)
-    grn = grn.set_index('gene_short_name').reindex(genes_lower, fill_value=0)[tf_cols]
-    grn.columns = genes[genes_lower.isin(tf_cols)].values
 
-    # Set tf/target values using pandas assignment and alignment
-    scaffold.update(grn.T)  # ensures targets (from base_GRN rows) match scaffold cols
+    # Lowercase mappings for alignment
+    tf_lc = [c.lower() for c in base_GRN.columns if c != 'gene_short_name']
+    tf2real = {c.lower(): c for c in base_GRN.columns if c != 'gene_short_name'}
+    target_lc = [g.lower() for g in base_GRN['gene_short_name']]
+    target2real = {g.lower(): g for g in base_GRN['gene_short_name']}
+    genes_lc_to_real = dict(zip(genes_lower, genes))
 
-    print(f"TFs in scaffold: {len(tf_cols)}")
-    print(f"Target genes in scaffold: {grn.shape[0]}")
+    # Keep only TFs and targets that are present in the adata genes
+    selected_tfs = [t for t in tf_lc if t in genes_lc_to_real]
+    selected_targets = [t for t in target_lc if t in genes_lc_to_real]
+
+    # Build a scaffold DataFrame in lowercase for easy alignment
+    scaffold_lc = pd.DataFrame(0, index=genes_lower, columns=genes_lower)
+
+    # Lowercase the GRN gene_short_name for merging
+    base_GRN_lc = base_GRN.copy()
+    base_GRN_lc['gene_short_name'] = base_GRN_lc['gene_short_name'].str.lower()
+    base_GRN_lc.columns = [c.lower() if c != 'gene_short_name' else c for c in base_GRN_lc.columns]
+
+    # Fill the values using DataFrame broadcasting (much more efficient!)
+    common_tfs = [t for t in selected_tfs if t in base_GRN_lc.columns]
+    common_targets = list(set(selected_targets) & set(base_GRN_lc['gene_short_name']))
+
+    sub_grn = base_GRN_lc.set_index('gene_short_name').loc[common_targets, common_tfs]
+    scaffold_lc.loc[common_tfs, common_targets] = sub_grn.T.values  # transpose due to indexing
+
+    # Map back to original-case scaffold
+    idx_map = [genes_lc_to_real[lc] for lc in scaffold_lc.index]
+    col_map = [genes_lc_to_real[lc] for lc in scaffold_lc.columns]
+    scaffold.loc[idx_map, col_map] = scaffold_lc.values
+
+    print(f"TFs in scaffold: {len(common_tfs)}")
+    print(f"Target genes in scaffold: {len(common_targets)}")
     return scaffold
 
 
