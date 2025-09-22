@@ -5,6 +5,8 @@ Contains the JacobianAnalyzer class for computing and analyzing Jacobian matrice
 
 import numpy as np
 import pandas as pd
+import torch
+import scipy.linalg
 from typing import Optional, Tuple, Dict, Any
 from tqdm import tqdm
 
@@ -46,9 +48,102 @@ class JacobianAnalyzer(BaseAnalyzer):
         return {'jacobians_computed': True}
 
     def compute_jacobians(self, save_to_disk: bool = False, save_dir: Optional[str] = None,
-                         compute_eigenvectors: bool = False, device: str = 'cpu') -> None:
+                         compute_eigenvectors: bool = False, device: str = 'cpu',
+                         use_chunking: bool = True, chunk_size: int = 100) -> None:
         """
         Compute Jacobian matrices for all cells in the dataset.
+
+        Args:
+            save_to_disk: Whether to save results to disk using memory mapping
+            save_dir: Directory to save results (required if save_to_disk=True)
+            compute_eigenvectors: Whether to compute eigenvectors in addition to eigenvalues
+            device: Device to use for computation ('cpu' or 'cuda')
+            use_chunking: Whether to use chunked processing for efficiency
+            chunk_size: Size of chunks when use_chunking=True
+        """
+        if use_chunking:
+            self._compute_jacobians_chunked(compute_eigenvectors=compute_eigenvectors,
+                                           device=device, chunk_size=chunk_size)
+        else:
+            self._compute_jacobians_original(save_to_disk=save_to_disk, save_dir=save_dir,
+                                           compute_eigenvectors=compute_eigenvectors, device=device)
+
+    def _compute_jacobians_chunked(self, compute_eigenvectors: bool = False,
+                                  device: str = 'cpu', chunk_size: int = 100) -> None:
+        """
+        Compute Jacobian matrices using chunked processing for efficiency.
+        """
+        print("Computing Jacobian matrices in chunks...")
+
+        expression_data = self.analyzer.get_matrix(self.analyzer.spliced_matrix_key, genes=self.analyzer.genes)
+        expression_data = torch.tensor(expression_data, dtype=torch.float32)
+        n_cells, n_genes = expression_data.shape
+
+        clusters = np.array(self.adata.obs[self.analyzer.cluster_key])
+        unique_clusters = np.unique(clusters)
+
+        # Prepare output arrays on CPU or disk: small buffers sufficient since batch-wise processing
+        self.jacobians = np.zeros((n_cells, n_genes, n_genes), dtype=np.float64)
+        self.eigenvalues = np.zeros((n_cells, n_genes), dtype=np.complex128)
+        if compute_eigenvectors:
+            self.eigenvectors = np.zeros((n_cells, n_genes, n_genes), dtype=np.complex128)
+
+        exponent = self.analyzer.exponent
+        threshold = self.analyzer.threshold
+
+        for cluster in unique_clusters:
+            W = torch.tensor(self.analyzer.W[cluster], dtype=torch.float32).to(device)
+            if self.analyzer.refit_gamma:
+                gamma = torch.tensor(self.analyzer.gamma[cluster], dtype=torch.float32).to(device)
+            else:
+                gamma = torch.tensor(self.analyzer.adata.var[self.analyzer.gamma_key][self.analyzer.genes].values, dtype=torch.float32).to(device)
+
+            cluster_idx = np.where(clusters == cluster)[0]
+            expr_cluster = expression_data[cluster_idx].to(device)
+
+            # Compute sigmoid and derivative in batch
+            sig = 1 / (1 + torch.exp(-exponent * (expr_cluster - threshold)))
+            dsig_dx = sig * (1 - sig) * exponent  # shape (num_cells_in_cluster, n_genes)
+
+            num_cells_cluster = len(cluster_idx)
+
+            for start in tqdm(range(0, num_cells_cluster, chunk_size), desc=f"Cluster {cluster}"):
+                end = min(start + chunk_size, num_cells_cluster)
+                batch_idx = slice(start, end)
+
+                dsig_chunk = dsig_dx[batch_idx]  # (chunk_size, n_genes)
+
+                # Compute batch Jacobians: W * diag(dsig_dx) - diag(gamma)
+                # Broadcasting: (chunk_size, n_genes, n_genes)
+                jac_chunk = W.unsqueeze(0) * dsig_chunk.unsqueeze(2) - torch.diag(gamma).unsqueeze(0)
+
+                # Transfer to CPU as numpy for storage and eig computation if CPU only
+                jac_chunk_cpu = jac_chunk.cpu().numpy()
+
+                # Store Jacobians
+                self.jacobians[cluster_idx[start:end], :, :] = jac_chunk_cpu
+
+                # Compute eigenvalues (and vectors optionally)
+                if compute_eigenvectors:
+                    for i, jac in enumerate(jac_chunk_cpu):
+                        vals, vecs = scipy.linalg.eig(jac)
+                        self.eigenvalues[cluster_idx[start + i]] = vals
+                        self.eigenvectors[cluster_idx[start + i]] = vecs
+                else:
+                    for i, jac in enumerate(jac_chunk_cpu):
+                        vals = scipy.linalg.eigvals(jac)
+                        self.eigenvalues[cluster_idx[start + i]] = vals
+
+                # Free GPU cache
+                if device == 'cuda':
+                    torch.cuda.empty_cache()
+
+        print(f"Completed computation for {n_cells} cells.")
+
+    def _compute_jacobians_original(self, save_to_disk: bool = False, save_dir: Optional[str] = None,
+                                   compute_eigenvectors: bool = False, device: str = 'cpu') -> None:
+        """
+        Original implementation - compute Jacobian matrices for all cells in the dataset.
 
         Args:
             save_to_disk: Whether to save results to disk using memory mapping
