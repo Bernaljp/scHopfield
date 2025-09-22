@@ -9,6 +9,7 @@ import torch.optim as optim
 from torch.utils.data import DataLoader, Dataset
 from tqdm import tqdm
 import matplotlib.pyplot as plt
+import numpy as np
 from typing import Optional, Callable, Dict, Any
 
 from ..core.base_models import BaseOptimizer
@@ -183,6 +184,40 @@ class ScaffoldOptimizer(nn.Module, BaseOptimizer):
         if get_plots:
             self._plot_training_curves(losses)
 
+    def fit(self, x: np.ndarray, y: np.ndarray, **kwargs) -> Dict[str, Any]:
+        """
+        Fit the model to data (required by BaseOptimizer).
+
+        This method provides a wrapper around train_model for compatibility.
+        """
+        # Create a simple dataset and dataloader
+        import torch
+        device = self.device
+        dataset = SimpleDataset(torch.tensor(x, dtype=torch.float32, device=device),
+                               torch.tensor(y, dtype=torch.float32, device=device))
+        train_loader = DataLoader(dataset, batch_size=kwargs.get('batch_size', 64), shuffle=True)
+
+        # Train the model
+        epochs = kwargs.get('epochs', 1000)
+        learning_rate = kwargs.get('learning_rate', 0.001)
+        criterion = kwargs.get('criterion', 'L2')
+
+        self.train_model(train_loader, epochs, learning_rate, criterion)
+
+        return {'training_completed': True}
+
+    def predict(self, x: np.ndarray) -> np.ndarray:
+        """
+        Make predictions using the fitted model (required by BaseOptimizer).
+        """
+        import torch
+        self.eval()
+        with torch.no_grad():
+            x_tensor = torch.tensor(x, dtype=torch.float32, device=self.device)
+            # Assuming x contains sigmoid values, predict velocities
+            predictions = self.forward(x_tensor, x_tensor)  # Using same input for both sig and x
+        return predictions.cpu().numpy()
+
     def _plot_training_curves(self, losses: list) -> None:
         """Plot training loss curves."""
         plt.figure(figsize=(10, 6))
@@ -208,7 +243,23 @@ class CustomDataset(Dataset):
         return len(self.sig)
 
     def __getitem__(self, idx: int) -> tuple:
-        return self.sig[idx], self.v[idx], self.x[idx]
+        return (self.sig[idx], self.x[idx]), self.v[idx]
+
+
+class SimpleDataset(Dataset):
+    """
+    Simple PyTorch dataset for general use.
+    """
+
+    def __init__(self, data: torch.Tensor, targets: torch.Tensor):
+        self.data = data
+        self.targets = targets
+
+    def __len__(self) -> int:
+        return len(self.data)
+
+    def __getitem__(self, idx: int):
+        return self.data[idx], self.targets[idx]
 
 
 class InteractionMatrixOptimizer(BaseOptimizer):
