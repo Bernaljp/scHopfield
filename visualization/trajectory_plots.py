@@ -122,6 +122,21 @@ class TrajectoryPlotter:
 
         # Get expression range for the selected genes
         expression_data = self.analyzer.get_matrix(self.analyzer.spliced_matrix_key, genes=self.analyzer.genes)
+
+        # Validate gene indices
+        n_genes = expression_data.shape[1]
+        if gene_indices[0] >= n_genes:
+            gene_indices = (0, min(1, n_genes-1))
+        if gene_indices[1] >= n_genes:
+            gene_indices = (gene_indices[0], min(gene_indices[0]+1, n_genes-1))
+
+        # Handle case where there's only one gene
+        if n_genes == 1:
+            ax.text(0.5, 0.5, f'Phase portrait requires at least 2 genes\nOnly {n_genes} gene available',
+                   ha='center', va='center', transform=ax.transAxes)
+            ax.set_title(f'Phase Portrait - {cluster} (Insufficient genes)')
+            return ax
+
         gene1_range = [np.min(expression_data[:, gene_indices[0]]), np.max(expression_data[:, gene_indices[0]])]
         gene2_range = [np.min(expression_data[:, gene_indices[1]]), np.max(expression_data[:, gene_indices[1]])]
 
