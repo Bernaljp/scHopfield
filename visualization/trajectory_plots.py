@@ -121,7 +121,8 @@ class TrajectoryPlotter:
             fig, ax = plt.subplots(figsize=(8, 6))
 
         # Get expression range for the selected genes
-        expression_data = self.analyzer.get_matrix(self.analyzer.spliced_matrix_key, genes=self.analyzer.genes)
+        from ..utils.utilities import to_numpy
+        expression_data = to_numpy(self.analyzer.get_matrix(self.analyzer.spliced_matrix_key, genes=self.analyzer.genes))
 
         # Validate gene indices
         n_genes = expression_data.shape[1]
@@ -159,7 +160,7 @@ class TrajectoryPlotter:
         for i in range(resolution):
             for j in range(resolution):
                 # Create state vector (use mean values for other genes)
-                state = np.mean(expression_data, axis=0)
+                state = np.asarray(np.mean(expression_data, axis=0)).flatten()
                 state[gene_indices[0]] = X[i, j]
                 state[gene_indices[1]] = Y[i, j]
 
