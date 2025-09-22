@@ -8,8 +8,10 @@ using energy landscape approaches.
 # Import main analysis classes
 from .landscape_analyzer import LandscapeAnalyzer
 from .energy_calculator import EnergyCalculator
+from .network_analyzer import NetworkAnalyzer
 
 __all__ = [
     "LandscapeAnalyzer",
     "EnergyCalculator",
+    "NetworkAnalyzer",
 ]

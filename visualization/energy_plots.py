@@ -31,14 +31,16 @@ class EnergyPlotter:
         self.analyzer = landscape_analyzer
 
     def plot_energy_boxplots(self, order: Optional[List] = None, plot_energy: str = 'all',
-                           colors: Optional[Union[List, Dict]] = None, **fig_kws) -> np.ndarray:
+                           colors: Optional[Union[List, Dict]] = None, plot_type: str = 'boxplot',
+                           **fig_kws) -> np.ndarray:
         """
-        Plot the energy distributions for different clusters using boxplots.
+        Plot the energy distributions for different clusters using boxplots or violin plots.
 
         Args:
-            order: Order of clusters to display in the boxplots
+            order: Order of clusters to display in the plots
             plot_energy: Type of energy to plot ('all', 'interaction', 'degradation', 'bias')
             colors: Colors for the clusters
+            plot_type: Type of plot ('boxplot' or 'violin')
             **fig_kws: Additional keyword arguments for plot customization
 
         Returns:
@@ -75,10 +77,49 @@ class EnergyPlotter:
         for energy, ax in zip(es, axs):
             df = pd.DataFrame.from_dict(energy, orient='index').transpose().melt(
                 var_name='Cluster', value_name='Energy').dropna()
-            sns.boxplot(data=df, x='Cluster', y='Energy', order=order, ax=ax)
+
+            if plot_type == 'violin':
+                sns.violinplot(data=df, x='Cluster', y='Energy', order=order, ax=ax)
+            else:  # boxplot
+                sns.boxplot(data=df, x='Cluster', y='Energy', order=order, ax=ax)
 
         plt.tight_layout()
         return axs
+
+    def plot_energy_violin_plots(self, energy_data: Dict, order: Optional[List] = None,
+                                figsize: tuple = (22, 11), x_axis: str = 'linear',
+                                **kwargs) -> None:
+        """
+        Plot energy distributions as violin plots.
+
+        Args:
+            energy_data: Dictionary containing energy data for clusters
+            order: Order of clusters to display
+            figsize: Figure size
+            x_axis: Scale for x-axis ('linear' or 'logscale')
+            **kwargs: Additional plotting arguments
+        """
+        if order is None:
+            order = list(energy_data.keys())
+
+        # Prepare data for plotting
+        plot_data = []
+        for cluster in order:
+            if cluster in energy_data and cluster != 'all':
+                energies = energy_data[cluster]
+                for energy in energies:
+                    plot_data.append({'Cluster': cluster, 'Energy': energy})
+
+        df = pd.DataFrame(plot_data)
+
+        plt.figure(figsize=figsize)
+        sns.violinplot(data=df, x='Cluster', y='Energy', order=order, **kwargs)
+
+        if x_axis == 'logscale':
+            plt.yscale('log')
+
+        plt.xticks(rotation=45)
+        plt.tight_layout()
 
     def plot_energy_scatters(self, basis: str = 'umap', order: Optional[List] = None,
                            plot_energy: str = 'all', show_legend: bool = False, **fig_kws) -> None:

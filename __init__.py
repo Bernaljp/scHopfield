@@ -21,6 +21,12 @@ from .utils.utilities import (
     rezet,
     ordinal,
 )
+from .utils.analysis_utilities import (
+    change_spines,
+    extract_cluster_colors,
+    prepare_scaffold_matrix,
+    get_correlation_table,
+)
 
 __all__ = [
     # Base classes
@@ -39,4 +45,9 @@ __all__ = [
     "soften",
     "rezet",
     "ordinal",
+    # Analysis utilities
+    "change_spines",
+    "extract_cluster_colors",
+    "prepare_scaffold_matrix",
+    "get_correlation_table",
 ]

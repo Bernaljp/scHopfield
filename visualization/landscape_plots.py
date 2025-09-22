@@ -10,6 +10,7 @@ from typing import Optional, List, Dict, Union, Any
 from mpl_toolkits.mplot3d import Axes3D
 
 from ..utils.utilities import to_numpy, sigmoid, fit_sigmoid
+import seaborn as sns
 
 
 class LandscapePlotter:
@@ -306,6 +307,161 @@ class LandscapePlotter:
         ax.grid(True, alpha=0.3)
 
         return ax
+
+    def plot_eigenvalue_distributions(self, eigenvalues: np.ndarray, obs: pd.DataFrame,
+                                     cluster_key: str, order: List[str],
+                                     figsize: tuple = (15, 10)) -> None:
+        """
+        Plot eigenvalue distribution analysis.
+
+        Args:
+            eigenvalues: Eigenvalue array
+            obs: Observation metadata
+            cluster_key: Key for cluster information
+            order: Order of clusters
+            figsize: Figure size
+        """
+        fig, axes = plt.subplots(2, 2, figsize=figsize)
+
+        # Real eigenvalue distribution by cluster
+        real_eigenvals = np.real(eigenvalues)
+        positive_counts = []
+        cluster_labels = []
+
+        for cluster in order:
+            cluster_mask = obs[cluster_key] == cluster
+            cluster_eigenvals = real_eigenvals[cluster_mask]
+            positive_cluster = cluster_eigenvals[cluster_eigenvals > 0]
+
+            for val in positive_cluster.flatten():
+                positive_counts.append(val)
+                cluster_labels.append(cluster)
+
+        df_positive = pd.DataFrame({'eigenvalue': positive_counts, 'cluster': cluster_labels})
+
+        # Plot positive eigenvalue distribution
+        sns.boxplot(data=df_positive, x='cluster', y='eigenvalue', order=order, ax=axes[0, 0])
+        axes[0, 0].set_title('Positive Real Eigenvalue Distribution')
+        axes[0, 0].set_ylabel('Eigenvalue (Real)')
+        axes[0, 0].tick_params(axis='x', rotation=45)
+
+        # Plot number of positive eigenvalues per cluster
+        obs['eval_positive'] = np.sum(np.real(eigenvalues) > 0, axis=1)
+        df_counts = obs[[cluster_key, 'eval_positive']].copy()
+        sns.boxplot(data=df_counts, x=cluster_key, y='eval_positive', order=order, ax=axes[0, 1])
+        axes[0, 1].set_title('Number of Positive Eigenvalues per Cell')
+        axes[0, 1].set_ylabel('Count')
+        axes[0, 1].tick_params(axis='x', rotation=45)
+
+        # Plot Jacobian trace distribution
+        obs['jacobian_trace'] = np.trace(eigenvalues, axis1=1, axis2=2) if len(eigenvalues.shape) == 3 else np.sum(eigenvalues, axis=1)
+        sns.boxplot(data=obs, x=cluster_key, y='jacobian_trace', order=order, ax=axes[1, 0])
+        axes[1, 0].set_title('Jacobian Trace Distribution')
+        axes[1, 0].set_ylabel('Trace')
+        axes[1, 0].tick_params(axis='x', rotation=45)
+
+        # Plot mean real eigenvalue distribution
+        obs['eval_mean_real'] = np.mean(np.real(eigenvalues), axis=1)
+        sns.boxplot(data=obs, x=cluster_key, y='eval_mean_real', order=order, ax=axes[1, 1])
+        axes[1, 1].set_title('Mean Real Eigenvalue Distribution')
+        axes[1, 1].set_ylabel('Mean Real Eigenvalue')
+        axes[1, 1].tick_params(axis='x', rotation=45)
+
+        plt.tight_layout()
+        plt.show()
+
+    def plot_eigenvector_analysis(self, jacobians: np.ndarray, obs: pd.DataFrame,
+                                cluster_key: str, gene_names: np.ndarray,
+                                order: List[str], colors: Dict[str, Any],
+                                n_genes_table: int = 10, figsize: tuple = (18, 6)) -> pd.DataFrame:
+        """
+        Plot eigenvector analysis for dominant and recessive eigenvalues.
+
+        Args:
+            jacobians: Jacobian matrices
+            obs: Observation metadata
+            cluster_key: Key for cluster information
+            gene_names: Array of gene names
+            order: Order of clusters
+            colors: Colors for clusters
+            n_genes_table: Number of genes for table
+            figsize: Figure size
+
+        Returns:
+            DataFrame with eigenvector analysis results
+        """
+        # Create storage for eigenvector analysis
+        df_eigenvalues_combined = pd.DataFrame(
+            index=range(1, n_genes_table + 1),
+            columns=pd.MultiIndex.from_product([order, ['+EV gene', '+EV value', '-EV gene', '-EV value']])
+        )
+
+        fig, axes = plt.subplots(len(order), 3, figsize=(18, figsize[1] * len(order)))
+        if len(order) == 1:
+            axes = axes.reshape(1, -1)
+
+        for i, cell_type in enumerate(order):
+            # Get cluster mask
+            cluster_mask = obs[cluster_key] == cell_type
+            cluster_indices = np.where(cluster_mask)[0]
+
+            # Get mean Jacobian for this cluster
+            cluster_jacobians = jacobians[cluster_indices]
+            mean_jacobian = np.mean(cluster_jacobians, axis=0)
+
+            # Compute eigenvalues and eigenvectors of mean Jacobian
+            e_vals, e_vecs = np.linalg.eig(mean_jacobian)
+
+            # Find eigenvectors corresponding to most positive and most negative eigenvalues
+            max_idx = np.argmax(e_vals.real)
+            min_idx = np.argmin(e_vals.real)
+
+            eigvec_pos = e_vecs[:, max_idx].real
+            eigvec_neg = e_vecs[:, min_idx].real
+
+            # Sort genes by absolute eigenvector components
+            sorted_abs_pos = np.argsort(np.abs(eigvec_pos))[::-1]
+            sorted_abs_neg = np.argsort(np.abs(eigvec_neg))[::-1]
+
+            # ==== COLUMN 1: EIGENVALUE SCATTER ====
+            axes[i, 0].scatter(e_vals.real, e_vals.imag, alpha=0.7, s=50, color=colors[cell_type])
+            axes[i, 0].axhline(y=0, color='black', linestyle='--', alpha=0.5)
+            axes[i, 0].axvline(x=0, color='black', linestyle='--', alpha=0.5)
+            axes[i, 0].set_xlabel('Real Part')
+            axes[i, 0].set_ylabel('Imaginary Part')
+            axes[i, 0].set_title(f"{cell_type} - Eigenvalues")
+            axes[i, 0].grid(True, alpha=0.3)
+
+            # ==== COLUMN 2: POSITIVE EIGENVECTOR ====
+            y_pos = range(len(gene_names))
+            sorted_eigvec_pos = eigvec_pos[sorted_abs_pos]
+            axes[i, 1].barh(y_pos, sorted_eigvec_pos, color=colors[cell_type], alpha=0.7)
+            axes[i, 1].set_yticks(y_pos[::max(1, len(y_pos)//10)])
+            axes[i, 1].set_yticklabels(gene_names[sorted_abs_pos][::max(1, len(y_pos)//10)], fontsize=8)
+            axes[i, 1].set_xlabel('Eigenvector Component')
+            axes[i, 1].set_title(f'{cell_type} - Dominant Eigenvector')
+            axes[i, 1].grid(True, alpha=0.3)
+
+            # Store top genes
+            df_eigenvalues_combined[cell_type, '+EV gene'] = gene_names[sorted_abs_pos[:n_genes_table]]
+            df_eigenvalues_combined[cell_type, '+EV value'] = [f"{v:.3f}" for v in eigvec_pos[sorted_abs_pos[:n_genes_table]]]
+
+            # ==== COLUMN 3: NEGATIVE EIGENVECTOR ====
+            sorted_eigvec_neg = eigvec_neg[sorted_abs_neg]
+            axes[i, 2].barh(y_pos, sorted_eigvec_neg, color=colors[cell_type], alpha=0.7)
+            axes[i, 2].set_yticks(y_pos[::max(1, len(y_pos)//10)])
+            axes[i, 2].set_yticklabels(gene_names[sorted_abs_neg][::max(1, len(y_pos)//10)], fontsize=8)
+            axes[i, 2].set_xlabel('Eigenvector Component')
+            axes[i, 2].set_title(f'{cell_type} - Recessive Eigenvector')
+            axes[i, 2].grid(True, alpha=0.3)
+
+            df_eigenvalues_combined[cell_type, '-EV gene'] = gene_names[sorted_abs_neg[:n_genes_table]]
+            df_eigenvalues_combined[cell_type, '-EV value'] = [f"{v:.3f}" for v in eigvec_neg[sorted_abs_neg[:n_genes_table]]]
+
+        plt.tight_layout()
+        plt.show()
+
+        return df_eigenvalues_combined
 
 
 class JacobianPlotter:
