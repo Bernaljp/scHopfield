@@ -76,6 +76,7 @@ class JacobianAnalyzer(BaseAnalyzer):
         print("Computing Jacobian matrices in chunks...")
 
         expression_data = self.analyzer.get_matrix(self.analyzer.spliced_matrix_key, genes=self.analyzer.genes)
+        expression_data = to_numpy(expression_data)  # Convert sparse to dense if needed
         expression_data = torch.tensor(expression_data, dtype=torch.float32)
         n_cells, n_genes = expression_data.shape
 
