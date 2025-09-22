@@ -89,8 +89,8 @@ class JacobianAnalyzer(BaseAnalyzer):
         if compute_eigenvectors:
             self.eigenvectors = np.zeros((n_cells, n_genes, n_genes), dtype=np.complex128)
 
-        exponent = self.analyzer.exponent
-        threshold = self.analyzer.threshold
+        exponent = torch.tensor(self.analyzer.exponent, dtype=torch.float32).to(device)
+        threshold = torch.tensor(self.analyzer.threshold, dtype=torch.float32).to(device)
 
         for cluster in unique_clusters:
             W = torch.tensor(self.analyzer.W[cluster], dtype=torch.float32).to(device)
