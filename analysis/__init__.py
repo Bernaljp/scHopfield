@@ -9,9 +9,11 @@ using energy landscape approaches.
 from .landscape_analyzer import LandscapeAnalyzer
 from .energy_calculator import EnergyCalculator
 from .network_analyzer import NetworkAnalyzer
+from .jacobian_analyzer import JacobianAnalyzer
 
 __all__ = [
     "LandscapeAnalyzer",
     "EnergyCalculator",
     "NetworkAnalyzer",
+    "JacobianAnalyzer",
 ]
