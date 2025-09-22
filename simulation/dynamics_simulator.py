@@ -10,7 +10,7 @@ from scipy.optimize import minimize
 
 from ..core.base_models import BaseSimulator
 from ..utils.utilities import to_numpy, sigmoid
-from .ode_solver import ODESolver
+from .ode_solver import ODESolver, DynamicsSimulator
 
 
 class AttractorAnalyzer(BaseSimulator):
