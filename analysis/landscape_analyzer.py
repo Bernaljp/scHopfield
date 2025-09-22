@@ -637,24 +637,173 @@ class LandscapeAnalyzer(BaseAnalyzer, ValidationMixin):
 
     def plot_high_correlation_genes(self, top_n: int = 10, energy: str = 'total',
                                    cluster: str = 'all', absolute: bool = False,
-                                   basis: str = 'umap', figsize: tuple = (15, 10)) -> None:
+                                   basis: str = 'umap', figsize: tuple = (15, 10),
+                                   plot_correlations: bool = False) -> None:
         """
         Plot genes with high correlation to energy values.
 
         Args:
             top_n: Number of top genes to plot
-            energy: Type of energy correlation to use
+            energy: Type of energy correlation to use ('total', 'interaction', 'degradation', 'bias')
             cluster: Cluster to analyze
             absolute: Whether to use absolute correlation values
             basis: Embedding basis for plotting
             figsize: Figure size
+            plot_correlations: Whether to plot correlation values or gene expression
         """
         print(f"Plotting top {top_n} correlated genes for {energy} energy...")
 
-        # This is a placeholder - would need actual plotting implementation
+        # Determine the correct correlation dictionary based on the energy type
+        if energy == 'interaction':
+            corr_dict = self.correlation_interaction
+        elif energy == 'degradation':
+            corr_dict = self.correlation_degradation
+        elif energy == 'bias':
+            corr_dict = self.correlation_bias
+        else:
+            corr_dict = self.correlation
+
+        # Check if correlations have been computed
+        if not hasattr(self, 'correlation') or not corr_dict:
+            print("Correlations not computed yet. Run energy_genes_correlation() first.")
+            return
+
+        # Get the correlations for the specified cluster
+        if cluster not in corr_dict:
+            print(f"Cluster '{cluster}' not found in correlation data. Available clusters: {list(corr_dict.keys())}")
+            return
+
+        corr = corr_dict[cluster]
+
+        # Sort genes based on their absolute or relative correlation values
+        abscorr = np.abs(corr) if absolute else corr
+        top_genes_indices = np.argsort(abscorr)[-top_n:][::-1]
+        top_genes_names = self.gene_names[top_genes_indices]
+
+        # Plot the correlations
+        self.plot_gene_correlation(top_genes_names, energy=energy, cluster=cluster,
+                                 absolute=absolute, basis=basis, return_corr=False,
+                                 plot='correlation' if plot_correlations else 'expression',
+                                 figsize=figsize)
+
+    def plot_gene_correlation(self, genes, energy: str = 'total', cluster: str = 'all',
+                            absolute: bool = False, basis: str = 'umap', return_corr: bool = False,
+                            plot: str = 'correlation', figsize: tuple = (15, 10)) -> str:
+        """
+        Plot the correlation of specified genes with energy landscapes.
+
+        Args:
+            genes: Gene names to plot (can be string or list of strings)
+            energy: Type of energy correlation to use
+            cluster: Cluster to analyze
+            absolute: Whether to use absolute correlation values
+            basis: Embedding basis for plotting
+            return_corr: Whether to return correlation string instead of plotting
+            plot: Whether to plot 'correlation' or 'expression'
+            figsize: Figure size
+
+        Returns:
+            If return_corr is True, returns correlation string
+        """
         import matplotlib.pyplot as plt
-        fig, ax = plt.subplots(figsize=figsize)
-        ax.text(0.5, 0.5, f'Top {top_n} {energy} energy correlated genes\n(placeholder plot)',
-               ha='center', va='center', transform=ax.transAxes)
-        ax.set_title(f'High Correlation Genes - {energy.title()} Energy')
+        import numpy as np
+
+        # Ensure genes is a list
+        if isinstance(genes, str):
+            genes = [genes]
+
+        # Determine the correct correlation dictionary
+        if energy == 'interaction':
+            corr_dict = self.correlation_interaction
+        elif energy == 'degradation':
+            corr_dict = self.correlation_degradation
+        elif energy == 'bias':
+            corr_dict = self.correlation_bias
+        else:
+            corr_dict = self.correlation
+
+        if cluster not in corr_dict:
+            print(f"Cluster '{cluster}' not found in correlation data.")
+            return ""
+
+        corr = corr_dict[cluster]
+
+        # Get gene indices
+        gene_indices = []
+        for gene in genes:
+            if gene in self.gene_names:
+                idx = np.where(self.gene_names == gene)[0][0]
+                gene_indices.append(idx)
+            else:
+                print(f"Gene '{gene}' not found in gene names.")
+
+        if not gene_indices:
+            print("No valid genes found.")
+            return ""
+
+        # Get correlations for the genes
+        gene_corrs = corr[gene_indices]
+        if absolute:
+            gene_corrs = np.abs(gene_corrs)
+
+        if return_corr:
+            # Return correlation string
+            corr_strings = []
+            for gene, corr_val in zip(genes, gene_corrs):
+                corr_strings.append(f"{cluster}: {gene} = {corr_val:.4f}")
+            return "\n".join(corr_strings)
+
+        # Create subplot layout
+        n_genes = len(genes)
+        if n_genes == 1:
+            fig, ax = plt.subplots(1, 1, figsize=figsize)
+            axes = [ax]
+        else:
+            cols = min(4, n_genes)
+            rows = (n_genes + cols - 1) // cols
+            fig, axes = plt.subplots(rows, cols, figsize=figsize)
+            if rows == 1:
+                axes = axes if n_genes > 1 else [axes]
+            else:
+                axes = axes.flatten()
+
+        # Plot each gene
+        for i, (gene, gene_idx, corr_val) in enumerate(zip(genes, gene_indices, gene_corrs)):
+            if i >= len(axes):
+                break
+
+            ax = axes[i]
+
+            if plot == 'correlation':
+                # Plot correlation value as a bar
+                ax.bar([0], [corr_val], color='skyblue', alpha=0.7)
+                ax.set_ylim(-1, 1) if not absolute else ax.set_ylim(0, 1)
+                ax.set_ylabel('Correlation')
+                ax.set_title(f'{gene}\nCorr: {corr_val:.3f}')
+                ax.set_xticks([])
+            else:
+                # Plot gene expression as scatter plot
+                if basis in self.adata.obsm:
+                    embedding = self.adata.obsm[f'X_{basis}']
+                    gene_expr = to_numpy(self.adata.layers[self.spliced_matrix_key][:, gene_idx])
+
+                    scatter = ax.scatter(embedding[:, 0], embedding[:, 1],
+                                       c=gene_expr, cmap='viridis', s=1, alpha=0.6)
+                    ax.set_xlabel(f'{basis.upper()}_1')
+                    ax.set_ylabel(f'{basis.upper()}_2')
+                    ax.set_title(f'{gene} (Corr: {corr_val:.3f})')
+                    plt.colorbar(scatter, ax=ax, shrink=0.6)
+                else:
+                    ax.text(0.5, 0.5, f'{gene}\nCorr: {corr_val:.3f}\n({basis} not available)',
+                           ha='center', va='center', transform=ax.transAxes)
+                    ax.set_title(f'{gene}')
+
+        # Hide unused subplots
+        for i in range(len(genes), len(axes)):
+            axes[i].set_visible(False)
+
+        plt.suptitle(f'Top Correlated Genes - {energy.title()} Energy ({cluster})', fontsize=14)
+        plt.tight_layout()
         plt.show()
+
+        return ""
