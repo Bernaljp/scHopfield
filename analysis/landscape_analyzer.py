@@ -488,17 +488,20 @@ class LandscapeAnalyzer(BaseAnalyzer, ValidationMixin):
             else:
                 cells = self.adata.obs[self.cluster_key] == k
 
+            # Convert to numpy boolean array for consistent indexing
+            cells_bool = cells.values
+
             # Assign computed energies for the current cluster to the energies array
-            energies[0, cells] = self.E.get(k, np.zeros(sum(cells)))
-            energies[1, cells] = self.E_interaction.get(k, np.zeros(sum(cells)))
-            energies[2, cells] = self.E_degradation.get(k, np.zeros(sum(cells)))
-            energies[3, cells] = self.E_bias.get(k, np.zeros(sum(cells)))
+            energies[0, cells_bool] = self.E.get(k, np.zeros(sum(cells_bool)))
+            energies[1, cells_bool] = self.E_interaction.get(k, np.zeros(sum(cells_bool)))
+            energies[2, cells_bool] = self.E_degradation.get(k, np.zeros(sum(cells_bool)))
+            energies[3, cells_bool] = self.E_bias.get(k, np.zeros(sum(cells_bool)))
 
             # Extract expression data for the current cluster
-            X = to_numpy(self.adata.layers[self.spliced_matrix_key][cells][:, self.genes].T)
+            X = to_numpy(self.adata.layers[self.spliced_matrix_key][cells_bool][:, self.genes].T)
 
             # Compute correlations between energies and gene expression
-            correlations = np.nan_to_num(np.corrcoef(np.vstack((energies[:, cells], X)))[:4, 4:])
+            correlations = np.nan_to_num(np.corrcoef(np.vstack((energies[:, cells_bool], X)))[:4, 4:])
 
             # Store computed correlations in their respective dictionaries
             self.correlation[k], self.correlation_interaction[k], self.correlation_degradation[k], self.correlation_bias[k] = correlations
