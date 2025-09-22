@@ -25,7 +25,34 @@ class EnergyCalculator(BaseEnergyCalculator):
         Args:
             analyzer: The main LandscapeAnalyzer instance.
         """
+        # Initialize the parent class with the analyzer's adata
+        super().__init__(analyzer.adata)
         self.analyzer = analyzer
+
+    def compute(self, **kwargs) -> Dict[str, Any]:
+        """
+        Compute method required by BaseAnalyzer.
+
+        Returns:
+            Dictionary containing computation results
+        """
+        self.get_energies()
+        return {'energies_computed': True}
+
+    def calculate_energy(self, x: np.ndarray, cluster: str = 'all') -> np.ndarray:
+        """
+        Calculate energy for given expression values.
+
+        Parameters:
+            x: Expression matrix or values
+            cluster: Cluster identifier
+
+        Returns:
+            Calculated energy values
+        """
+        # Use the get_energies method to calculate energies for specific input
+        energies, _, _, _ = self.get_energies(x=x)
+        return energies.get(cluster, np.array([]))
 
     def get_energies(self, x: Optional[np.ndarray] = None) -> Optional[Tuple[Dict, Dict, Dict, Dict]]:
         """
