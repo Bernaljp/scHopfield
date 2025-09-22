@@ -79,39 +79,30 @@ def prepare_scaffold_matrix(adata, base_GRN: pd.DataFrame) -> pd.DataFrame:
     Returns:
         Scaffold matrix as DataFrame
     """
-    # Ensure case-insensitive handling of gene names
-    genes_to_use = list(adata.var['use_for_dynamics'].values)
-    scaffold = pd.DataFrame(0, index=adata.var.index[adata.var['use_for_dynamics']],
-                          columns=adata.var.index[adata.var['use_for_dynamics']])
+    # Get genes to use (preserve original order/case)
+    genes = adata.var.index[adata.var['use_for_dynamics']]
+    genes_lower = genes.str.lower()
 
-    # Convert gene names to lowercase for case-insensitive comparison
-    tfs = list(set(base_GRN.columns.str.lower()) & set(scaffold.index.str.lower()))
-    target_genes = list(set(base_GRN['gene_short_name'].str.lower().values) & set(scaffold.columns.str.lower()))
+    # Lowercase the relevant base_GRN data and columns for case-insensitive matching
+    grn = base_GRN.copy()
+    grn['gene_short_name'] = grn['gene_short_name'].str.lower()
+    grn.columns = [c.lower() if c != 'gene_short_name' else c for c in grn.columns]
 
-    # Create a mapping from lowercase to original case
-    index_mapping = {gene.lower(): gene for gene in scaffold.index}
-    column_mapping = {gene.lower(): gene for gene in scaffold.columns}
-    grn_tf_mapping = {gene.lower(): gene for gene in base_GRN.columns if gene != 'gene_short_name'}
-    grn_target_mapping = {gene.lower(): gene for gene in base_GRN['gene_short_name'].values}
+    # Filter only TF columns (not gene_short_name) that are present in the genes list
+    tf_cols = [c for c in grn.columns if c != 'gene_short_name' and c in genes_lower.values]
+    grn = grn[grn['gene_short_name'].isin(genes_lower.values)]
 
-    # Populate the scaffold matrix with case-insensitive matching
-    for tf_lower in tfs:
-        tf_original = index_mapping[tf_lower]
-        grn_tf_original = grn_tf_mapping[tf_lower]
+    # Scaffold initialized as zeros
+    scaffold = pd.DataFrame(0, index=genes, columns=genes)
+    # Reindex grn to match scaffold's index/column order (using lowercase for matching)
+    grn = grn.set_index('gene_short_name').reindex(genes_lower, fill_value=0)[tf_cols]
+    grn.columns = genes[genes_lower.isin(tf_cols)].values
 
-        for target_lower in target_genes:
-            target_original = column_mapping[target_lower]
-            grn_target_original = grn_target_mapping[target_lower]
+    # Set tf/target values using pandas assignment and alignment
+    scaffold.update(grn.T)  # ensures targets (from base_GRN rows) match scaffold cols
 
-            # Find the value in the base_GRN
-            mask = base_GRN['gene_short_name'] == grn_target_original
-            if mask.any():
-                value = base_GRN.loc[mask, grn_tf_original].values[0]
-                scaffold.loc[tf_original, target_original] = value
-
-    print(f"TFs in scaffold: {len(tfs)}")
-    print(f"Target genes in scaffold: {len(target_genes)}")
-
+    print(f"TFs in scaffold: {len(tf_cols)}")
+    print(f"Target genes in scaffold: {grn.shape[0]}")
     return scaffold
 
 
