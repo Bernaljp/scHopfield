@@ -368,6 +368,7 @@ class LandscapeAnalyzer(BaseAnalyzer, ValidationMixin):
         """
         Helper function to fit interaction matrix W and bias vector I for a group (global or cluster).
         """
+        import torch
         device_torch = torch.device("cuda" if (torch.cuda.is_available() and device == "cuda") else "cpu")
 
         W = None
@@ -423,10 +424,11 @@ class LandscapeAnalyzer(BaseAnalyzer, ValidationMixin):
             self.gamma[group] = g
 
     def _create_train_loader(self, sig: np.ndarray, v: np.ndarray, x: np.ndarray,
-                           device: torch.device, batch_size: int = 64):
+                           device, batch_size: int = 64):
         """
         Helper function to create a PyTorch DataLoader for training.
         """
+        import torch
         from ..optimization.scaffold_optimizer import CustomDataset
         import torch.utils.data
 
