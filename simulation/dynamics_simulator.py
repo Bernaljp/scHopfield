@@ -283,14 +283,21 @@ class EnergySimulator(BaseSimulator):
 
         for i in range(n_timepoints):
             state = trajectory[:, i]
-            energies = self.analyzer.get_energies(state.reshape(1, -1))
 
-            if energies is not None:
-                E, E_int, E_deg, E_bias = energies
-                total_energy[i] = E[cluster][0]
-                interaction_energy[i] = E_int[cluster][0]
-                degradation_energy[i] = E_deg[cluster][0]
-                bias_energy[i] = E_bias[cluster][0]
+            # Compute energy components for this state
+            W = self.analyzer.W[cluster]
+            I = self.analyzer.I[cluster]
+            gamma = (self.analyzer.adata.var[self.analyzer.gamma_key][self.analyzer.genes].values
+                    if not self.analyzer.refit_gamma else self.analyzer.gamma[cluster])
+
+            # Compute sigmoid activation
+            sig = sigmoid(state, self.analyzer.threshold, self.analyzer.exponent)
+
+            # Compute individual energy components
+            interaction_energy[i] = -0.5 * sig @ W @ sig
+            degradation_energy[i] = 0.5 * gamma @ (state ** 2)
+            bias_energy[i] = -I @ sig
+            total_energy[i] = interaction_energy[i] + degradation_energy[i] + bias_energy[i]
 
         return {
             'trajectory': trajectory,
