@@ -151,7 +151,7 @@ class ScaffoldOptimizer(nn.Module, BaseOptimizer):
         for epoch in tqdm(range(epochs), desc="Training"):
             epoch_loss = 0.0
 
-            for batch_idx, (sig, v, x) in enumerate(train_loader):
+            for batch_idx, ((sig, x), v) in enumerate(train_loader):
                 sig, v, x = sig.to(self.device), v.to(self.device), x.to(self.device)
 
                 optimizer.zero_grad()
