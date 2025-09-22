@@ -256,21 +256,182 @@ class LandscapeAnalyzer(BaseAnalyzer, ValidationMixin):
             'analysis_complete': True
         }
 
-    def fit_interactions(self, **kwargs) -> None:
+    def fit_interactions(self,
+                         w_threshold: float = None,
+                         w_scaffold: np.ndarray = None,
+                         scaffold_regularization: float = None,
+                         only_TFs: bool = None,
+                         infer_I: bool = None,
+                         refit_gamma: bool = None,
+                         pre_initialize_W: bool = None,
+                         n_epochs: int = None,
+                         criterion: str = None,
+                         batch_size: int = None,
+                         device: str = None,
+                         skip_all: bool = None,
+                         use_scheduler: bool = None,
+                         scheduler_kws: dict = None,
+                         get_plots: bool = None) -> None:
         """
-        Fit interaction matrices W and bias vectors I.
+        Fit interaction matrices W and bias vectors I for each cluster.
 
-        This is a placeholder method that should be implemented with the
-        actual interaction fitting logic.
+        This method implements the complete interaction fitting logic from scMomentum,
+        including scaffold-based optimization using PyTorch.
         """
-        print("Fitting interaction matrices...")
+        # Use stored parameters if not overridden
+        w_threshold = w_threshold if w_threshold is not None else self.w_threshold
+        w_scaffold = w_scaffold if w_scaffold is not None else self.w_scaffold
+        scaffold_regularization = scaffold_regularization if scaffold_regularization is not None else self.scaffold_regularization
+        only_TFs = only_TFs if only_TFs is not None else self.only_TFs
+        infer_I = infer_I if infer_I is not None else self.infer_I
+        refit_gamma = refit_gamma if refit_gamma is not None else self.refit_gamma
+        pre_initialize_W = pre_initialize_W if pre_initialize_W is not None else self.pre_initialize_W
+        n_epochs = n_epochs if n_epochs is not None else self.n_epochs
+        criterion = criterion if criterion is not None else self.criterion
+        batch_size = batch_size if batch_size is not None else self.batch_size
+        device = device if device is not None else self.device
+        skip_all = skip_all if skip_all is not None else self.skip_all
+        use_scheduler = use_scheduler if use_scheduler is not None else self.use_scheduler
+        scheduler_kws = scheduler_kws if scheduler_kws is not None else self.scheduler_kws
+        get_plots = get_plots if get_plots is not None else self.get_plots
 
-        # Initialize interaction matrices and bias vectors for each cluster
-        for cluster in self.clusters:
-            self.W[cluster] = np.random.randn(len(self.genes), len(self.genes)) * 0.1
-            self.I[cluster] = np.random.randn(len(self.genes)) * 0.1
+        print("Fitting interaction matrices using scaffold optimization...")
 
-        print(f"Initialized interaction matrices for {len(self.clusters)} clusters")
+        # Get spliced and velocity matrices
+        x = to_numpy(self.get_matrix(self.spliced_matrix_key, genes=self.genes))
+        v = to_numpy(self.get_matrix(self.velocity_key, genes=self.genes))
+        g = self.adata.var[self.gamma_key][self.genes].values.astype(x.dtype)
+        sig = self.get_sigmoid()
+
+        self.W = {}
+        self.I = {}
+        if refit_gamma:
+            self.gamma = {}
+
+        clusters = self.adata.obs[self.cluster_key].unique()
+        if not skip_all:
+            clusters = np.append(clusters, 'all')
+        if w_scaffold is not None:
+            self.models = {}
+
+        for ct in clusters:
+            print(f"Inferring interaction matrix W and bias vector I for cluster {ct}")
+            if ct == 'all':
+                idx = slice(None)
+            else:
+                idx = self.adata.obs[self.cluster_key].values == ct
+
+            self._fit_interactions_for_group(
+                group=ct,
+                x=x[idx, :],
+                v=v[idx, :],
+                sig=sig[idx, :],
+                g=g,
+                w_threshold=w_threshold,
+                w_scaffold=w_scaffold,
+                scaffold_regularization=scaffold_regularization,
+                only_TFs=only_TFs,
+                infer_I=infer_I,
+                refit_gamma=refit_gamma,
+                pre_initialize_W=pre_initialize_W,
+                n_epochs=n_epochs,
+                criterion=criterion,
+                batch_size=batch_size,
+                device=device,
+                use_scheduler=use_scheduler,
+                scheduler_kws=scheduler_kws,
+                get_plots=get_plots,
+            )
+
+        print(f"Fitted interaction matrices for {len(clusters)} clusters")
+
+    def _fit_interactions_for_group(self,
+                                   group: str,
+                                   x: np.ndarray,
+                                   v: np.ndarray,
+                                   sig: np.ndarray,
+                                   g: np.ndarray,
+                                   w_threshold: float,
+                                   w_scaffold: np.ndarray,
+                                   scaffold_regularization: float,
+                                   only_TFs: bool,
+                                   infer_I: bool,
+                                   refit_gamma: bool,
+                                   pre_initialize_W: bool,
+                                   n_epochs: int,
+                                   criterion: str,
+                                   batch_size: int,
+                                   device: str,
+                                   use_scheduler: bool,
+                                   scheduler_kws: dict,
+                                   get_plots: bool) -> None:
+        """
+        Helper function to fit interaction matrix W and bias vector I for a group (global or cluster).
+        """
+        device_torch = torch.device("cuda" if (torch.cuda.is_available() and device == "cuda") else "cpu")
+
+        W = None
+        I = None
+        if (w_scaffold is None) or pre_initialize_W:
+            # Default L2 criterion using least squares
+            rhs = np.hstack((sig, np.ones((sig.shape[0], 1), dtype=x.dtype))) if infer_I else sig
+            try:
+                WI = np.linalg.lstsq(rhs, v + g[None, :] * x, rcond=1e-5)[0]
+                W = WI[:-1, :].T if infer_I else WI.T
+                I = WI[-1, :] if infer_I else -np.clip(WI, a_min=None, a_max=0).sum(axis=0)
+            except:
+                pass
+
+        if w_scaffold is not None:
+            # Import the optimizer here to avoid circular imports
+            from ..optimization.scaffold_optimizer import ScaffoldOptimizer, CustomDataset
+            import torch.utils.data
+
+            # Use ScaffoldOptimizer
+            model = ScaffoldOptimizer(
+                g, w_scaffold, device_torch, refit_gamma,
+                scaffold_regularization=scaffold_regularization,
+                use_masked_linear=only_TFs,
+                pre_initialized_W=W,
+                pre_initialized_I=I
+            )
+            train_loader = self._create_train_loader(sig, v, x, device_torch, batch_size=batch_size)
+            scheduler_fn = torch.optim.lr_scheduler.StepLR if use_scheduler else None
+            scheduler_kwargs = {"step_size": 100, "gamma": 0.4} if scheduler_kws == {} else scheduler_kws
+            model.train_model(
+                train_loader, n_epochs, learning_rate=0.1, criterion=criterion,
+                scheduler_fn=scheduler_fn, scheduler_kwargs=scheduler_kwargs, get_plots=get_plots
+            )
+            W = model.W.weight.detach().cpu().numpy()
+            I = model.I.detach().cpu().numpy()
+            g = np.exp(model.gamma.detach().cpu().numpy()) if refit_gamma else g
+            if hasattr(self, 'models'):
+                self.models[group] = model
+
+        # Handle case where W and I are still None
+        if W is None:
+            W = np.random.randn(len(self.genes), len(self.genes)) * 0.01
+        if I is None:
+            I = np.random.randn(len(self.genes)) * 0.01
+
+        # Threshold values and store results
+        W[np.abs(W) < w_threshold] = 0
+        I[np.abs(I) < w_threshold] = 0
+        self.W[group] = W
+        self.I[group] = I
+        if refit_gamma:
+            self.gamma[group] = g
+
+    def _create_train_loader(self, sig: np.ndarray, v: np.ndarray, x: np.ndarray,
+                           device: torch.device, batch_size: int = 64):
+        """
+        Helper function to create a PyTorch DataLoader for training.
+        """
+        from ..optimization.scaffold_optimizer import CustomDataset
+        import torch.utils.data
+
+        dataset = CustomDataset(sig, v, x, device)
+        return torch.utils.data.DataLoader(dataset, batch_size=batch_size, shuffle=True)
 
     def get_energies(self) -> None:
         """
