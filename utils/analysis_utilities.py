@@ -11,23 +11,34 @@ import pandas as pd
 from typing import Dict, Any, Optional, Union, List
 
 
-def change_spines(ax: plt.Axes) -> None:
+def change_spines(ax: Union[plt.Axes, List[plt.Axes]]) -> None:
     """
     Modify axes spines for better visualization.
 
     Args:
-        ax: Matplotlib axes object
+        ax: Matplotlib axes object or list of axes objects
     """
-    for ch in ax.get_children():
-        try:
-            ch.set_alpha(0.5)
-        except:
+    # Handle case where ax is a list (from some plotting functions)
+    if isinstance(ax, list):
+        axes_list = ax
+    else:
+        axes_list = [ax]
+
+    for single_ax in axes_list:
+        # Skip if not a valid axes object
+        if not hasattr(single_ax, 'get_children'):
             continue
 
-    for spine in ax.spines.values():
-        spine.set_edgecolor('black')
-        spine.set_linewidth(1.5)
-        spine.set_alpha(1)
+        for ch in single_ax.get_children():
+            try:
+                ch.set_alpha(0.5)
+            except:
+                continue
+
+        for spine in single_ax.spines.values():
+            spine.set_edgecolor('black')
+            spine.set_linewidth(1.5)
+            spine.set_alpha(1)
 
 
 def extract_cluster_colors(adata, cluster_key: str) -> Dict[str, np.ndarray]:
@@ -41,12 +52,6 @@ def extract_cluster_colors(adata, cluster_key: str) -> Dict[str, np.ndarray]:
     Returns:
         Dictionary mapping cluster names to color arrays
     """
-    # Create a dummy plot to extract colors
-    fig, ax = plt.subplots()
-    scatter = ax.scatter(range(len(adata.obs[cluster_key].unique())),
-                        range(len(adata.obs[cluster_key].unique())),
-                        c=range(len(adata.obs[cluster_key].unique())))
-
     # Extract colors
     colors = {}
     unique_clusters = adata.obs[cluster_key].unique()
@@ -55,10 +60,11 @@ def extract_cluster_colors(adata, cluster_key: str) -> Dict[str, np.ndarray]:
         # Get first cell of this cluster to extract color
         cluster_mask = adata.obs[cluster_key] == cluster
         if cluster_mask.any():
-            colors[cluster] = plt.cm.tab10(i)[:4]  # RGBA values
-            colors[cluster][3] = 1  # Set alpha to 1
+            # Convert tuple to list to allow modification
+            color_array = list(plt.cm.tab10(i)[:4])  # RGBA values
+            color_array[3] = 1  # Set alpha to 1
+            colors[cluster] = np.array(color_array)
 
-    plt.close(fig)
     return colors
 
 

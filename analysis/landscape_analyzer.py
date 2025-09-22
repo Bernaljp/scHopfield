@@ -220,3 +220,25 @@ class LandscapeAnalyzer(BaseAnalyzer, ValidationMixin):
             return np.where(genes)[0]
         else:
             raise ValueError("Genes argument must be None, a list of gene names, indices, or a Boolean mask.")
+
+    def compute(self, **kwargs) -> Dict[str, Any]:
+        """
+        Compute the complete energy landscape analysis.
+
+        This method implements the abstract method from BaseAnalyzer and runs
+        the complete analysis pipeline.
+
+        Returns:
+            Dictionary containing analysis results
+        """
+        # Fit sigmoid functions to expression data
+        self.fit_all_sigmoids()
+
+        # Write sigmoids to the adata object
+        self.write_sigmoids()
+
+        # Return basic results (this is a placeholder implementation)
+        return {
+            'fitted_sigmoids': True,
+            'analysis_complete': True
+        }
