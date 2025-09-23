@@ -61,7 +61,9 @@ class AttractorAnalyzer(BaseSimulator):
             Dictionary containing different types of attractors
         """
         # Get expression range for generating initial conditions
+        from ..utils.utilities import to_numpy
         expression_data = self.analyzer.get_matrix(self.analyzer.spliced_matrix_key, genes=self.analyzer.genes)
+        expression_data = to_numpy(expression_data)  # Convert sparse to dense if needed
         min_expr = np.min(expression_data, axis=0)
         max_expr = np.max(expression_data, axis=0)
 
@@ -320,7 +322,9 @@ class EnergySimulator(BaseSimulator):
             List of energy minima with their properties
         """
         # Get expression range for random starting points
+        from ..utils.utilities import to_numpy
         expression_data = self.analyzer.get_matrix(self.analyzer.spliced_matrix_key, genes=self.analyzer.genes)
+        expression_data = to_numpy(expression_data)  # Convert sparse to dense if needed
         min_expr = np.min(expression_data, axis=0)
         max_expr = np.max(expression_data, axis=0)
 
