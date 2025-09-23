@@ -332,7 +332,8 @@ class EnergySimulator(BaseSimulator):
 
         def energy_function(state):
             """Energy function to minimize."""
-            energies = self.analyzer.get_energies(state.reshape(1, -1))
+            # Use the energy calculator directly with custom state
+            energies = self.analyzer.energy_calculator.get_energies(state.reshape(1, -1))
             if energies is not None:
                 E, _, _, _ = energies
                 return E[cluster][0]
