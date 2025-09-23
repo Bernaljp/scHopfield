@@ -65,6 +65,146 @@ class NetworkAnalyzer(BaseAnalyzer):
             links[k]['cluster'] = k
         return links
 
+    def compute_network_centralities_fast(self) -> Any:
+        """
+        Fast network centrality computation using CellOracle Links object.
+        This is much faster than the NetworkX-based approach.
+
+        Returns:
+            CellOracle Links object with computed network centralities
+        """
+        try:
+            import celloracle as co
+        except ImportError:
+            raise ImportError("CellOracle is required for fast centrality computation. "
+                            "Install with: pip install celloracle")
+
+        print("Computing network centralities using CellOracle (fast method)...")
+
+        # Get links dictionary
+        links_dict = self.get_links_dict()
+
+        # Remove 'all' cluster if it exists
+        try:
+            links_dict.__delitem__('all')
+        except:
+            pass
+
+        # Create CellOracle Links object
+        links = co.network_analysis.links_object.Links(
+            name=self.analyzer.cluster_key,
+            links_dict=links_dict
+        )
+
+        # Set up color information
+        co.trajectory.oracle_utility._check_color_information_and_create_if_not_found(
+            self.analyzer.adata, self.analyzer.cluster_key, 'umap'
+        )
+
+        try:
+            links.palette = pd.DataFrame.from_dict(
+                self.analyzer.adata.uns[f'{self.analyzer.cluster_key}_colors'],
+                orient='index',
+                columns=['palette']
+            )
+        except:
+            try:
+                links.palette = pd.DataFrame(
+                    self.analyzer.adata.uns[f'{self.analyzer.cluster_key}_colors'],
+                    index=self.analyzer.adata.obs[self.analyzer.cluster_key].unique(),
+                    columns=['palette']
+                )
+            except:
+                print("Warning: Could not set palette colors for Links object")
+
+        # Filter links and calculate network scores
+        links.filter_links(p=0.001, weight="coef_abs", threshold_number=40000)
+        links.get_network_score()
+
+        print(f"Computed centralities for {len(links.cluster)} clusters")
+        print(f"Available centrality measures: {list(links.merged_score.columns.drop('cluster'))}")
+
+        return links
+
+    def get_centrality_table_from_links(self, links, order: List[str],
+                                       score: str = 'eigenvector_centrality',
+                                       n_genes: int = 10) -> pd.DataFrame:
+        """
+        Create a table of top genes by centrality score from CellOracle Links object.
+
+        Args:
+            links: CellOracle Links object with computed centralities
+            order: Order of clusters
+            score: Centrality score to use
+            n_genes: Number of top genes
+
+        Returns:
+            DataFrame with top genes by centrality
+        """
+        df_centrality = pd.DataFrame(
+            index=range(1, n_genes + 1),
+            columns=pd.MultiIndex.from_product([order, ['Gene', 'Score']])
+        )
+
+        for cluster in order:
+            if cluster in links.merged_score['cluster'].values:
+                cluster_data = links.merged_score[links.merged_score['cluster'] == cluster]
+                if score in cluster_data.columns:
+                    top_genes = cluster_data.nlargest(n_genes, score)
+
+                    df_centrality[cluster, 'Gene'] = top_genes.index.values[:n_genes]
+                    df_centrality[cluster, 'Score'] = [f"{v:.4f}" for v in top_genes[score].values[:n_genes]]
+
+        return df_centrality
+
+    def plot_centrality_rankings_from_links(self, links, order: List[str],
+                                           colors: Dict[str, Any],
+                                           score: str = 'eigenvector_centrality',
+                                           n_genes: int = 10,
+                                           figsize: Tuple[int, int] = None) -> None:
+        """
+        Plot top genes by centrality score for each cluster using CellOracle Links data.
+
+        Args:
+            links: CellOracle Links object with computed centralities
+            order: Order of clusters to plot
+            colors: Colors for each cluster
+            score: Centrality score to plot
+            n_genes: Number of top genes to show
+            figsize: Figure size
+        """
+        if figsize is None:
+            figsize = (5*len(order), 6)
+
+        fig, axes = plt.subplots(1, len(order), figsize=figsize)
+        if len(order) == 1:
+            axes = [axes]
+
+        for i, cluster in enumerate(order):
+            if cluster in links.merged_score['cluster'].values:
+                cluster_data = links.merged_score[links.merged_score['cluster'] == cluster]
+                if score in cluster_data.columns:
+                    top_genes = cluster_data.nlargest(n_genes, score)
+
+                    y_pos = range(len(top_genes))
+                    axes[i].barh(y_pos, top_genes[score].values, color=colors[cluster], alpha=0.7)
+                    axes[i].set_yticks(y_pos)
+                    axes[i].set_yticklabels(top_genes.index.values, fontsize=10)
+                    axes[i].set_xlabel(score.replace('_', ' ').title())
+                    axes[i].set_title(f'{cluster}\nTop {n_genes} Genes')
+                    axes[i].grid(True, alpha=0.3)
+                else:
+                    axes[i].text(0.5, 0.5, f'Score {score} not available',
+                               ha='center', va='center', transform=axes[i].transAxes)
+                    axes[i].set_title(f'{cluster}\nNo Data')
+            else:
+                axes[i].text(0.5, 0.5, 'No data', ha='center', va='center',
+                           transform=axes[i].transAxes)
+                axes[i].set_title(f'{cluster}\nNo Data')
+
+        plt.tight_layout()
+        plt.show()
+
     def compute_network_centralities(self) -> Dict[str, pd.DataFrame]:
         """
         Compute network centrality measures for each cluster.
