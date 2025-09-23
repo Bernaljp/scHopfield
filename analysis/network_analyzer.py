@@ -30,7 +30,18 @@ class NetworkAnalyzer(BaseAnalyzer):
         Args:
             landscape_analyzer: Reference to the main LandscapeAnalyzer instance
         """
+        super().__init__(landscape_analyzer.adata)
         self.analyzer = landscape_analyzer
+
+    def compute(self, **kwargs) -> Dict[str, Any]:
+        """
+        Compute method required by BaseAnalyzer.
+
+        Returns:
+            Dictionary containing computation results
+        """
+        centrality_results = self.compute_network_centralities()
+        return {'centrality_results': centrality_results}
 
     def get_links_dict(self) -> Dict[str, pd.DataFrame]:
         """
