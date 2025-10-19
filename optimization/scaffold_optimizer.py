@@ -62,6 +62,7 @@ class ScaffoldOptimizer(nn.Module, BaseOptimizer):
                  device: torch.device,
                  refit_gamma: bool = False,
                  scaffold_regularization: float = 1.0,
+                 bias_regularization: float = 0.1,
                  use_masked_linear: bool = False,
                  pre_initialized_W: Optional[torch.Tensor] = None,
                  pre_initialized_I: Optional[torch.Tensor] = None):
@@ -84,6 +85,7 @@ class ScaffoldOptimizer(nn.Module, BaseOptimizer):
 
         init_I = torch.rand((n,), device=device) if pre_initialized_I is None else torch.tensor(pre_initialized_I, dtype=torch.float32, device=device)
         self.I = nn.Parameter(init_I)
+        self.bias_lambda = bias_regularization
 
         if use_masked_linear:
             self.W = MaskedLinearLayer(n, n, self.scaffold, device=device, pre_initialized_W=pre_initialized_W)
@@ -147,6 +149,7 @@ class ScaffoldOptimizer(nn.Module, BaseOptimizer):
         # Training loop
         losses = []
         self.train()
+        mask_m = 1.0 - self.scaffold_raw
 
         for epoch in tqdm(range(epochs), desc="Training"):
             epoch_loss = 0.0
@@ -164,8 +167,10 @@ class ScaffoldOptimizer(nn.Module, BaseOptimizer):
 
                 # Add scaffold regularization
                 if hasattr(self.W, 'weight'):
-                    scaffold_loss = torch.norm(self.W.weight - self.scaffold_raw) * self.scaffold_lambda
+                    scaffold_loss = self.scaffold_lambda * ((self.W.weight * mask_m).norm(2) + (self.W.weight * mask_m).norm(1))
                     loss += scaffold_loss
+
+                loss += self.bias_lambda * self.I.norm(2)
 
                 # Backward pass
                 loss.backward()
