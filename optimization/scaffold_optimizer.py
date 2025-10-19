@@ -170,7 +170,8 @@ class ScaffoldOptimizer(nn.Module, BaseOptimizer):
                     scaffold_loss = self.scaffold_lambda * ((self.W.weight * mask_m).norm(2) + (self.W.weight * mask_m).norm(1))
                     loss += scaffold_loss
 
-                loss += self.bias_lambda * (torch.abs(self.I)+10).norm(2)
+                # loss += self.bias_lambda * (torch.abs(self.I)+10).norm(2)
+                loss += self.bias_lambda * torch.norm(self.I, 2)
 
                 # Backward pass
                 loss.backward()
