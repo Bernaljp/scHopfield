@@ -3,6 +3,7 @@ Landscape analysis functionality for scHopfield package.
 Contains the main LandscapeAnalyzer class that implements energy landscape analysis.
 """
 
+from audioop import bias
 import anndata
 from collections import defaultdict
 import itertools
@@ -38,6 +39,7 @@ class LandscapeAnalyzer(BaseAnalyzer, ValidationMixin):
                  w_threshold: float = 1e-5,
                  w_scaffold: Union[None, np.ndarray] = None,
                  scaffold_regularization: float = 1.0,
+                 scaffold_bias: float = 0.1,
                  only_TFs: bool = False,
                  infer_I: bool = False,
                  refit_gamma: bool = False,
@@ -68,6 +70,7 @@ class LandscapeAnalyzer(BaseAnalyzer, ValidationMixin):
         self.w_threshold = w_threshold
         self.w_scaffold = w_scaffold
         self.scaffold_regularization = scaffold_regularization
+        self.scaffold_bias = scaffold_bias
         self.only_TFs = only_TFs
         self.infer_I = infer_I
         self.refit_gamma = refit_gamma
@@ -260,6 +263,7 @@ class LandscapeAnalyzer(BaseAnalyzer, ValidationMixin):
                          w_threshold: float = None,
                          w_scaffold: np.ndarray = None,
                          scaffold_regularization: float = None,
+                         bias_regularization: float = None,
                          only_TFs: bool = None,
                          infer_I: bool = None,
                          refit_gamma: bool = None,
@@ -282,6 +286,7 @@ class LandscapeAnalyzer(BaseAnalyzer, ValidationMixin):
         w_threshold = w_threshold if w_threshold is not None else self.w_threshold
         w_scaffold = w_scaffold if w_scaffold is not None else self.w_scaffold
         scaffold_regularization = scaffold_regularization if scaffold_regularization is not None else self.scaffold_regularization
+        bias_regularization = bias_regularization if bias_regularization is not None else self.scaffold_bias
         only_TFs = only_TFs if only_TFs is not None else self.only_TFs
         infer_I = infer_I if infer_I is not None else self.infer_I
         refit_gamma = refit_gamma if refit_gamma is not None else self.refit_gamma
@@ -330,6 +335,7 @@ class LandscapeAnalyzer(BaseAnalyzer, ValidationMixin):
                 w_threshold=w_threshold,
                 w_scaffold=w_scaffold,
                 scaffold_regularization=scaffold_regularization,
+                bias_regularization=bias_regularization,
                 only_TFs=only_TFs,
                 infer_I=infer_I,
                 refit_gamma=refit_gamma,
@@ -354,6 +360,7 @@ class LandscapeAnalyzer(BaseAnalyzer, ValidationMixin):
                                    w_threshold: float,
                                    w_scaffold: np.ndarray,
                                    scaffold_regularization: float,
+                                   bias_regularization: float,
                                    only_TFs: bool,
                                    infer_I: bool,
                                    refit_gamma: bool,
@@ -392,6 +399,7 @@ class LandscapeAnalyzer(BaseAnalyzer, ValidationMixin):
             model = ScaffoldOptimizer(
                 g, w_scaffold, device_torch, refit_gamma,
                 scaffold_regularization=scaffold_regularization,
+                bias_regularization=bias_regularization,
                 use_masked_linear=only_TFs,
                 pre_initialized_W=W,
                 pre_initialized_I=I
