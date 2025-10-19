@@ -39,7 +39,7 @@ class LandscapeAnalyzer(BaseAnalyzer, ValidationMixin):
                  w_threshold: float = 1e-5,
                  w_scaffold: Union[None, np.ndarray] = None,
                  scaffold_regularization: float = 1.0,
-                 scaffold_bias: float = 0.1,
+                 bias_regularization: float = 0.1,
                  only_TFs: bool = False,
                  infer_I: bool = False,
                  refit_gamma: bool = False,
@@ -70,7 +70,7 @@ class LandscapeAnalyzer(BaseAnalyzer, ValidationMixin):
         self.w_threshold = w_threshold
         self.w_scaffold = w_scaffold
         self.scaffold_regularization = scaffold_regularization
-        self.scaffold_bias = scaffold_bias
+        self.bias_regularization = bias_regularization
         self.only_TFs = only_TFs
         self.infer_I = infer_I
         self.refit_gamma = refit_gamma
@@ -286,7 +286,7 @@ class LandscapeAnalyzer(BaseAnalyzer, ValidationMixin):
         w_threshold = w_threshold if w_threshold is not None else self.w_threshold
         w_scaffold = w_scaffold if w_scaffold is not None else self.w_scaffold
         scaffold_regularization = scaffold_regularization if scaffold_regularization is not None else self.scaffold_regularization
-        bias_regularization = bias_regularization if bias_regularization is not None else self.scaffold_bias
+        bias_regularization = bias_regularization if bias_regularization is not None else self.bias_regularization
         only_TFs = only_TFs if only_TFs is not None else self.only_TFs
         infer_I = infer_I if infer_I is not None else self.infer_I
         refit_gamma = refit_gamma if refit_gamma is not None else self.refit_gamma
