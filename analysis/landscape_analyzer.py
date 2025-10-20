@@ -791,19 +791,27 @@ class LandscapeAnalyzer(BaseAnalyzer, ValidationMixin):
                 ax.set_xticks([])
             else:
                 # Plot gene expression as scatter plot
-                if basis in self.adata.obsm:
+                embedding = None
+                if f'X_{basis}' in self.adata.obsm:
                     embedding = self.adata.obsm[f'X_{basis}']
+                elif basis in self.adata.obsm:
+                    embedding = self.adata.obsm[basis]
+
+                # Now, check if an embedding was successfully found
+                if embedding is not None:
+                    # An embedding was found, so proceed with plotting
                     gene_expr = to_numpy(self.adata.layers[self.spliced_matrix_key][:, gene_idx])
 
                     scatter = ax.scatter(embedding[:, 0], embedding[:, 1],
-                                       c=gene_expr, cmap='viridis', s=1, alpha=0.6)
+                                    c=gene_expr, cmap='viridis', s=1, alpha=0.6)
                     ax.set_xlabel(f'{basis.upper()}_1')
                     ax.set_ylabel(f'{basis.upper()}_2')
                     ax.set_title(f'{gene} (Corr: {corr_val:.3f})')
                     plt.colorbar(scatter, ax=ax, shrink=0.6)
                 else:
+                    # Neither embedding key was found
                     ax.text(0.5, 0.5, f'{gene}\nCorr: {corr_val:.3f}\n({basis} not available)',
-                           ha='center', va='center', transform=ax.transAxes)
+                        ha='center', va='center', transform=ax.transAxes)
                     ax.set_title(f'{gene}')
 
         # Hide unused subplots
