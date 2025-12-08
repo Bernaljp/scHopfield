@@ -17,7 +17,7 @@ def plot_trajectory(
     Parameters
     ----------
     trajectory : np.ndarray
-        Trajectory array (n_timepoints × n_genes)
+        Trajectory array (n_timepoints ï¿½ n_genes)
     t_span : np.ndarray
         Time points
     gene_names : list, optional
