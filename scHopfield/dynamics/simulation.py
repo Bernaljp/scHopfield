@@ -37,7 +37,7 @@ def simulate_trajectory(
     Returns
     -------
     np.ndarray
-        Simulated trajectory (len(t_span) × n_genes)
+        Simulated trajectory (len(t_span) ï¿½ n_genes)
     """
     genes = get_genes_used(adata)
     x0 = to_numpy(get_matrix(adata, spliced_key, genes=genes)[cell_idx])
