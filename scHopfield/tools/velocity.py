@@ -55,7 +55,7 @@ def compute_reconstructed_velocity(
 
     if cluster is not None:
         # Compute for specific cluster
-        cluster_mask = adata.obs[cluster_key] == cluster
+        cluster_mask = (adata.obs[cluster_key] == cluster).values
         cluster_indices = np.where(cluster_mask)[0]
         n_cells = len(cluster_indices)
 
@@ -89,7 +89,7 @@ def compute_reconstructed_velocity(
         reconstructed_v = np.zeros((adata.n_obs, n_genes))
 
         for clust in clusters:
-            cluster_mask = adata.obs[cluster_key] == clust
+            cluster_mask = (adata.obs[cluster_key] == clust).values
             cluster_indices = np.where(cluster_mask)[0]
 
             # Get cluster-specific parameters
@@ -172,7 +172,7 @@ def validate_velocity(
         )
 
         # Get original velocity
-        cluster_mask = adata.obs[cluster_key] == cluster
+        cluster_mask = (adata.obs[cluster_key] == cluster).values
         original_v = to_numpy(get_matrix(adata, velocity_key, genes=genes)[cluster_mask])
 
         # Compute squared error
