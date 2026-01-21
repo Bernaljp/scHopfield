@@ -6,11 +6,12 @@ import itertools
 from typing import Optional
 from anndata import AnnData
 
-from .._utils.io import get_genes_used, get_cluster_key
+from .._utils.io import get_genes_used
 
 
 def network_correlations(
     adata: AnnData,
+    cluster_key: str = 'cell_type',
     copy: bool = False
 ) -> Optional[AnnData]:
     """
@@ -40,7 +41,6 @@ def network_correlations(
     """
     adata = adata.copy() if copy else adata
 
-    cluster_key = get_cluster_key(adata)
     keys = adata.obs[cluster_key].unique()
 
     # Initialize result DataFrames
