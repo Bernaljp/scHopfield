@@ -143,22 +143,3 @@ def get_genes_used(adata):
     return np.where(adata.var['scHopfield_used'].values)[0]
 
 
-def get_cluster_key(adata):
-    """
-    Get cluster key used in previous scHopfield analysis.
-
-    Parameters
-    ----------
-    adata : AnnData
-        Annotated data object
-
-    Returns
-    -------
-    str
-        Cluster key from analysis
-    """
-    if 'scHopfield' not in adata.uns:
-        raise ValueError("No scHopfield analysis found in adata")
-    if 'cluster_key' not in adata.uns['scHopfield']:
-        raise ValueError("No cluster_key found in scHopfield analysis")
-    return adata.uns['scHopfield']['cluster_key']

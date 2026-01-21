@@ -50,7 +50,7 @@ def fit_all_sigmoids(
     """
     adata = adata.copy() if copy else adata
 
-    # Initialize scHopfield namespace
+    # Initialize scHopfield namespace 
     if 'scHopfield' not in adata.uns:
         adata.uns['scHopfield'] = {}
 

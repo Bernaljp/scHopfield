@@ -5,13 +5,14 @@ from typing import Optional, Union, Tuple, Dict
 from anndata import AnnData
 
 from .._utils.math import sigmoid, int_sig_act_inv
-from .._utils.io import get_matrix, to_numpy, get_genes_used, get_cluster_key
+from .._utils.io import get_matrix, to_numpy, get_genes_used
 
 
 def compute_energies(
     adata: AnnData,
     spliced_key: str = 'Ms',
     degradation_key: str = 'gamma',
+    cluster_key: str = 'cell_type',
     copy: bool = False
 ) -> Optional[AnnData]:
     """
@@ -48,16 +49,15 @@ def compute_energies(
     """
     adata = adata.copy() if copy else adata
 
-    cluster_key = get_cluster_key(adata)
     genes = get_genes_used(adata)
 
     # Find all clusters that have been fitted
-    clusters = [k.replace('I_', '') for k in adata.var.columns if k.startswith('I_')]
+    clusters = adata.obs[cluster_key].unique()
 
     for cluster in clusters:
         # Compute energy components
-        e_int = _interaction_energy(adata, cluster, spliced_key, degradation_key, x=None)
-        e_deg = _degradation_energy(adata, cluster, spliced_key, degradation_key, x=None)
+        e_int = _interaction_energy(adata, cluster, cluster_key)
+        e_deg = _degradation_energy(adata, cluster, spliced_key, degradation_key)
         e_bias = _bias_energy(adata, cluster, spliced_key, x=None)
 
         # Get cluster indices
@@ -85,8 +85,7 @@ def compute_energies(
 def _interaction_energy(
     adata: AnnData,
     cluster: str,
-    spliced_key: str,
-    degradation_key: str,
+    cluster_key: str,
     x: Optional[np.ndarray] = None
 ) -> np.ndarray:
     """
@@ -94,7 +93,6 @@ def _interaction_energy(
 
     Adapted from Landscape.interaction_energy.
     """
-    cluster_key = get_cluster_key(adata)
     genes = get_genes_used(adata)
 
     # Get sigmoid activations
@@ -120,7 +118,7 @@ def _interaction_energy(
 def _degradation_energy(
     adata: AnnData,
     cluster: str,
-    spliced_key: str,
+    cluster_key: str, 
     degradation_key: str,
     x: Optional[np.ndarray] = None
 ) -> np.ndarray:
@@ -129,32 +127,23 @@ def _degradation_energy(
 
     Adapted from Landscape.degradation_energy.
     """
-    cluster_key = get_cluster_key(adata)
     genes = get_genes_used(adata)
 
     # Get degradation rates
-    gamma_col = f'gamma_{cluster}'
-    if gamma_col in adata.var:
-        g = adata.var[gamma_col].values[genes]
-    else:
-        g = adata.var[degradation_key].values[genes]
-
-    # Get sigmoid activations
-    if x is not None:
-        threshold = adata.var['sigmoid_threshold'].values[genes]
-        exponent = adata.var['sigmoid_exponent'].values[genes]
-        sig = np.nan_to_num(sigmoid(x, threshold[None, :], exponent[None, :]))
-    else:
-        if cluster == 'all':
-            idx = slice(None)
-        else:
-            idx = adata.obs[cluster_key] == cluster
-        sig = get_matrix(adata, 'sigmoid', genes=genes)[idx]
+    g = adata.var[degradation_key].values[genes]
 
     # Get sigmoid parameters
     threshold = adata.var['sigmoid_threshold'].values[genes]
     exponent = adata.var['sigmoid_exponent'].values[genes]
 
+    # Get sigmoid activations
+    if x is not None:
+        sig = np.nan_to_num(sigmoid(x, threshold[None, :], exponent[None, :]))
+    else:
+        idx = adata.obs[cluster_key] == cluster
+        sig = get_matrix(adata, 'sigmoid', genes=genes)[idx]
+
+    
     # Compute integral
     integral = int_sig_act_inv(sig, threshold, exponent)
     degradation_energy = np.sum(g[None, :] * integral, axis=1)
@@ -165,7 +154,7 @@ def _degradation_energy(
 def _bias_energy(
     adata: AnnData,
     cluster: str,
-    spliced_key: str,
+    cluster_key: str, 
     x: Optional[np.ndarray] = None
 ) -> np.ndarray:
     """
@@ -173,7 +162,7 @@ def _bias_energy(
 
     Adapted from Landscape.bias_energy.
     """
-    cluster_key = get_cluster_key(adata)
+
     genes = get_genes_used(adata)
 
     # Get sigmoid activations
@@ -182,10 +171,7 @@ def _bias_energy(
         exponent = adata.var['sigmoid_exponent'].values[genes]
         sig = np.nan_to_num(sigmoid(x, threshold[None, :], exponent[None, :]))
     else:
-        if cluster == 'all':
-            idx = slice(None)
-        else:
-            idx = adata.obs[cluster_key] == cluster
+        idx = adata.obs[cluster_key] == cluster
         sig = get_matrix(adata, 'sigmoid', genes=genes)[idx]
 
     # Get bias vector
