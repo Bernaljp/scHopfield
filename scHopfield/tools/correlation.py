@@ -212,3 +212,75 @@ def future_celltype_correlation(
     adata.uns['scHopfield']['future_celltype_correlation'] = rv
 
     return adata if copy else None
+
+
+def get_correlation_table(
+    adata: AnnData,
+    cluster_key: str = 'cell_type',
+    energy_type: str = 'total',
+    n_top_genes: int = 20,
+    order: Optional[list] = None
+) -> pd.DataFrame:
+    """
+    Get correlation table with top genes per cluster.
+
+    Creates a formatted table showing the top N genes correlated with
+    energy for each cluster.
+
+    Parameters
+    ----------
+    adata : AnnData
+        Annotated data object with computed energy-gene correlations
+    cluster_key : str, optional (default: 'cell_type')
+        Key in adata.obs for cluster labels
+    energy_type : str, optional (default: 'total')
+        Type of energy correlation: 'total', 'interaction', 'degradation', or 'bias'
+    n_top_genes : int, optional (default: 20)
+        Number of top correlated genes to show per cluster
+    order : list, optional
+        Order of clusters to display. If None, uses all unique clusters
+
+    Returns
+    -------
+    pd.DataFrame
+        DataFrame with MultiIndex columns (cluster, ['Gene', 'Correlation'])
+        showing top correlated genes for each cluster
+    """
+    genes = get_genes_used(adata)
+    gene_names = adata.var.index[genes]
+
+    if order is None:
+        order = adata.obs[cluster_key].unique().tolist()
+
+    # Check that correlations exist
+    test_col = f'correlation_{energy_type}_{order[0]}'
+    if test_col not in adata.var.columns:
+        raise ValueError(
+            f"No correlation data found. Please run sch.tl.energy_gene_correlation() first."
+        )
+
+    # Create DataFrame with MultiIndex columns
+    df = pd.DataFrame(
+        index=range(n_top_genes),
+        columns=pd.MultiIndex.from_product([order, ['Gene', 'Correlation']])
+    )
+
+    for cluster in order:
+        corr_col = f'correlation_{energy_type}_{cluster}'
+        if corr_col not in adata.var.columns:
+            print(f"Warning: No correlation data for cluster '{cluster}', skipping...")
+            continue
+
+        # Get correlations for this cluster
+        corrs = adata.var[corr_col].values[genes]
+
+        # Sort by correlation (descending) and get top N
+        indices = np.argsort(corrs)[::-1][:n_top_genes]
+        top_genes = gene_names[indices]
+        top_corrs = corrs[indices]
+
+        # Fill in the DataFrame
+        df[(cluster, 'Gene')] = top_genes.values
+        df[(cluster, 'Correlation')] = top_corrs
+
+    return df

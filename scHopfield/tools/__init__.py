@@ -9,7 +9,8 @@ from .energy import (
 from .correlation import (
     energy_gene_correlation,
     celltype_correlation,
-    future_celltype_correlation
+    future_celltype_correlation,
+    get_correlation_table
 )
 from .embedding import (
     compute_umap,
@@ -36,6 +37,7 @@ __all__ = [
     'energy_gene_correlation',
     'celltype_correlation',
     'future_celltype_correlation',
+    'get_correlation_table',
     'compute_umap',
     'energy_embedding',
     'save_embedding',
