@@ -6,7 +6,7 @@ from typing import Optional
 from anndata import AnnData
 
 from .._utils.math import soften, sigmoid, int_sig_act_inv
-from .._utils.io import get_matrix, to_numpy, get_genes_used, get_cluster_key
+from .._utils.io import get_matrix, to_numpy, get_genes_used
 
 
 def compute_umap(
@@ -37,28 +37,24 @@ def energy_embedding(
     adata: AnnData,
     basis: str = 'umap',
     resolution: int = 50,
-    spliced_key: str = 'Ms',
+    cluster_key: str = 'cell_type',
     degradation_key: str = 'gamma',
     copy: bool = False
 ) -> Optional[AnnData]:
     """Compute energy landscape on embedding space."""
     adata = adata.copy() if copy else adata
     
-    cluster_key = get_cluster_key(adata)
     genes = get_genes_used(adata)
     
     cells2d = adata.obsm[f'X_{basis}']
     embedding = adata.uns['scHopfield']['embedding']
     
-    clusters = [k.replace('I_', '') for k in adata.var.columns if k.startswith('I_')]
+    clusters = adata.obs[cluster_key].unique()
     
     # Generate grids
     grid_X, grid_Y = {}, {}
     for cluster in clusters:
-        if cluster == 'all':
-            cidx = np.arange(adata.n_obs)
-        else:
-            cidx = adata.obs[cluster_key] == cluster
+        cidx = adata.obs[cluster_key] == cluster
         
         minx, miny = np.min(cells2d[cidx], axis=0)
         maxx, maxy = np.max(cells2d[cidx], axis=0)
