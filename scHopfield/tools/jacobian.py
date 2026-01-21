@@ -6,7 +6,7 @@ from typing import Optional
 from anndata import AnnData
 from tqdm import tqdm
 
-from .._utils.io import get_matrix, to_numpy, get_genes_used, get_cluster_key
+from .._utils.io import get_matrix, to_numpy, get_genes_used
 from .._utils.math import sigmoid
 
 
@@ -14,6 +14,7 @@ def compute_jacobians(
     adata: AnnData,
     spliced_key: str = 'Ms',
     degradation_key: str = 'gamma',
+    cluster_key: str = 'cell_type',
     compute_eigenvectors: bool = False,
     device: str = 'cpu',
     copy: bool = False
@@ -24,8 +25,7 @@ def compute_jacobians(
     The Jacobian is: J = W * diag(dsigmoid/dx) - diag(gamma)
     """
     adata = adata.copy() if copy else adata
-    
-    cluster_key = get_cluster_key(adata)
+
     genes = get_genes_used(adata)
     n_genes = len(genes)
     n_cells = adata.n_obs
@@ -40,8 +40,8 @@ def compute_jacobians(
     threshold = adata.var['sigmoid_threshold'].values[genes]
     exponent = adata.var['sigmoid_exponent'].values[genes]
     
-    clusters = [k.replace('I_', '') for k in adata.var.columns if k.startswith('I_') and k != 'I_all']
-    
+    clusters = adata.obs[cluster_key].unique()
+
     for cluster in clusters:
         print(f"Computing Jacobians for cluster {cluster}")
         
