@@ -138,8 +138,8 @@ def celltype_correlation(
     counts = get_matrix(adata, spliced_key, genes=genes)
 
     for k1, k2 in itertools.combinations(keys, 2):
-        expr_k1 = to_numpy(counts[adata.obs[cluster_key] == k1])
-        expr_k2 = to_numpy(counts[adata.obs[cluster_key] == k2])
+        expr_k1 = to_numpy(counts[(adata.obs[cluster_key] == k1).values])
+        expr_k2 = to_numpy(counts[(adata.obs[cluster_key] == k2).values])
         rv.loc[k1, k2] = corr_f([expr_k1.T, expr_k2.T])[0, 1]
         rv.loc[k2, k1] = rv.loc[k1, k2]
 
@@ -194,8 +194,8 @@ def future_celltype_correlation(
     for k1, k2 in itertools.combinations(keys, 2):
         from .._utils.math import sigmoid
 
-        counts_k1 = to_numpy(counts[adata.obs[cluster_key] == k1])
-        counts_k2 = to_numpy(counts[adata.obs[cluster_key] == k2])
+        counts_k1 = to_numpy(counts[(adata.obs[cluster_key] == k1).values])
+        counts_k2 = to_numpy(counts[(adata.obs[cluster_key] == k2).values])
 
         sig_k1 = sigmoid(counts_k1, threshold[None, :], exponent[None, :])
         sig_k2 = sigmoid(counts_k2, threshold[None, :], exponent[None, :])
