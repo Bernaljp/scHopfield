@@ -36,11 +36,13 @@ def compute_energies(
     -------
     AnnData or None
         Returns adata if copy=True, otherwise None.
-        Adds to adata.obs for each cluster:
-        - 'energy_total_{cluster}'
-        - 'energy_interaction_{cluster}'
-        - 'energy_degradation_{cluster}'
-        - 'energy_bias_{cluster}'
+        Adds to adata.obs:
+        - 'energy_total'
+        - 'energy_interaction'
+        - 'energy_degradation'
+        - 'energy_bias'
+
+        Each cell's energy is computed using cluster-specific parameters.
 
     Notes
     -----
@@ -54,30 +56,30 @@ def compute_energies(
     # Find all clusters that have been fitted
     clusters = adata.obs[cluster_key].unique()
 
-    for cluster in clusters:
-        # Compute energy components
-        e_int = _interaction_energy(adata, cluster, cluster_key)
-        e_deg = _degradation_energy(adata, cluster, spliced_key, degradation_key, cluster_key)
-        e_bias = _bias_energy(adata, cluster, spliced_key, cluster_key, x=None)
+    # Initialize columns once for all cells
+    if 'energy_total' not in adata.obs:
+        adata.obs['energy_total'] = 0.0
+        adata.obs['energy_interaction'] = 0.0
+        adata.obs['energy_degradation'] = 0.0
+        adata.obs['energy_bias'] = 0.0
 
+    for cluster in clusters:
         # Get cluster indices
         if cluster == 'all':
             idx = np.ones(adata.n_obs, dtype=bool)
         else:
             idx = adata.obs[cluster_key] == cluster
 
-        # Initialize columns if not present
-        if f'energy_total_{cluster}' not in adata.obs:
-            adata.obs[f'energy_total_{cluster}'] = 0.0
-            adata.obs[f'energy_interaction_{cluster}'] = 0.0
-            adata.obs[f'energy_degradation_{cluster}'] = 0.0
-            adata.obs[f'energy_bias_{cluster}'] = 0.0
+        # Compute energy components for this cluster's cells using cluster-specific parameters
+        e_int = _interaction_energy(adata, cluster, cluster_key)
+        e_deg = _degradation_energy(adata, cluster, spliced_key, degradation_key, cluster_key)
+        e_bias = _bias_energy(adata, cluster, spliced_key, cluster_key, x=None)
 
-        # Store energies
-        adata.obs.loc[idx, f'energy_total_{cluster}'] = e_int + e_deg + e_bias
-        adata.obs.loc[idx, f'energy_interaction_{cluster}'] = e_int
-        adata.obs.loc[idx, f'energy_degradation_{cluster}'] = e_deg
-        adata.obs.loc[idx, f'energy_bias_{cluster}'] = e_bias
+        # Store energies in shared columns
+        adata.obs.loc[idx, 'energy_total'] = e_int + e_deg + e_bias
+        adata.obs.loc[idx, 'energy_interaction'] = e_int
+        adata.obs.loc[idx, 'energy_degradation'] = e_deg
+        adata.obs.loc[idx, 'energy_bias'] = e_bias
 
     return adata if copy else None
 

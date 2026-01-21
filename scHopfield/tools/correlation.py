@@ -51,8 +51,12 @@ def energy_gene_correlation(
     # Get clusters
     clusters = adata.obs[cluster_key].unique()
 
-    # Initialize arrays for all cells
+    # Get energies from shared columns (already computed with cluster-specific parameters)
     energies = np.zeros((4, adata.n_obs))
+    energies[0, :] = adata.obs['energy_total'].values
+    energies[1, :] = adata.obs['energy_interaction'].values
+    energies[2, :] = adata.obs['energy_degradation'].values
+    energies[3, :] = adata.obs['energy_bias'].values
 
     for cluster in clusters:
         if cluster == 'all':
@@ -61,16 +65,10 @@ def energy_gene_correlation(
         # Get cluster cells
         cells = adata.obs[cluster_key] == cluster
 
-        # Get energies
-        energies[0, cells] = adata.obs[f'energy_total_{cluster}'].values[cells]
-        energies[1, cells] = adata.obs[f'energy_interaction_{cluster}'].values[cells]
-        energies[2, cells] = adata.obs[f'energy_degradation_{cluster}'].values[cells]
-        energies[3, cells] = adata.obs[f'energy_bias_{cluster}'].values[cells]
-
-        # Get expression
+        # Get expression for this cluster
         X = to_numpy(get_matrix(adata, spliced_key, genes=genes)[cells].T)
 
-        # Compute correlations
+        # Compute correlations for this cluster
         correlations = np.nan_to_num(np.corrcoef(np.vstack((energies[:, cells], X)))[:4, 4:])
 
         # Initialize columns if not present
