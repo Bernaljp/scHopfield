@@ -23,6 +23,10 @@ from .jacobian import (
     load_jacobians
 )
 from .networks import network_correlations
+from .velocity import (
+    compute_reconstructed_velocity,
+    validate_velocity
+)
 
 __all__ = [
     'compute_energies',
@@ -40,4 +44,6 @@ __all__ = [
     'save_jacobians',
     'load_jacobians',
     'network_correlations',
+    'compute_reconstructed_velocity',
+    'validate_velocity',
 ]
