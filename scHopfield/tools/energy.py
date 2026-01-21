@@ -57,8 +57,8 @@ def compute_energies(
     for cluster in clusters:
         # Compute energy components
         e_int = _interaction_energy(adata, cluster, cluster_key)
-        e_deg = _degradation_energy(adata, cluster, spliced_key, degradation_key)
-        e_bias = _bias_energy(adata, cluster, spliced_key, x=None)
+        e_deg = _degradation_energy(adata, cluster, spliced_key, degradation_key, cluster_key)
+        e_bias = _bias_energy(adata, cluster, spliced_key, cluster_key, x=None)
 
         # Get cluster indices
         if cluster == 'all':
@@ -118,8 +118,9 @@ def _interaction_energy(
 def _degradation_energy(
     adata: AnnData,
     cluster: str,
-    cluster_key: str, 
+    spliced_key: str,
     degradation_key: str,
+    cluster_key: str = 'cell_type',
     x: Optional[np.ndarray] = None
 ) -> np.ndarray:
     """
@@ -154,7 +155,8 @@ def _degradation_energy(
 def _bias_energy(
     adata: AnnData,
     cluster: str,
-    cluster_key: str, 
+    spliced_key: str,
+    cluster_key: str = 'cell_type',
     x: Optional[np.ndarray] = None
 ) -> np.ndarray:
     """
