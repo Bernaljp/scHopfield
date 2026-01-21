@@ -1,6 +1,11 @@
 """Plotting module for visualization functions."""
 
-from .energy import plot_energy_landscape, plot_energy_components
+from .energy import (
+    plot_energy_landscape,
+    plot_energy_components,
+    plot_energy_boxplots,
+    plot_energy_scatters
+)
 from .genes import plot_sigmoid_fit
 from .networks import plot_interaction_matrix
 from .dynamics import plot_trajectory
@@ -8,6 +13,8 @@ from .dynamics import plot_trajectory
 __all__ = [
     'plot_energy_landscape',
     'plot_energy_components',
+    'plot_energy_boxplots',
+    'plot_energy_scatters',
     'plot_sigmoid_fit',
     'plot_interaction_matrix',
     'plot_trajectory',
