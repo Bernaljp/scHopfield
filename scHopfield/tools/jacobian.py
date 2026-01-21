@@ -90,26 +90,26 @@ def compute_jacobians(
     return adata if copy else None
 
 
-def save_jacobians(adata: AnnData, filename: str, compression: str = 'gzip'):
+def save_jacobians(adata: AnnData, filename: str, cluster_key: str = 'cell_type', compression: str = 'gzip'):
     """Save Jacobian eigenvalues and eigenvectors to HDF5 file."""
     import h5py
-    
+
     with h5py.File(filename, 'w') as f:
         if 'jacobian_eigenvalues' in adata.obsm:
             evals = adata.obsm['jacobian_eigenvalues']
             f.create_dataset('eigenvalues_real', data=evals.real, compression=compression)
             f.create_dataset('eigenvalues_imag', data=evals.imag, compression=compression)
-        
+
         if 'jacobian_eigenvectors_temp' in adata.uns:
             evecs = adata.uns['jacobian_eigenvectors_temp']['data']
             f.create_dataset('eigenvectors_real', data=evecs.real, compression=compression)
             f.create_dataset('eigenvectors_imag', data=evecs.imag, compression=compression)
             del adata.uns['jacobian_eigenvectors_temp']
             print("Eigenvectors saved to file and removed from memory.")
-        
+
         f.attrs['n_cells'] = adata.n_obs
         f.attrs['n_genes'] = len(get_genes_used(adata))
-        f.attrs['cluster_key'] = get_cluster_key(adata)
+        f.attrs['cluster_key'] = cluster_key
 
 
 def load_jacobians(

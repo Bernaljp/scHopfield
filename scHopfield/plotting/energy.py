@@ -5,8 +5,6 @@ import matplotlib.pyplot as plt
 from typing import Optional
 from anndata import AnnData
 
-from .._utils.io import get_cluster_key
-
 
 def plot_energy_landscape(
     adata: AnnData,

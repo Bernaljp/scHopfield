@@ -187,6 +187,7 @@ def decompose_degradation_energy(
     cluster: str,
     spliced_key: str = 'Ms',
     degradation_key: str = 'gamma',
+    cluster_key: str = 'cell_type',
     x: Optional[np.ndarray] = None
 ) -> np.ndarray:
     """
@@ -199,7 +200,6 @@ def decompose_degradation_energy(
     np.ndarray
         Array of shape (n_cells, n_genes) with degradation energy per gene
     """
-    cluster_key = get_cluster_key(adata)
     genes = get_genes_used(adata)
 
     # Get degradation rates
@@ -232,6 +232,7 @@ def decompose_bias_energy(
     adata: AnnData,
     cluster: str,
     spliced_key: str = 'Ms',
+    cluster_key: str = 'cell_type',
     x: Optional[np.ndarray] = None
 ) -> np.ndarray:
     """
@@ -244,7 +245,6 @@ def decompose_bias_energy(
     np.ndarray
         Array of shape (n_cells, n_genes) with bias energy per gene
     """
-    cluster_key = get_cluster_key(adata)
     genes = get_genes_used(adata)
 
     # Get sigmoid
@@ -268,6 +268,7 @@ def decompose_interaction_energy(
     cluster: str,
     side: str = 'in',
     spliced_key: str = 'Ms',
+    cluster_key: str = 'cell_type',
     x: Optional[np.ndarray] = None
 ) -> np.ndarray:
     """
@@ -285,7 +286,6 @@ def decompose_interaction_energy(
     np.ndarray
         Array of shape (n_cells, n_genes) with interaction energy per gene
     """
-    cluster_key = get_cluster_key(adata)
     genes = get_genes_used(adata)
 
     # Get sigmoid
