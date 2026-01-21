@@ -68,7 +68,7 @@ def compute_energies(
         if cluster == 'all':
             idx = np.ones(adata.n_obs, dtype=bool)
         else:
-            idx = adata.obs[cluster_key] == cluster
+            idx = (adata.obs[cluster_key] == cluster).values
 
         # Compute energy components for this cluster's cells using cluster-specific parameters
         e_int = _interaction_energy(adata, cluster, cluster_key)
@@ -106,7 +106,7 @@ def _interaction_energy(
         if cluster == 'all':
             idx = slice(None)
         else:
-            idx = adata.obs[cluster_key] == cluster
+            idx = (adata.obs[cluster_key] == cluster).values
         sig = get_matrix(adata, 'sigmoid', genes=genes)[idx]
 
     # Get interaction matrix
@@ -143,7 +143,7 @@ def _degradation_energy(
     if x is not None:
         sig = np.nan_to_num(sigmoid(x, threshold[None, :], exponent[None, :]))
     else:
-        idx = adata.obs[cluster_key] == cluster
+        idx = (adata.obs[cluster_key] == cluster).values
         sig = get_matrix(adata, 'sigmoid', genes=genes)[idx]
 
     
@@ -175,7 +175,7 @@ def _bias_energy(
         exponent = adata.var['sigmoid_exponent'].values[genes]
         sig = np.nan_to_num(sigmoid(x, threshold[None, :], exponent[None, :]))
     else:
-        idx = adata.obs[cluster_key] == cluster
+        idx = (adata.obs[cluster_key] == cluster).values
         sig = get_matrix(adata, 'sigmoid', genes=genes)[idx]
 
     # Get bias vector
@@ -222,7 +222,7 @@ def decompose_degradation_energy(
         if cluster == 'all':
             idx = slice(None)
         else:
-            idx = adata.obs[cluster_key] == cluster
+            idx = (adata.obs[cluster_key] == cluster).values
         sig = get_matrix(adata, 'sigmoid', genes=genes)[idx]
 
     threshold = adata.var['sigmoid_threshold'].values[genes]
@@ -260,7 +260,7 @@ def decompose_bias_energy(
         if cluster == 'all':
             idx = slice(None)
         else:
-            idx = adata.obs[cluster_key] == cluster
+            idx = (adata.obs[cluster_key] == cluster).values
         sig = get_matrix(adata, 'sigmoid', genes=genes)[idx]
 
     I = adata.var[f'I_{cluster}'].values[genes]
@@ -301,7 +301,7 @@ def decompose_interaction_energy(
         if cluster == 'all':
             idx = slice(None)
         else:
-            idx = adata.obs[cluster_key] == cluster
+            idx = (adata.obs[cluster_key] == cluster).values
         sig = get_matrix(adata, 'sigmoid', genes=genes)[idx]
 
     W = adata.varp[f'W_{cluster}']

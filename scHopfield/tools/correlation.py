@@ -63,7 +63,7 @@ def energy_gene_correlation(
             continue
 
         # Get cluster cells
-        cells = adata.obs[cluster_key] == cluster
+        cells = (adata.obs[cluster_key] == cluster).values
 
         # Get expression for this cluster
         X = to_numpy(get_matrix(adata, spliced_key, genes=genes)[cells].T)

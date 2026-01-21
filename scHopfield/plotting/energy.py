@@ -211,7 +211,7 @@ def plot_energy_scatters(
 
     # Plot each cluster
     for k in order:
-        cluster_mask = adata.obs[cluster_key] == k
+        cluster_mask = (adata.obs[cluster_key] == k).values
         cells = adata.obsm[f'X_{basis}'][cluster_mask, :2]
 
         for ax, energy_col in zip(axs, energy_cols):

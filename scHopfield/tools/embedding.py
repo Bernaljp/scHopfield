@@ -54,8 +54,8 @@ def energy_embedding(
     # Generate grids
     grid_X, grid_Y = {}, {}
     for cluster in clusters:
-        cidx = adata.obs[cluster_key] == cluster
-        
+        cidx = (adata.obs[cluster_key] == cluster).values
+
         minx, miny = np.min(cells2d[cidx], axis=0)
         maxx, maxy = np.max(cells2d[cidx], axis=0)
         grid_X[cluster], grid_Y[cluster] = np.mgrid[minx:maxx:resolution*1j, miny:maxy:resolution*1j]
