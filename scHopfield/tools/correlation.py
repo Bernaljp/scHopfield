@@ -7,12 +7,13 @@ from typing import Optional
 from anndata import AnnData
 import hoggorm as ho
 
-from .._utils.io import get_matrix, to_numpy, get_genes_used, get_cluster_key
+from .._utils.io import get_matrix, to_numpy, get_genes_used
 
 
 def energy_gene_correlation(
     adata: AnnData,
     spliced_key: str = 'Ms',
+    cluster_key: str = 'cell_type',
     copy: bool = False
 ) -> Optional[AnnData]:
     """
@@ -44,12 +45,11 @@ def energy_gene_correlation(
     """
     adata = adata.copy() if copy else adata
 
-    cluster_key = get_cluster_key(adata)
     genes = get_genes_used(adata)
     gene_names = adata.var.index[genes]
 
     # Get clusters
-    clusters = [k.replace('I_', '') for k in adata.var.columns if k.startswith('I_')]
+    clusters = adata.obs[cluster_key].unique()
 
     # Initialize arrays for all cells
     energies = np.zeros((4, adata.n_obs))
@@ -96,6 +96,7 @@ def energy_gene_correlation(
 def celltype_correlation(
     adata: AnnData,
     spliced_key: str = 'Ms',
+    cluster_key: str = 'cell_type',
     modified: bool = True,
     all_genes: bool = False,
     copy: bool = False
@@ -129,7 +130,6 @@ def celltype_correlation(
     """
     adata = adata.copy() if copy else adata
 
-    cluster_key = get_cluster_key(adata)
     keys = adata.obs[cluster_key].unique()
 
     corr_f = ho.mat_corr_coeff.RV2coeff if modified else ho.mat_corr_coeff.RVcoeff
@@ -153,6 +153,7 @@ def celltype_correlation(
 def future_celltype_correlation(
     adata: AnnData,
     spliced_key: str = 'Ms',
+    cluster_key: str = 'cell_type',
     modified: bool = True,
     copy: bool = False
 ) -> Optional[AnnData]:
@@ -181,7 +182,6 @@ def future_celltype_correlation(
     """
     adata = adata.copy() if copy else adata
 
-    cluster_key = get_cluster_key(adata)
     genes = get_genes_used(adata)
     keys = adata.obs[cluster_key].unique()
 
