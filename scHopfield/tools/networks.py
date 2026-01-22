@@ -3,7 +3,7 @@
 import numpy as np
 import pandas as pd
 import itertools
-from typing import Optional, Dict, Union
+from typing import Optional, Dict, Union, List
 from anndata import AnnData
 
 from .._utils.io import get_genes_used
