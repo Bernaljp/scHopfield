@@ -23,7 +23,12 @@ from .jacobian import (
     save_jacobians,
     load_jacobians
 )
-from .networks import network_correlations
+from .networks import (
+    network_correlations,
+    get_network_links,
+    compute_network_centrality,
+    get_top_genes_table
+)
 from .velocity import (
     compute_reconstructed_velocity,
     validate_velocity
@@ -46,6 +51,9 @@ __all__ = [
     'save_jacobians',
     'load_jacobians',
     'network_correlations',
+    'get_network_links',
+    'compute_network_centrality',
+    'get_top_genes_table',
     'compute_reconstructed_velocity',
     'validate_velocity',
 ]
