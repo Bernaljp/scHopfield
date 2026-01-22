@@ -44,7 +44,7 @@ def plot_interaction_matrix(
 
 def plot_network_centrality_rank(
     adata: AnnData,
-    metric: str = 'eigenvector_centrality',
+    metric: str = 'degree_centrality_all',
     clusters: Optional[Union[str, List[str]]] = None,
     cluster_key: str = 'cell_type',
     n_genes: int = 50,
@@ -60,8 +60,10 @@ def plot_network_centrality_rank(
     ----------
     adata : AnnData
         Annotated data object with computed centrality metrics
-    metric : str, optional (default: 'eigenvector_centrality')
-        Centrality metric to plot
+    metric : str, optional (default: 'degree_centrality_all')
+        Centrality metric to plot. Available: 'degree_all', 'degree_centrality_all',
+        'degree_in', 'degree_centrality_in', 'degree_out', 'degree_centrality_out',
+        'betweenness_centrality', 'eigenvector_centrality'
     clusters : str or list, optional
         Cluster(s) to plot. If None, plots all clusters
     cluster_key : str, optional (default: 'cell_type')
@@ -129,7 +131,7 @@ def plot_centrality_comparison(
     adata: AnnData,
     cluster1: str,
     cluster2: str,
-    metric: str = 'eigenvector_centrality',
+    metric: str = 'degree_centrality_all',
     cluster_key: str = 'cell_type',
     percentile: float = 99,
     annotate: bool = True,
@@ -147,8 +149,10 @@ def plot_centrality_comparison(
         First cluster name (x-axis)
     cluster2 : str
         Second cluster name (y-axis)
-    metric : str, optional (default: 'eigenvector_centrality')
-        Centrality metric to compare
+    metric : str, optional (default: 'degree_centrality_all')
+        Centrality metric to compare. Available: 'degree_all', 'degree_centrality_all',
+        'degree_in', 'degree_centrality_in', 'degree_out', 'degree_centrality_out',
+        'betweenness_centrality', 'eigenvector_centrality'
     cluster_key : str, optional (default: 'cell_type')
         Key in adata.obs for cluster labels
     percentile : float, optional (default: 99)
@@ -248,7 +252,10 @@ def plot_gene_centrality(
         Key in adata.obs for cluster labels
     metrics : list, optional
         List of centrality metrics to plot. If None, plots:
-        ['degree_centrality', 'betweenness_centrality', 'eigenvector_centrality']
+        ['degree_centrality_all', 'betweenness_centrality', 'eigenvector_centrality']
+        Available metrics: 'degree_all', 'degree_centrality_all', 'degree_in',
+        'degree_centrality_in', 'degree_out', 'degree_centrality_out',
+        'betweenness_centrality', 'eigenvector_centrality'
     order : list, optional
         Order of clusters to display
     colors : dict, optional
@@ -279,7 +286,7 @@ def plot_gene_centrality(
     gene_idx = np.where(gene_names == gene)[0][0]
 
     if metrics is None:
-        metrics = ['degree_centrality', 'betweenness_centrality', 'eigenvector_centrality']
+        metrics = ['degree_centrality_all', 'betweenness_centrality', 'eigenvector_centrality']
 
     clusters = adata.obs[cluster_key].unique().tolist()
     if order is not None:

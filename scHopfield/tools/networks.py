@@ -173,15 +173,16 @@ def get_network_links(
 def compute_network_centrality(
     adata: AnnData,
     cluster_key: str = 'cell_type',
-    metrics: Optional[list] = None,
+    threshold_number: Optional[int] = 2000,
+    weight: str = 'coef_abs',
+    use_igraph: bool = True,
     copy: bool = False
 ) -> Optional[AnnData]:
     """
     Compute network centrality metrics for genes in each cluster.
 
-    Computes various centrality measures using NetworkX on the
-    interaction networks. Results are stored in adata.var with
-    cluster-specific columns.
+    Uses igraph (fast C implementation) by default, with NetworkX as fallback.
+    Filters network edges before computing centrality for better performance.
 
     Parameters
     ----------
@@ -189,16 +190,14 @@ def compute_network_centrality(
         Annotated data object with fitted interaction matrices
     cluster_key : str, optional (default: 'cell_type')
         Key in adata.obs for cluster labels
-    metrics : list, optional
-        List of centrality metrics to compute. Options:
-        - 'degree_centrality'
-        - 'in_degree_centrality'
-        - 'out_degree_centrality'
-        - 'betweenness_centrality'
-        - 'closeness_centrality'
-        - 'eigenvector_centrality'
-        - 'pagerank'
-        If None, computes all metrics
+    threshold_number : int, optional (default: 2000)
+        Maximum number of edges to keep per cluster (top edges by weight).
+        Set to None to use all edges (slower).
+    weight : str, optional (default: 'coef_abs')
+        Weight column to use for filtering: 'coef_abs' or 'coef_mean'
+    use_igraph : bool, optional (default: True)
+        Use igraph library if available (much faster than NetworkX).
+        Falls back to NetworkX if igraph is not installed.
     copy : bool, optional (default: False)
         If True, return a copy instead of modifying in-place
 
@@ -206,79 +205,140 @@ def compute_network_centrality(
     -------
     AnnData or None
         Returns adata if copy=True, otherwise None.
-        Adds to adata.var for each cluster and metric:
-        - '{metric}_{cluster}': centrality values for each gene
-    """
-    try:
-        import networkx as nx
-    except ImportError:
-        raise ImportError(
-            "NetworkX is required for centrality computation. "
-            "Install it with: pip install networkx"
-        )
+        Adds to adata.var for each cluster:
+        - 'degree_all_{cluster}': total degree
+        - 'degree_centrality_all_{cluster}': normalized total degree
+        - 'degree_in_{cluster}': in-degree
+        - 'degree_centrality_in_{cluster}': normalized in-degree
+        - 'degree_out_{cluster}': out-degree
+        - 'degree_centrality_out_{cluster}': normalized out-degree
+        - 'betweenness_centrality_{cluster}': betweenness centrality
+        - 'eigenvector_centrality_{cluster}': eigenvector centrality
 
+    Notes
+    -----
+    This implementation is based on CellOracle's approach for efficiency.
+    Edge filtering significantly speeds up computation for large networks.
+    """
     adata = adata.copy() if copy else adata
 
     genes = get_genes_used(adata)
     gene_names = adata.var.index[genes]
     clusters = adata.obs[cluster_key].unique()
 
-    if metrics is None:
-        metrics = [
-            'degree_centrality',
-            'in_degree_centrality',
-            'out_degree_centrality',
-            'betweenness_centrality',
-            'eigenvector_centrality',
-            'pagerank'
-        ]
+    # Try to use igraph, fall back to NetworkX
+    if use_igraph:
+        try:
+            from igraph import Graph
+            use_igraph_lib = True
+        except ImportError:
+            print("Warning: igraph not found, falling back to NetworkX (slower).")
+            print("For better performance, install igraph: pip install python-igraph")
+            use_igraph_lib = False
+            try:
+                import networkx as nx
+            except ImportError:
+                raise ImportError(
+                    "Neither igraph nor NetworkX is installed. "
+                    "Install one of them: pip install python-igraph"
+                )
+    else:
+        use_igraph_lib = False
+        try:
+            import networkx as nx
+        except ImportError:
+            raise ImportError(
+                "NetworkX is required. Install it with: pip install networkx"
+            )
 
     for cluster in clusters:
         if cluster == 'all':
             continue
 
-        # Get interaction matrix
+        # Get filtered network links efficiently
         W = adata.varp[f'W_{cluster}']
 
-        # Create directed graph
-        G = nx.DiGraph()
-        G.add_nodes_from(gene_names)
+        # Convert to DataFrame efficiently
+        df = pd.DataFrame(W.T, index=gene_names, columns=gene_names).reset_index()
+        df = df.melt(
+            id_vars='index',
+            value_vars=df.columns[1:],
+            var_name='target',
+            value_name='coef_mean'
+        )
 
-        # Add edges with non-zero weights
-        for i, gene_i in enumerate(gene_names):
-            for j, gene_j in enumerate(gene_names):
-                if W[i, j] != 0:
-                    G.add_edge(gene_i, gene_j, weight=abs(W[i, j]))
+        # Filter non-zero edges
+        df = df[df['coef_mean'] != 0].copy()
+        df.rename(columns={'index': 'source'}, inplace=True)
+        df['coef_abs'] = np.abs(df['coef_mean'])
 
-        # Compute centrality metrics
-        for metric in metrics:
-            try:
-                if metric == 'degree_centrality':
-                    cent = nx.degree_centrality(G)
-                elif metric == 'in_degree_centrality':
-                    cent = nx.in_degree_centrality(G)
-                elif metric == 'out_degree_centrality':
-                    cent = nx.out_degree_centrality(G)
-                elif metric == 'betweenness_centrality':
-                    cent = nx.betweenness_centrality(G, weight='weight')
-                elif metric == 'closeness_centrality':
-                    cent = nx.closeness_centrality(G, distance='weight')
-                elif metric == 'eigenvector_centrality':
-                    cent = nx.eigenvector_centrality(G, weight='weight', max_iter=1000)
-                elif metric == 'pagerank':
-                    cent = nx.pagerank(G, weight='weight')
-                else:
-                    print(f"Warning: Unknown metric '{metric}', skipping...")
-                    continue
+        # Apply threshold filtering
+        if threshold_number is not None and len(df) > threshold_number:
+            df = df.sort_values(weight, ascending=False).head(threshold_number)
 
-                # Store in adata.var
-                col_name = f'{metric}_{cluster}'
-                if col_name not in adata.var.columns:
-                    adata.var[col_name] = 0.0
-                adata.var.loc[gene_names, col_name] = [cent[g] for g in gene_names]
+        if use_igraph_lib:
+            # Use igraph (fast)
+            g = Graph.DataFrame(df[["source", "target"]], directed=True, use_vids=False)
+            g.es["weight"] = df["coef_abs"].values
 
-            except Exception as e:
-                print(f"Warning: Could not compute {metric} for {cluster}: {e}")
+            # Get vertex dataframe as placeholder
+            result_df = g.get_vertex_dataframe()
+
+            # Calculate centrality scores
+            for mode in ["all", "in", "out"]:
+                result_df[f"degree_{mode}"] = g.degree(mode=mode)
+                result_df[f"degree_centrality_{mode}"] = result_df[f"degree_{mode}"] / (result_df.shape[0] - 1)
+
+            result_df["betweenness_centrality"] = g.betweenness(directed=True, weights="weight")
+            result_df["eigenvector_centrality"] = g.eigenvector_centrality(directed=False, weights="weight")
+
+            # Set gene names as index
+            result_df = result_df.set_index("name")
+            result_df.index.name = None
+
+        else:
+            # Use NetworkX (fallback)
+            G = nx.from_pandas_edgelist(
+                df,
+                source='source',
+                target='target',
+                edge_attr='coef_abs',
+                create_using=nx.DiGraph()
+            )
+
+            # Ensure all genes are in the graph
+            G.add_nodes_from(gene_names)
+
+            # Rename edge attribute to 'weight'
+            nx.set_edge_attributes(G, {(u, v): d['coef_abs'] for u, v, d in G.edges(data=True)}, 'weight')
+
+            # Calculate centrality scores
+            result_df = pd.DataFrame(index=gene_names)
+
+            degree_all = dict(G.degree())
+            degree_in = dict(G.in_degree())
+            degree_out = dict(G.out_degree())
+            n_nodes = G.number_of_nodes()
+
+            result_df['degree_all'] = [degree_all.get(g, 0) for g in gene_names]
+            result_df['degree_in'] = [degree_in.get(g, 0) for g in gene_names]
+            result_df['degree_out'] = [degree_out.get(g, 0) for g in gene_names]
+            result_df['degree_centrality_all'] = result_df['degree_all'] / (n_nodes - 1)
+            result_df['degree_centrality_in'] = result_df['degree_in'] / (n_nodes - 1)
+            result_df['degree_centrality_out'] = result_df['degree_out'] / (n_nodes - 1)
+
+            betweenness = nx.betweenness_centrality(G, weight='weight')
+            eigenvector = nx.eigenvector_centrality(G, weight='weight', max_iter=1000)
+
+            result_df['betweenness_centrality'] = [betweenness.get(g, 0) for g in gene_names]
+            result_df['eigenvector_centrality'] = [eigenvector.get(g, 0) for g in gene_names]
+
+        # Store results in adata.var
+        for col in result_df.columns:
+            col_name = f'{col}_{cluster}'
+            if col_name not in adata.var.columns:
+                adata.var[col_name] = 0.0
+            adata.var.loc[gene_names, col_name] = result_df[col].values
 
     return adata if copy else None
 
