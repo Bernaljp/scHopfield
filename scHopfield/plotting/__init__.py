@@ -9,6 +9,10 @@ from .energy import (
 from .genes import plot_sigmoid_fit
 from .networks import plot_interaction_matrix
 from .dynamics import plot_trajectory
+from .correlation import (
+    plot_gene_correlation_scatter,
+    plot_correlations_grid
+)
 
 __all__ = [
     'plot_energy_landscape',
@@ -18,4 +22,6 @@ __all__ = [
     'plot_sigmoid_fit',
     'plot_interaction_matrix',
     'plot_trajectory',
+    'plot_gene_correlation_scatter',
+    'plot_correlations_grid',
 ]
