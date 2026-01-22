@@ -278,23 +278,26 @@ def compute_network_centrality(
 
         if use_igraph_lib:
             # Use igraph (fast)
-            g = Graph.DataFrame(df[["source", "target"]], directed=True, use_vids=False)
+            # First create graph with all genes to ensure all vertices exist
+            g = Graph(directed=True)
+            g.add_vertices(list(gene_names))
+
+            # Add edges from filtered DataFrame
+            edges = [(row['source'], row['target']) for _, row in df.iterrows()]
+            g.add_edges(edges)
             g.es["weight"] = df["coef_abs"].values
 
-            # Get vertex dataframe as placeholder
-            result_df = g.get_vertex_dataframe()
+            # Calculate centrality scores (returns list in vertex order)
+            n_vertices = len(gene_names)
+            result_df = pd.DataFrame(index=gene_names)
 
-            # Calculate centrality scores
             for mode in ["all", "in", "out"]:
-                result_df[f"degree_{mode}"] = g.degree(mode=mode)
-                result_df[f"degree_centrality_{mode}"] = result_df[f"degree_{mode}"] / (result_df.shape[0] - 1)
+                degrees = g.degree(mode=mode)
+                result_df[f"degree_{mode}"] = degrees
+                result_df[f"degree_centrality_{mode}"] = np.array(degrees) / (n_vertices - 1)
 
             result_df["betweenness_centrality"] = g.betweenness(directed=True, weights="weight")
             result_df["eigenvector_centrality"] = g.eigenvector_centrality(directed=False, weights="weight")
-
-            # Set gene names as index
-            result_df = result_df.set_index("name")
-            result_df.index.name = None
 
         else:
             # Use NetworkX (fallback)
