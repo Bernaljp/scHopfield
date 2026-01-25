@@ -22,6 +22,12 @@ from .correlation import (
     plot_gene_correlation_scatter,
     plot_correlations_grid
 )
+from .jacobian import (
+    plot_jacobian_eigenvalue_spectrum,
+    plot_jacobian_eigenvalue_boxplots,
+    plot_jacobian_stats_boxplots,
+    plot_jacobian_element_grid
+)
 
 __all__ = [
     'plot_energy_landscape',
@@ -40,4 +46,8 @@ __all__ = [
     'plot_trajectory',
     'plot_gene_correlation_scatter',
     'plot_correlations_grid',
+    'plot_jacobian_eigenvalue_spectrum',
+    'plot_jacobian_eigenvalue_boxplots',
+    'plot_jacobian_stats_boxplots',
+    'plot_jacobian_element_grid',
 ]

@@ -21,7 +21,10 @@ from .embedding import (
 from .jacobian import (
     compute_jacobians,
     save_jacobians,
-    load_jacobians
+    load_jacobians,
+    compute_jacobian_stats,
+    compute_jacobian_elements,
+    compute_rotational_part
 )
 from .networks import (
     network_correlations,
@@ -53,6 +56,9 @@ __all__ = [
     'compute_jacobians',
     'save_jacobians',
     'load_jacobians',
+    'compute_jacobian_stats',
+    'compute_jacobian_elements',
+    'compute_rotational_part',
     'network_correlations',
     'get_network_links',
     'compute_network_centrality',
