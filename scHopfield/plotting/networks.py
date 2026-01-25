@@ -1,6 +1,7 @@
 """Plotting functions for network visualization."""
 
 import numpy as np
+import pandas as pd
 import matplotlib.pyplot as plt
 from typing import Optional, List, Dict, Union
 from anndata import AnnData
@@ -854,3 +855,329 @@ def plot_eigenanalysis_grid(
 
     plt.tight_layout()
     return fig
+
+
+def plot_grn_network(
+    adata: AnnData,
+    cluster: str,
+    genes: Optional[List[str]] = None,
+    cluster_key: str = 'cell_type',
+    score_size: Optional[str] = None,
+    size_threshold: float = 0,
+    cmap: Union[str, 'Colormap'] = 'RdBu_r',
+    topn: Optional[int] = None,
+    w_quantile: float = 0.99,
+    figsize: tuple = (10, 10),
+    ax: Optional[plt.Axes] = None
+) -> plt.Axes:
+    """
+    Generate a Gene Regulatory Network (GRN) graph for a cluster.
+
+    Parameters
+    ----------
+    adata : AnnData
+        Annotated data object with interaction matrices
+    cluster : str
+        Cluster name
+    genes : list, optional
+        List of gene names to include. If None, uses all genes
+    cluster_key : str, optional (default: 'cell_type')
+        Key in adata.obs for cluster labels
+    score_size : str, optional
+        Column in adata.var (with cluster suffix) to use for node sizes.
+        Example: 'degree_centrality_out' will use 'degree_centrality_out_{cluster}'
+    size_threshold : float, optional (default: 0)
+        Threshold for displaying node labels (as fraction of max size)
+    cmap : str or Colormap, optional (default: 'RdBu_r')
+        Colormap for edge coloring
+    topn : int, optional
+        Number of top genes to retain based on size
+    w_quantile : float, optional (default: 0.99)
+        Quantile threshold for filtering weak edges
+    figsize : tuple, optional (default: (10, 10))
+        Figure size
+    ax : plt.Axes, optional
+        Axes to plot on
+
+    Returns
+    -------
+    plt.Axes
+        Axes with network plot
+    """
+    try:
+        import networkx as nx
+        from matplotlib.colors import Colormap
+    except ImportError:
+        raise ImportError(
+            "NetworkX is required for this plot. "
+            "Install it with: pip install networkx"
+        )
+
+    gene_list = get_genes_used(adata)
+    gene_names_all = adata.var.index[gene_list]
+
+    if genes is None:
+        genes = gene_names_all.tolist()
+
+    # Get interaction matrix
+    W = adata.varp[f'W_{cluster}'].copy()
+
+    # Threshold edges based on weight quantile
+    threshold = np.quantile(np.abs(W), w_quantile)
+    W[np.abs(W) < threshold] = 0
+
+    # Create DataFrame representation
+    df = pd.DataFrame(W.T, index=gene_names_all, columns=gene_names_all)
+
+    # Compute node sizes
+    if score_size is None:
+        sizes = np.abs(W).sum(axis=0) + np.abs(W).sum(axis=1)
+    else:
+        score_col = f'{score_size}_{cluster}'
+        if score_col not in adata.var.columns:
+            raise ValueError(f"Column '{score_col}' not found in adata.var")
+        sizes = np.array([
+            adata.var.loc[g, score_col] if g in adata.var.index else 0
+            for g in gene_names_all
+        ])
+
+    # Filter top genes based on size
+    topq = np.sort(sizes)[-topn] if topn is not None else 0
+    dropids = gene_names_all[sizes < topq]
+
+    # Normalize sizes for better visualization
+    size_multiplier = 1000 / max(sizes) if max(sizes) > 0 else 1
+    gene_mask = np.isin(gene_names_all, genes) & (sizes >= topq)
+    sizes_filtered = sizes[gene_mask]
+    sizes_filtered = size_multiplier * sizes_filtered
+
+    # Remove genes below threshold
+    genes_filtered = [g for g in genes if g not in dropids]
+    df.drop(index=dropids, columns=dropids, inplace=True)
+    df = df.loc[genes_filtered, genes_filtered]
+
+    # Define node labels (hide small ones)
+    labels = {
+        gene: gene if size / 1000 > size_threshold else ''
+        for gene, size in zip(df.index, sizes_filtered)
+    }
+
+    # Create directed graph
+    G = nx.from_pandas_adjacency(df, create_using=nx.DiGraph)
+    Gp = nx.from_pandas_adjacency(df.abs(), create_using=nx.DiGraph)
+
+    # Compute edge weights for visualization
+    weights = np.array([abs(G[u][v]['weight']) for u, v in G.edges()])
+    weights_signed = 10 * np.array([G[u][v]['weight'] for u, v in G.edges()])
+    if weights.size > 0:
+        weights = 1.5 * np.log1p(weights) / np.log1p(weights.max())
+
+    # Define node positions
+    pos = nx.circular_layout(G)
+
+    # Define axes
+    if ax is None:
+        fig, ax = plt.subplots(figsize=figsize)
+
+    # Validate colormap input
+    if isinstance(cmap, str):
+        cmap = plt.get_cmap(cmap)
+    elif not isinstance(cmap, Colormap):
+        from matplotlib.colors import Colormap as MplColormap
+        if not isinstance(cmap, MplColormap):
+            raise ValueError("`cmap` must be a string or a matplotlib.colors.Colormap instance")
+
+    # Compute colormap normalization
+    vmax = weights.max() if weights.size > 0 else 1
+
+    # Draw network graph
+    nx.draw_networkx(
+        G, pos, node_size=sizes_filtered, width=weights, with_labels=True, labels=labels,
+        edge_color=weights_signed, edge_cmap=cmap, edge_vmin=-vmax, edge_vmax=vmax, ax=ax
+    )
+
+    ax.set_title(f'{cluster} - GRN')
+    ax.axis('off')
+
+    return ax
+
+
+def plot_grn_subset(
+    adata: AnnData,
+    cluster: str,
+    selected_genes: List[str],
+    cluster_key: str = 'cell_type',
+    score_size: Optional[str] = None,
+    node_positions: Optional[Dict[str, tuple]] = None,
+    prune_threshold: float = 0,
+    selected_edges: Optional[List[tuple]] = None,
+    node_color: str = 'white',
+    label_offset: float = 0.11,
+    label_size: int = 12,
+    variable_width: bool = False,
+    figsize: tuple = (10, 10),
+    ax: Optional[plt.Axes] = None
+) -> plt.Axes:
+    """
+    Plot a Gene Regulatory Network (GRN) for a user-defined subset of genes.
+
+    Parameters
+    ----------
+    adata : AnnData
+        Annotated data object with interaction matrices
+    cluster : str
+        Cluster name
+    selected_genes : list
+        List of genes to include in the graph
+    cluster_key : str, optional (default: 'cell_type')
+        Key in adata.obs for cluster labels
+    score_size : str, optional
+        Column in adata.var (with cluster suffix) to use for node sizes
+    node_positions : dict, optional
+        Dictionary with custom node positions {gene: (x, y)}
+    prune_threshold : float, optional (default: 0)
+        Edges below this threshold (absolute value) will be removed
+    selected_edges : list of tuples, optional
+        List of user-defined edges (tuples) to plot
+    node_color : str, optional (default: 'white')
+        Color of nodes
+    label_offset : float, optional (default: 0.11)
+        Distance of labels from nodes
+    label_size : int, optional (default: 12)
+        Font size for labels
+    variable_width : bool, optional (default: False)
+        Whether to use variable edge widths based on weight
+    figsize : tuple, optional (default: (10, 10))
+        Figure size
+    ax : plt.Axes, optional
+        Axes to plot on
+
+    Returns
+    -------
+    plt.Axes
+        Axes with network plot
+    """
+    try:
+        import networkx as nx
+    except ImportError:
+        raise ImportError(
+            "NetworkX is required for this plot. "
+            "Install it with: pip install networkx"
+        )
+
+    gene_list = get_genes_used(adata)
+    gene_names_all = adata.var.index[gene_list]
+
+    # Get interaction matrix
+    W = adata.varp[f'W_{cluster}']
+
+    # Convert adjacency matrix to DataFrame
+    df = pd.DataFrame(W.T, index=gene_names_all, columns=gene_names_all)
+
+    # Subset the graph to only the selected nodes
+    df = df.loc[selected_genes, selected_genes]
+
+    # Prune weak edges
+    df[df.abs() < prune_threshold] = 0
+
+    # Filter only user-defined edges (if provided)
+    if selected_edges:
+        mask = np.zeros_like(df, dtype=bool)
+        for u, v in selected_edges:
+            if u in df.index and v in df.columns:
+                mask[df.index.get_loc(u), df.columns.get_loc(v)] = True
+        df[~mask] = 0
+
+    # Compute node sizes
+    if score_size is None:
+        sizes = df.abs().sum(axis=0) + df.abs().sum(axis=1)
+    else:
+        score_col = f'{score_size}_{cluster}'
+        if score_col not in adata.var.columns:
+            raise ValueError(f"Column '{score_col}' not found in adata.var")
+        sizes = pd.Series([
+            adata.var.loc[g, score_col] if g in adata.var.index else 0
+            for g in selected_genes
+        ], index=selected_genes)
+
+    # Normalize sizes
+    size_multiplier = 1000 / sizes.max() if sizes.max() > 0 else 1
+    sizes = size_multiplier * sizes
+    node_size_dict = {node: size for node, size in sizes.items()}
+
+    # Define node labels
+    labels = {gene: gene for gene in selected_genes}
+
+    # Create directed graph
+    G = nx.from_pandas_adjacency(df, create_using=nx.DiGraph)
+
+    # Compute edge weights
+    edge_list = [(u, v) for u, v in G.edges() if abs(G[u][v]['weight']) >= prune_threshold]
+    if not edge_list:
+        print("Warning: No edges remain after filtering")
+        edge_list = []
+
+    weights = np.array([abs(G[u][v]['weight']) for u, v in edge_list]) if edge_list else np.array([])
+    weights_signed = np.array([G[u][v]['weight'] for u, v in edge_list]) if edge_list else np.array([])
+
+    # Normalize edge widths
+    if weights.size > 0:
+        weights = 2 * np.log1p(weights) / np.log1p(weights.max())
+
+    # Use predefined node positions if provided, otherwise default to spring layout
+    if node_positions:
+        pos = {gene: node_positions[gene] for gene in selected_genes if gene in node_positions}
+    else:
+        pos = {}
+
+    if len(pos) < len(selected_genes):
+        default_layout = nx.spring_layout(G)
+        for node in selected_genes:
+            if node not in pos:
+                pos[node] = default_layout.get(node, (0, 0))
+
+    # Define axes
+    if ax is None:
+        fig, ax = plt.subplots(figsize=figsize)
+
+    # Set fixed edge colors (Red for positive, Blue for negative)
+    edge_colors = ['red' if w > 0 else 'blue' for w in weights_signed] if len(weights_signed) > 0 else []
+
+    # Handle bidirectional edges: shift arcs slightly to avoid overlap
+    curved_edges = set()
+    for u, v in edge_list:
+        if u == v:
+            continue
+        if (v, u) in edge_list and (v, u) not in curved_edges:
+            curved_edges.add((u, v))
+            curved_edges.add((v, u))
+
+    # Adjust margins for each node
+    min_margin = 0.02
+    max_margin = 0.1
+    node_margins = {node: np.clip(size / 2000, min_margin, max_margin) for node, size in node_size_dict.items()}
+
+    # Draw nodes
+    nx.draw_networkx_nodes(G, pos, node_size=list(sizes.values), node_color=node_color,
+                          edgecolors='black', linewidths=1.5, ax=ax, alpha=0.9)
+
+    # Move labels outside the nodes
+    adjusted_pos = {k: (v[0], v[1] + label_offset) for k, v in pos.items()}
+    nx.draw_networkx_labels(G, adjusted_pos, labels, font_size=label_size, ax=ax)
+
+    # Draw edges with adjusted arrows
+    for idx, edge in enumerate(edge_list):
+        u, v = edge
+        width = weights[idx] if variable_width and len(weights) > 0 else 1
+        style = "arc3,rad=0.15" if edge in curved_edges else "arc3,rad=0"
+        nx.draw_networkx_edges(G, pos, edgelist=[edge], width=width,
+                              edge_color=[edge_colors[idx]], ax=ax,
+                              arrows=True,
+                              min_source_margin=node_margins.get(u, min_margin),
+                              min_target_margin=node_margins.get(v, min_margin),
+                              connectionstyle=style)
+
+    ax.set_title(f'{cluster} - Subset GRN')
+    ax.axis('off')
+
+    return ax

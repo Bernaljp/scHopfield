@@ -15,7 +15,9 @@ from .networks import (
     plot_centrality_scatter,
     plot_eigenvalue_spectrum,
     plot_eigenvector_components,
-    plot_eigenanalysis_grid
+    plot_eigenanalysis_grid,
+    plot_grn_network,
+    plot_grn_subset
 )
 from .dynamics import plot_trajectory
 from .correlation import (
@@ -43,6 +45,8 @@ __all__ = [
     'plot_eigenvalue_spectrum',
     'plot_eigenvector_components',
     'plot_eigenanalysis_grid',
+    'plot_grn_network',
+    'plot_grn_subset',
     'plot_trajectory',
     'plot_gene_correlation_scatter',
     'plot_correlations_grid',
