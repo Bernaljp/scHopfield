@@ -27,7 +27,10 @@ from .networks import (
     network_correlations,
     get_network_links,
     compute_network_centrality,
-    get_top_genes_table
+    get_top_genes_table,
+    compute_eigenanalysis,
+    get_top_eigenvector_genes,
+    get_eigenanalysis_table
 )
 from .velocity import (
     compute_reconstructed_velocity,
@@ -54,6 +57,9 @@ __all__ = [
     'get_network_links',
     'compute_network_centrality',
     'get_top_genes_table',
+    'compute_eigenanalysis',
+    'get_top_eigenvector_genes',
+    'get_eigenanalysis_table',
     'compute_reconstructed_velocity',
     'validate_velocity',
 ]

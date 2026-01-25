@@ -524,3 +524,333 @@ def plot_centrality_scatter(
 
     plt.tight_layout()
     return fig
+
+
+def _linspace_iterator(start, stop, num):
+    """Helper function for annotation positioning."""
+    if num == 1:
+        yield start
+        return
+    step = (stop - start) / float(num - 1)
+    for i in range(num):
+        yield start + i * step
+
+
+def _annotate_points(ax, x_data, y_data, labels, offset_x_fraction=0.1, offset_y_fraction=0.1):
+    """
+    Helper function to annotate points with adaptive positioning.
+
+    Parameters
+    ----------
+    ax : plt.Axes
+        Axes to annotate on
+    x_data : array-like
+        X coordinates of points
+    y_data : array-like
+        Y coordinates of points
+    labels : array-like
+        Labels for each point
+    offset_x_fraction : float, optional (default: 0.1)
+        Horizontal offset fraction
+    offset_y_fraction : float, optional (default: 0.1)
+        Vertical offset fraction
+    """
+    n_positive = sum(y >= 0 for y in y_data)
+    n_negative = sum(y < 0 for y in y_data)
+    n_total = len(y_data) // 2
+    frac_positive = n_positive / n_total if n_total > 0 else 1
+    frac_negative = n_negative / n_total if n_total > 0 else 1
+    offsets_positive = _linspace_iterator(-0.25 * offset_y_fraction * frac_positive,
+                                          1.75 * offset_y_fraction * frac_positive,
+                                          n_positive)
+    offsets_negative = _linspace_iterator(-0.25 * offset_y_fraction * frac_negative,
+                                          1.75 * offset_y_fraction * frac_negative,
+                                          n_negative)
+    offset_x = offset_x_fraction
+
+    for name, x, y in zip(labels, x_data, y_data):
+        offset_y = next(offsets_positive) if y >= 0 else next(offsets_negative)
+
+        # Convert offset to display coordinates
+        offset_x_data = offset_x * ax.figure.dpi
+        offset_y_data = offset_y * ax.figure.dpi
+
+        # Determine text position based on y-value
+        if y < 0:
+            xytext = (offset_x_data, offset_y_data)
+            ha = 'left'
+        else:
+            xytext = (-offset_x_data, -offset_y_data)
+            ha = 'right'
+
+        # Annotate the point
+        ax.annotate(name, xy=(x, y), xytext=xytext, fontsize=8, ha=ha,
+                   textcoords='offset points',
+                   arrowprops=dict(arrowstyle="->", color='gray', lw=0.5))
+
+
+def plot_eigenvalue_spectrum(
+    adata: AnnData,
+    clusters: Optional[Union[str, List[str]]] = None,
+    cluster_key: str = 'cell_type',
+    colors: Optional[Dict[str, str]] = None,
+    highlight_extremes: bool = True,
+    figsize: Optional[tuple] = None,
+    ax: Optional[plt.Axes] = None
+) -> plt.Axes:
+    """
+    Plot eigenvalue spectrum in the complex plane.
+
+    Parameters
+    ----------
+    adata : AnnData
+        Annotated data object with computed eigenanalysis
+    clusters : str or list, optional
+        Cluster(s) to plot. If None, plots all clusters
+    cluster_key : str, optional (default: 'cell_type')
+        Key in adata.obs for cluster labels
+    colors : dict, optional
+        Colors for each cluster
+    highlight_extremes : bool, optional (default: True)
+        Whether to highlight eigenvalues with max/min real parts
+    figsize : tuple, optional
+        Figure size
+    ax : plt.Axes, optional
+        Axes to plot on
+
+    Returns
+    -------
+    plt.Axes
+        Axes with plot
+    """
+    if 'eigenanalysis' not in adata.uns['scHopfield']:
+        raise ValueError(
+            "Eigenanalysis not found. Please run sch.tl.compute_eigenanalysis() first."
+        )
+
+    if clusters is None:
+        clusters = adata.obs[cluster_key].unique().tolist()
+    elif isinstance(clusters, str):
+        clusters = [clusters]
+
+    if ax is None:
+        if figsize is None:
+            figsize = (8, 8)
+        fig, ax = plt.subplots(figsize=figsize)
+
+    for cluster in clusters:
+        eigenvalues = adata.uns['scHopfield']['eigenanalysis'][f'eigenvalues_{cluster}']
+
+        color = colors[cluster] if colors is not None and cluster in colors else 'tab:blue'
+        ax.scatter(eigenvalues.real, eigenvalues.imag, color=color, alpha=0.6,
+                  s=15, label=cluster)
+
+        if highlight_extremes:
+            # Highlight max and min real eigenvalues
+            idx_max = np.argmax(eigenvalues.real)
+            idx_min = np.argmin(eigenvalues.real)
+
+            ax.scatter(eigenvalues[idx_max].real, eigenvalues[idx_max].imag,
+                      color='blue', edgecolor='black', s=100, zorder=3,
+                      marker='*', label=f'{cluster} max Re(λ)')
+            ax.scatter(eigenvalues[idx_min].real, eigenvalues[idx_min].imag,
+                      color='red', edgecolor='black', s=100, zorder=3,
+                      marker='*', label=f'{cluster} min Re(λ)')
+
+    ax.set_xlabel('Re(λ)')
+    ax.set_ylabel('Im(λ)')
+    ax.set_title('Eigenvalue Spectrum')
+    ax.axhline(y=0, color='k', linestyle='--', alpha=0.3)
+    ax.axvline(x=0, color='k', linestyle='--', alpha=0.3)
+    ax.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
+
+    return ax
+
+
+def plot_eigenvector_components(
+    adata: AnnData,
+    cluster: str,
+    which: str = 'max',
+    n_genes: int = 10,
+    cluster_key: str = 'cell_type',
+    color: Optional[str] = None,
+    annotate: bool = True,
+    figsize: tuple = (10, 5),
+    ax: Optional[plt.Axes] = None
+) -> plt.Axes:
+    """
+    Plot sorted eigenvector components with top gene annotations.
+
+    Parameters
+    ----------
+    adata : AnnData
+        Annotated data object with computed eigenanalysis
+    cluster : str
+        Cluster name
+    which : str, optional (default: 'max')
+        Which eigenvalue: 'max' or 'min'
+    n_genes : int, optional (default: 10)
+        Number of top genes to annotate
+    cluster_key : str, optional (default: 'cell_type')
+        Key in adata.obs for cluster labels
+    color : str, optional
+        Color for plot. If None, uses blue for 'max', red for 'min'
+    annotate : bool, optional (default: True)
+        Whether to annotate top genes
+    figsize : tuple, optional (default: (10, 5))
+        Figure size
+    ax : plt.Axes, optional
+        Axes to plot on
+
+    Returns
+    -------
+    plt.Axes
+        Axes with plot
+    """
+    if 'eigenanalysis' not in adata.uns['scHopfield']:
+        raise ValueError(
+            "Eigenanalysis not found. Please run sch.tl.compute_eigenanalysis() first."
+        )
+
+    eigenvalues = adata.uns['scHopfield']['eigenanalysis'][f'eigenvalues_{cluster}']
+    eigenvectors = adata.uns['scHopfield']['eigenanalysis'][f'eigenvectors_{cluster}']
+    gene_names = adata.uns['scHopfield']['eigenanalysis']['gene_names']
+
+    # Select eigenvalue
+    if which == 'max':
+        idx = np.argmax(eigenvalues.real)
+        default_color = 'blue'
+        title_prefix = 'Max'
+    elif which == 'min':
+        idx = np.argmin(eigenvalues.real)
+        default_color = 'red'
+        title_prefix = 'Min'
+    else:
+        raise ValueError("which must be 'max' or 'min'")
+
+    if color is None:
+        color = default_color
+
+    eigenvector = eigenvectors[:, idx]
+    eigenvalue = eigenvalues[idx]
+
+    # Sort by eigenvector value
+    sorted_indices = np.argsort(eigenvector.real)
+    sorted_eigenvector = eigenvector[sorted_indices]
+
+    if ax is None:
+        fig, ax = plt.subplots(figsize=figsize)
+
+    ax.plot(sorted_eigenvector.real, '.', color=color)
+    ax.set_ylabel('Component value')
+    ax.set_xticks([])
+    ax.set_title(f'{cluster} - {title_prefix} Eigenvalue Eigenvector (λ={eigenvalue.real:.3f})')
+
+    if annotate:
+        # Get top genes by absolute value
+        sorted_abs = np.argsort(np.abs(eigenvector))[::-1]
+        top_indices = sorted_abs[:n_genes]
+
+        # Find positions in sorted array
+        x_data = [np.where(sorted_indices == idx)[0][0] for idx in top_indices]
+        y_data = eigenvector[top_indices].real
+        names = gene_names[top_indices]
+
+        _annotate_points(ax, x_data, y_data, names, offset_x_fraction=0.2, offset_y_fraction=0.1)
+
+    return ax
+
+
+def plot_eigenanalysis_grid(
+    adata: AnnData,
+    cluster_key: str = 'cell_type',
+    order: Optional[List[str]] = None,
+    colors: Optional[Dict[str, str]] = None,
+    n_genes: int = 10,
+    figsize: Optional[tuple] = None
+) -> plt.Figure:
+    """
+    Plot comprehensive eigenanalysis grid for all clusters.
+
+    Creates a grid with 3 columns per cluster:
+    1. Eigenvalue spectrum with max/min highlighted
+    2. Top eigenvector for max eigenvalue
+    3. Top eigenvector for min eigenvalue
+
+    Parameters
+    ----------
+    adata : AnnData
+        Annotated data object with computed eigenanalysis
+    cluster_key : str, optional (default: 'cell_type')
+        Key in adata.obs for cluster labels
+    order : list, optional
+        Order of clusters to display
+    colors : dict, optional
+        Colors for each cluster
+    n_genes : int, optional (default: 10)
+        Number of top genes to annotate
+    figsize : tuple, optional
+        Figure size. If None, auto-calculated
+
+    Returns
+    -------
+    plt.Figure
+        Figure with grid of plots
+    """
+    if 'eigenanalysis' not in adata.uns['scHopfield']:
+        raise ValueError(
+            "Eigenanalysis not found. Please run sch.tl.compute_eigenanalysis() first."
+        )
+
+    clusters = adata.obs[cluster_key].unique().tolist()
+    if order is not None:
+        clusters = [c for c in order if c in clusters]
+
+    n_clusters = len(clusters)
+    if figsize is None:
+        figsize = (16, 4 * n_clusters)
+
+    fig, axs = plt.subplots(n_clusters, 3, figsize=figsize)
+
+    # Handle single cluster case
+    if n_clusters == 1:
+        axs = axs.reshape(1, -1)
+
+    for i, cluster in enumerate(clusters):
+        color = colors[cluster] if colors is not None and cluster in colors else 'tab:blue'
+
+        # Column 1: Eigenvalue spectrum
+        plot_eigenvalue_spectrum(
+            adata,
+            clusters=cluster,
+            cluster_key=cluster_key,
+            colors=colors,
+            highlight_extremes=True,
+            ax=axs[i, 0]
+        )
+        axs[i, 0].legend().remove()  # Remove legend for cleaner look
+
+        # Column 2: Max eigenvalue eigenvector
+        plot_eigenvector_components(
+            adata,
+            cluster=cluster,
+            which='max',
+            n_genes=n_genes,
+            cluster_key=cluster_key,
+            color='blue',
+            ax=axs[i, 1]
+        )
+
+        # Column 3: Min eigenvalue eigenvector
+        plot_eigenvector_components(
+            adata,
+            cluster=cluster,
+            which='min',
+            n_genes=n_genes,
+            cluster_key=cluster_key,
+            color='red',
+            ax=axs[i, 2]
+        )
+
+    plt.tight_layout()
+    return fig

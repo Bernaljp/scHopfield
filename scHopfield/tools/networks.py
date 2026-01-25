@@ -3,7 +3,7 @@
 import numpy as np
 import pandas as pd
 import itertools
-from typing import Optional, Dict, Union, List
+from typing import Optional, Dict, Union, List, Tuple
 from anndata import AnnData
 
 from .._utils.io import get_genes_used
@@ -403,5 +403,204 @@ def get_top_genes_table(
         # Fill table
         result[(cluster, 'Gene')] = top_genes.values
         result[(cluster, metric_display)] = top_scores
+
+    return result
+
+
+def compute_eigenanalysis(
+    adata: AnnData,
+    cluster_key: str = 'cell_type',
+    copy: bool = False
+) -> Optional[AnnData]:
+    """
+    Compute eigenvalue decomposition for each cluster's interaction matrix.
+
+    Performs eigendecomposition (eigenvalues and eigenvectors) on the
+    interaction matrices W for each cluster. Results are stored in
+    adata.uns['scHopfield']['eigenanalysis'].
+
+    Parameters
+    ----------
+    adata : AnnData
+        Annotated data object with fitted interaction matrices
+    cluster_key : str, optional (default: 'cell_type')
+        Key in adata.obs for cluster labels
+    copy : bool, optional (default: False)
+        If True, return a copy instead of modifying in-place
+
+    Returns
+    -------
+    AnnData or None
+        Returns adata if copy=True, otherwise None.
+        Adds to adata.uns['scHopfield']['eigenanalysis'] for each cluster:
+        - 'eigenvalues_{cluster}': complex eigenvalues array
+        - 'eigenvectors_{cluster}': complex eigenvectors matrix
+
+    Notes
+    -----
+    Eigenvalues with large positive real parts indicate unstable directions.
+    Eigenvalues with large negative real parts indicate fast decay directions.
+    The eigenvectors show which gene combinations are associated with these dynamics.
+    """
+    adata = adata.copy() if copy else adata
+
+    genes = get_genes_used(adata)
+    gene_names = adata.var.index[genes]
+    clusters = adata.obs[cluster_key].unique()
+
+    if 'eigenanalysis' not in adata.uns['scHopfield']:
+        adata.uns['scHopfield']['eigenanalysis'] = {}
+
+    for cluster in clusters:
+        if cluster == 'all':
+            continue
+
+        # Get interaction matrix
+        W = adata.varp[f'W_{cluster}']
+
+        # Compute eigenvalues and eigenvectors
+        eigenvalues, eigenvectors = np.linalg.eig(W)
+
+        # Store results
+        adata.uns['scHopfield']['eigenanalysis'][f'eigenvalues_{cluster}'] = eigenvalues
+        adata.uns['scHopfield']['eigenanalysis'][f'eigenvectors_{cluster}'] = eigenvectors
+        adata.uns['scHopfield']['eigenanalysis'][f'gene_names'] = gene_names.values
+
+    return adata if copy else None
+
+
+def get_top_eigenvector_genes(
+    adata: AnnData,
+    cluster: str,
+    which: str = 'max',
+    n_genes: int = 20,
+    part: str = 'real',
+    cluster_key: str = 'cell_type'
+) -> pd.DataFrame:
+    """
+    Get top genes from eigenvector corresponding to extreme eigenvalue.
+
+    Parameters
+    ----------
+    adata : AnnData
+        Annotated data object with computed eigenanalysis
+    cluster : str
+        Cluster name
+    which : str, optional (default: 'max')
+        Which eigenvalue to use: 'max' for largest real part,
+        'min' for smallest (most negative) real part
+    n_genes : int, optional (default: 20)
+        Number of top genes to return
+    part : str, optional (default: 'real')
+        Which part of eigenvector to use: 'real', 'imag', or 'abs'
+    cluster_key : str, optional (default: 'cell_type')
+        Key in adata.obs for cluster labels (for validation)
+
+    Returns
+    -------
+    pd.DataFrame
+        DataFrame with columns 'gene' and 'component_value'
+
+    Raises
+    ------
+    ValueError
+        If eigenanalysis has not been computed yet
+    """
+    if 'eigenanalysis' not in adata.uns['scHopfield']:
+        raise ValueError(
+            "Eigenanalysis not found. Please run sch.tl.compute_eigenanalysis() first."
+        )
+
+    # Get eigenvalues and eigenvectors
+    eigenvalues = adata.uns['scHopfield']['eigenanalysis'][f'eigenvalues_{cluster}']
+    eigenvectors = adata.uns['scHopfield']['eigenanalysis'][f'eigenvectors_{cluster}']
+    gene_names = adata.uns['scHopfield']['eigenanalysis']['gene_names']
+
+    # Select eigenvalue
+    if which == 'max':
+        idx = np.argmax(eigenvalues.real)
+    elif which == 'min':
+        idx = np.argmin(eigenvalues.real)
+    else:
+        raise ValueError("which must be 'max' or 'min'")
+
+    eigenvalue = eigenvalues[idx]
+    eigenvector = eigenvectors[:, idx]
+
+    # Select component part
+    if part == 'real':
+        components = eigenvector.real
+    elif part == 'imag':
+        components = eigenvector.imag
+    elif part == 'abs':
+        components = np.abs(eigenvector)
+    else:
+        raise ValueError("part must be 'real', 'imag', or 'abs'")
+
+    # Get top genes by absolute value
+    sorted_idx = np.argsort(np.abs(components))[::-1][:n_genes]
+
+    result = pd.DataFrame({
+        'gene': gene_names[sorted_idx],
+        'component_value': components[sorted_idx],
+        'eigenvalue': eigenvalue
+    })
+
+    return result
+
+
+def get_eigenanalysis_table(
+    adata: AnnData,
+    cluster_key: str = 'cell_type',
+    n_genes: int = 20,
+    order: Optional[List[str]] = None
+) -> pd.DataFrame:
+    """
+    Create formatted table with top genes from extreme eigenvectors.
+
+    Parameters
+    ----------
+    adata : AnnData
+        Annotated data object with computed eigenanalysis
+    cluster_key : str, optional (default: 'cell_type')
+        Key in adata.obs for cluster labels
+    n_genes : int, optional (default: 20)
+        Number of top genes to include per cluster
+    order : list, optional
+        Order of clusters in table. If None, uses all clusters
+
+    Returns
+    -------
+    pd.DataFrame
+        DataFrame with MultiIndex columns (cluster, ['+EV gene', '+EV value', '-EV gene', '-EV value'])
+    """
+    if 'eigenanalysis' not in adata.uns['scHopfield']:
+        raise ValueError(
+            "Eigenanalysis not found. Please run sch.tl.compute_eigenanalysis() first."
+        )
+
+    clusters = adata.obs[cluster_key].unique().tolist()
+    if order is not None:
+        clusters = [c for c in order if c in clusters]
+
+    # Create result DataFrame
+    result = pd.DataFrame(
+        index=range(n_genes),
+        columns=pd.MultiIndex.from_product([
+            clusters,
+            ['+EV gene', '+EV value', '-EV gene', '-EV value']
+        ])
+    )
+
+    for cluster in clusters:
+        # Get top genes from max eigenvalue eigenvector
+        df_max = get_top_eigenvector_genes(adata, cluster, which='max', n_genes=n_genes)
+        result[(cluster, '+EV gene')] = df_max['gene'].values
+        result[(cluster, '+EV value')] = [f"{v:.3f}" for v in df_max['component_value'].values]
+
+        # Get top genes from min eigenvalue eigenvector
+        df_min = get_top_eigenvector_genes(adata, cluster, which='min', n_genes=n_genes)
+        result[(cluster, '-EV gene')] = df_min['gene'].values
+        result[(cluster, '-EV value')] = [f"{v:.3f}" for v in df_min['component_value'].values]
 
     return result

@@ -12,7 +12,10 @@ from .networks import (
     plot_network_centrality_rank,
     plot_centrality_comparison,
     plot_gene_centrality,
-    plot_centrality_scatter
+    plot_centrality_scatter,
+    plot_eigenvalue_spectrum,
+    plot_eigenvector_components,
+    plot_eigenanalysis_grid
 )
 from .dynamics import plot_trajectory
 from .correlation import (
@@ -31,6 +34,9 @@ __all__ = [
     'plot_centrality_comparison',
     'plot_gene_centrality',
     'plot_centrality_scatter',
+    'plot_eigenvalue_spectrum',
+    'plot_eigenvector_components',
+    'plot_eigenanalysis_grid',
     'plot_trajectory',
     'plot_gene_correlation_scatter',
     'plot_correlations_grid',
