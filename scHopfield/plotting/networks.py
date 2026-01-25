@@ -100,6 +100,10 @@ def plot_network_centrality_rank(
             figsize = (5, n_genes * size_per_gene)
         fig, ax = plt.subplots(figsize=figsize)
 
+    # Collect all top genes across clusters for consistent y-axis
+    all_top_genes = []
+    plot_data = []
+
     for cluster in clusters:
         col_name = f'{metric}_{cluster}'
         if col_name not in adata.var.columns:
@@ -109,14 +113,40 @@ def plot_network_centrality_rank(
         # Get scores and sort
         scores = adata.var[col_name].values[genes]
         sorted_idx = np.argsort(scores)[::-1][skip_first_n:n_genes+skip_first_n]
-        top_genes = gene_names[sorted_idx]
+        top_genes_cluster = gene_names[sorted_idx]
         top_scores = scores[sorted_idx]
+
+        # Store for plotting
+        plot_data.append({
+            'cluster': cluster,
+            'genes': top_genes_cluster,
+            'scores': top_scores
+        })
+
+        # Collect unique top genes
+        for gene in top_genes_cluster:
+            if gene not in all_top_genes:
+                all_top_genes.append(gene)
+
+    # Limit to n_genes if we have multiple clusters
+    if len(all_top_genes) > n_genes:
+        all_top_genes = all_top_genes[:n_genes]
+
+    # Plot each cluster
+    for data in plot_data:
+        cluster = data['cluster']
+        genes_cluster = data['genes']
+        scores = data['scores']
+
+        # Map genes to y-positions based on all_top_genes
+        y_positions = [all_top_genes.index(gene) for gene in genes_cluster if gene in all_top_genes]
+        scores_filtered = [scores[i] for i, gene in enumerate(genes_cluster) if gene in all_top_genes]
 
         # Plot
         color = colors[cluster] if colors is not None and cluster in colors else 'tab:blue'
-        ax.scatter(top_scores, range(len(top_scores)), color=color, label=cluster)
+        ax.scatter(scores_filtered, y_positions, color=color, label=cluster, s=50, alpha=0.7)
 
-    ax.set_yticks(range(len(top_genes)), top_genes)
+    ax.set_yticks(range(len(all_top_genes)), all_top_genes)
     ax.invert_yaxis()
     ax.set_xlabel(metric.replace('_', ' ').capitalize())
     ax.set_ylabel('Gene')
