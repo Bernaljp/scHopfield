@@ -3,7 +3,6 @@ numpy>=1.20.0
 scipy>=1.7.0
 pandas>=1.3.0
 matplotlib>=3.4.0
-seaborn>=0.11.0
 
 # Single-cell analysis
 anndata>=0.8.0
@@ -11,6 +10,9 @@ scanpy>=1.9.0
 
 # Deep learning
 torch>=1.9.0
+
+# Network analysis
+networkx>=2.6.0
 
 # Dimensionality reduction
 umap-learn>=0.5.0
@@ -23,5 +25,8 @@ h5py>=3.0.0
 # Statistical analysis
 hoggorm>=0.13.0
 
-# Optional dependencies for full functionality
-# dynamo-release>=1.0.0  # For RNA velocity integration (optional)
+# Optional dependencies for enhanced functionality
+# Install with: pip install scHopfield[optional]
+# seaborn>=0.11.0  # For boxplot visualizations
+# python-igraph>=0.9.0  # For faster network centrality (10-100× speedup on large networks)
+# dynamo-release>=1.0.0  # For RNA velocity integration

@@ -1,6 +1,7 @@
 # Include important metadata files
 include README.md
 include LICENSE
+include INSTALL.md
 include requirements.txt
 include pyproject.toml
 
@@ -12,6 +13,7 @@ global-exclude *.pyc
 global-exclude *.pyo
 global-exclude __pycache__
 global-exclude .DS_Store
+global-exclude *.egg-info
 
 # Exclude development files
 exclude .gitignore
@@ -19,3 +21,4 @@ exclude IMPLEMENTATION_PLAN.md
 recursive-exclude Base *
 recursive-exclude tests *
 recursive-exclude docs *
+recursive-exclude .git *

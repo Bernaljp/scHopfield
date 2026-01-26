@@ -7,7 +7,8 @@
 From the project directory:
 
 ```bash
-cd /Users/bernaljp/Documents/SCH
+git clone https://github.com/Bernaljp/scHopfield.git
+cd scHopfield
 pip install -e .
 ```
 
@@ -16,11 +17,17 @@ The `-e` flag installs in "editable" mode, meaning changes to the source code ar
 ### Method 2: Standard Installation
 
 ```bash
-cd /Users/bernaljp/Documents/SCH
+git clone https://github.com/Bernaljp/scHopfield.git
+cd scHopfield
 pip install .
 ```
 
 ### Method 3: With Optional Dependencies
+
+For enhanced functionality (seaborn, igraph, dynamo):
+```bash
+pip install -e ".[optional]"
+```
 
 For development tools:
 ```bash
@@ -34,7 +41,7 @@ pip install -e ".[docs]"
 
 For all optional features:
 ```bash
-pip install -e ".[dev,docs,optional]"
+pip install -e ".[all,dev,docs]"
 ```
 
 ## Verify Installation
@@ -91,10 +98,17 @@ Core dependencies are automatically installed:
 - matplotlib, seaborn (visualization)
 - anndata, scanpy (single-cell analysis)
 - torch (deep learning)
+- networkx (network analysis and graph layouts)
 - umap-learn, scikit-learn (dimensionality reduction)
 - tqdm (progress bars)
 - h5py (HDF5 file handling)
 - hoggorm (multivariate analysis)
+
+**Recommended optional dependencies:**
+- `python-igraph` - For 10-100× faster network centrality computation on large networks
+  ```bash
+  pip install igraph
+  ```
 
 ## Troubleshooting
 
@@ -120,6 +134,31 @@ Try:
 ```bash
 pip install umap-learn --no-cache-dir
 ```
+
+### Issue: igraph installation fails
+
+python-igraph requires C libraries. Try:
+
+**On macOS:**
+```bash
+brew install igraph
+pip install python-igraph
+```
+
+**On Ubuntu/Debian:**
+```bash
+sudo apt-get install libigraph0-dev
+pip install python-igraph
+```
+
+**On Windows:**
+```bash
+pip install python-igraph
+# If that fails, download pre-built wheel from:
+# https://www.lfd.uci.edu/~gohlke/pythonlibs/#python-igraph
+```
+
+**Alternative:** The package will work fine without igraph, it will just use networkx (slower for large networks)
 
 ### Issue: Import errors
 

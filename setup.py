@@ -52,6 +52,13 @@ setup(
             'ipykernel>=6.0',
         ],
         'optional': [
+            'seaborn>=0.11.0',
+            'python-igraph>=0.9.0',
+            'dynamo-release>=1.0.0',
+        ],
+        'all': [
+            'seaborn>=0.11.0',
+            'python-igraph>=0.9.0',
             'dynamo-release>=1.0.0',
         ],
     },
