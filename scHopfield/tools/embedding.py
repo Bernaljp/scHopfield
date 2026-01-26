@@ -17,7 +17,33 @@ def compute_umap(
     basis: str = 'umap',
     copy: bool = False
 ) -> Optional[AnnData]:
-    """Compute UMAP embedding."""
+    """
+    Compute UMAP embedding from gene expression data.
+
+    Performs dimensionality reduction using UMAP on the selected gene expression
+    layer. The UMAP model is stored in adata.uns['scHopfield']['embedding'] and
+    the 2D coordinates are stored in adata.obsm[f'X_{basis}'].
+
+    Parameters
+    ----------
+    adata : AnnData
+        Annotated data object
+    spliced_key : str, optional (default: 'Ms')
+        Key in adata.layers for expression data to use
+    n_neighbors : int, optional (default: 30)
+        Number of neighbors for UMAP
+    min_dist : float, optional (default: 0.1)
+        Minimum distance parameter for UMAP
+    basis : str, optional (default: 'umap')
+        Name for the embedding basis (stored as 'X_{basis}' in obsm)
+    copy : bool, optional (default: False)
+        Whether to return a copy or modify in place
+
+    Returns
+    -------
+    Optional[AnnData]
+        Returns AnnData if copy=True, otherwise modifies in place and returns None
+    """
     adata = adata.copy() if copy else adata
     
     genes = get_genes_used(adata)
@@ -41,7 +67,39 @@ def energy_embedding(
     degradation_key: str = 'gamma',
     copy: bool = False
 ) -> Optional[AnnData]:
-    """Compute energy landscape on embedding space."""
+    """
+    Compute energy landscape on 2D embedding space.
+
+    For each cluster, creates a grid in the embedding space and computes the
+    Hopfield energy at each grid point. The grid is transformed to the original
+    high-dimensional gene expression space using the inverse UMAP transform,
+    and energies are computed using the cluster-specific interaction matrices.
+
+    Stores grid coordinates and energy values in adata.uns['scHopfield'] with
+    keys: 'grid_X_{cluster}', 'grid_Y_{cluster}', 'grid_energy_{cluster}',
+    'grid_energy_interaction_{cluster}', 'grid_energy_degradation_{cluster}',
+    'grid_energy_bias_{cluster}'.
+
+    Parameters
+    ----------
+    adata : AnnData
+        Annotated data object with computed UMAP embedding
+    basis : str, optional (default: 'umap')
+        Name of the embedding basis to use (from obsm['X_{basis}'])
+    resolution : int, optional (default: 50)
+        Number of grid points per dimension (creates resolution x resolution grid)
+    cluster_key : str, optional (default: 'cell_type')
+        Key in adata.obs for cluster labels
+    degradation_key : str, optional (default: 'gamma')
+        Key in adata.var for degradation rates (fallback if cluster-specific not found)
+    copy : bool, optional (default: False)
+        Whether to return a copy or modify in place
+
+    Returns
+    -------
+    Optional[AnnData]
+        Returns AnnData if copy=True, otherwise modifies in place and returns None
+    """
     adata = adata.copy() if copy else adata
     
     genes = get_genes_used(adata)
@@ -102,7 +160,19 @@ def energy_embedding(
 
 
 def save_embedding(adata: AnnData, filename: str):
-    """Save embedding and grid data to file."""
+    """
+    Save UMAP embedding and energy grid data to file.
+
+    Saves the UMAP model, high-dimensional grid points, and grid coordinates
+    to a pickle file for later loading.
+
+    Parameters
+    ----------
+    adata : AnnData
+        Annotated data object with computed embedding
+    filename : str
+        Path to save the embedding data (will be saved as pickle file)
+    """
     emb_data = {
         'embedding': adata.uns['scHopfield']['embedding'],
         'highD_grid': adata.varm['highD_grid']
@@ -122,7 +192,29 @@ def load_embedding(
     basis: str = 'umap',
     copy: bool = False
 ) -> Optional[AnnData]:
-    """Load embedding from file."""
+    """
+    Load UMAP embedding and energy grid data from file.
+
+    Loads the UMAP model and grid data from a pickle file saved with
+    save_embedding(). Also transforms the current expression data using
+    the loaded UMAP model to get 2D coordinates.
+
+    Parameters
+    ----------
+    adata : AnnData
+        Annotated data object to load embedding into
+    filename : str
+        Path to the saved embedding pickle file
+    basis : str, optional (default: 'umap')
+        Name for the embedding basis (stored as 'X_{basis}' in obsm)
+    copy : bool, optional (default: False)
+        Whether to return a copy or modify in place
+
+    Returns
+    -------
+    Optional[AnnData]
+        Returns AnnData if copy=True, otherwise modifies in place and returns None
+    """
     adata = adata.copy() if copy else adata
     
     with open(filename, 'rb') as f:

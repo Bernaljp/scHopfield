@@ -21,8 +21,40 @@ def compute_jacobians(
 ) -> Optional[AnnData]:
     """
     Compute Jacobian matrices and eigenvalues for all cells.
-    
-    The Jacobian is: J = W * diag(dsigmoid/dx) - diag(gamma)
+
+    For each cell, computes the Jacobian matrix of the Hopfield dynamics:
+    J = W * diag(dsigmoid/dx) - diag(gamma)
+    where W is the interaction matrix, dsigmoid/dx is the derivative of the
+    sigmoid activation, and gamma is the degradation rate.
+
+    Eigenvalues are stored in adata.obsm['jacobian_eigenvalues']. Eigenvectors
+    can optionally be computed but are stored temporarily and should be saved
+    to disk using save_jacobians() to avoid memory issues.
+
+    Parameters
+    ----------
+    adata : AnnData
+        Annotated data object with fitted parameters
+    spliced_key : str, optional (default: 'Ms')
+        Layer key for spliced counts
+    degradation_key : str, optional (default: 'gamma')
+        Base key for degradation rates (cluster-specific rates used if available)
+    cluster_key : str, optional (default: 'cell_type')
+        Key in adata.obs for cluster labels
+    compute_eigenvectors : bool, optional (default: False)
+        Whether to compute eigenvectors (requires more memory and time)
+    device : str, optional (default: 'cpu')
+        Device for computation: 'cpu' or 'cuda'
+    copy : bool, optional (default: False)
+        If True, return a copy instead of modifying in-place
+
+    Returns
+    -------
+    Optional[AnnData]
+        Returns adata if copy=True, otherwise modifies in place and returns None.
+        Adds to adata.obsm:
+        - 'jacobian_eigenvalues': Complex eigenvalues array of shape (n_cells, n_genes)
+        If compute_eigenvectors=True, temporarily stores in adata.uns['jacobian_eigenvectors_temp']
     """
     adata = adata.copy() if copy else adata
 
@@ -91,7 +123,24 @@ def compute_jacobians(
 
 
 def save_jacobians(adata: AnnData, filename: str, cluster_key: str = 'cell_type', compression: str = 'gzip'):
-    """Save Jacobian eigenvalues and eigenvectors to HDF5 file."""
+    """
+    Save Jacobian eigenvalues and eigenvectors to HDF5 file.
+
+    Saves eigenvalues and eigenvectors (if computed) to an HDF5 file with
+    compression. Complex arrays are stored as separate real and imaginary
+    parts. Removes temporary eigenvector storage from adata after saving.
+
+    Parameters
+    ----------
+    adata : AnnData
+        Annotated data object with computed Jacobian data
+    filename : str
+        Path to save HDF5 file
+    cluster_key : str, optional (default: 'cell_type')
+        Cluster key to store as metadata attribute
+    compression : str, optional (default: 'gzip')
+        HDF5 compression algorithm ('gzip', 'lzf', etc.)
+    """
     import h5py
 
     with h5py.File(filename, 'w') as f:
@@ -117,7 +166,29 @@ def load_jacobians(
     filename: str,
     load_eigenvectors: bool = False
 ) -> Optional[np.ndarray]:
-    """Load Jacobian eigenvalues and optionally eigenvectors from HDF5 file."""
+    """
+    Load Jacobian eigenvalues and optionally eigenvectors from HDF5 file.
+
+    Loads eigenvalues into adata.obsm['jacobian_eigenvalues']. Optionally
+    loads and returns eigenvectors as a numpy array (not stored in adata
+    to save memory).
+
+    Parameters
+    ----------
+    adata : AnnData
+        Annotated data object to load data into
+    filename : str
+        Path to HDF5 file with saved Jacobian data
+    load_eigenvectors : bool, optional (default: False)
+        Whether to load eigenvectors (returns them if True)
+
+    Returns
+    -------
+    Optional[np.ndarray]
+        If load_eigenvectors=True, returns eigenvectors array of shape
+        (n_cells, n_genes, n_genes). Otherwise returns None.
+        Always loads eigenvalues into adata.obsm['jacobian_eigenvalues']
+    """
     import h5py
 
     with h5py.File(filename, 'r') as f:

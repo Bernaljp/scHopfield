@@ -528,7 +528,26 @@ def plot_centrality_scatter(
 
 
 def _linspace_iterator(start, stop, num):
-    """Helper function for annotation positioning."""
+    """
+    Generate evenly spaced values as an iterator.
+
+    Helper function for creating evenly spaced annotation positions.
+    Similar to numpy.linspace but returns an iterator instead of an array.
+
+    Parameters
+    ----------
+    start : float
+        Starting value
+    stop : float
+        Ending value
+    num : int
+        Number of values to generate
+
+    Yields
+    ------
+    float
+        Evenly spaced values from start to stop (inclusive)
+    """
     if num == 1:
         yield start
         return

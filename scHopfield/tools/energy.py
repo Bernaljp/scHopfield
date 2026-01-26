@@ -91,9 +91,26 @@ def _interaction_energy(
     x: Optional[np.ndarray] = None
 ) -> np.ndarray:
     """
-    Calculate interaction energy: -0.5 * s^T W s
+    Calculate interaction energy component: -0.5 * s^T W s.
 
-    Adapted from Landscape.interaction_energy.
+    Computes the energy contribution from gene-gene interactions using the
+    cluster-specific interaction matrix W and sigmoid activations.
+
+    Parameters
+    ----------
+    adata : AnnData
+        Annotated data object with fitted parameters
+    cluster : str
+        Cluster name to use for interaction matrix
+    cluster_key : str
+        Key in adata.obs for cluster labels
+    x : np.ndarray, optional
+        Optional expression data. If None, uses stored sigmoid values
+
+    Returns
+    -------
+    np.ndarray
+        Array of interaction energies for each cell
     """
     genes = get_genes_used(adata)
 
@@ -128,7 +145,28 @@ def _degradation_energy(
     """
     Calculate degradation energy using integral of inverse sigmoid.
 
-    Adapted from Landscape.degradation_energy.
+    Computes the energy contribution from mRNA degradation by integrating
+    the inverse sigmoid function, weighted by degradation rates.
+
+    Parameters
+    ----------
+    adata : AnnData
+        Annotated data object with fitted parameters
+    cluster : str
+        Cluster name to use for parameters
+    spliced_key : str
+        Key in adata.layers for spliced counts
+    degradation_key : str
+        Key in adata.var for degradation rates
+    cluster_key : str, optional (default: 'cell_type')
+        Key in adata.obs for cluster labels
+    x : np.ndarray, optional
+        Optional expression data. If None, uses stored sigmoid values
+
+    Returns
+    -------
+    np.ndarray
+        Array of degradation energies for each cell
     """
     genes = get_genes_used(adata)
 
@@ -162,9 +200,28 @@ def _bias_energy(
     x: Optional[np.ndarray] = None
 ) -> np.ndarray:
     """
-    Calculate bias energy: -I^T s
+    Calculate bias energy component: -I^T s.
 
-    Adapted from Landscape.bias_energy.
+    Computes the energy contribution from external inputs or biases using
+    the cluster-specific bias vector I and sigmoid activations.
+
+    Parameters
+    ----------
+    adata : AnnData
+        Annotated data object with fitted parameters
+    cluster : str
+        Cluster name to use for bias vector
+    spliced_key : str
+        Key in adata.layers for spliced counts
+    cluster_key : str, optional (default: 'cell_type')
+        Key in adata.obs for cluster labels
+    x : np.ndarray, optional
+        Optional expression data. If None, uses stored sigmoid values
+
+    Returns
+    -------
+    np.ndarray
+        Array of bias energies for each cell
     """
 
     genes = get_genes_used(adata)
@@ -195,9 +252,25 @@ def decompose_degradation_energy(
     x: Optional[np.ndarray] = None
 ) -> np.ndarray:
     """
-    Calculate gene-wise degradation energy.
+    Calculate gene-wise degradation energy decomposition.
 
-    Adapted from Landscape.degradation_energy_decomposed.
+    Computes the degradation energy contribution for each gene separately,
+    allowing analysis of which genes contribute most to the total degradation energy.
+
+    Parameters
+    ----------
+    adata : AnnData
+        Annotated data object with fitted parameters
+    cluster : str
+        Cluster name to use for parameters
+    spliced_key : str, optional (default: 'Ms')
+        Key in adata.layers for spliced counts
+    degradation_key : str, optional (default: 'gamma')
+        Key in adata.var for degradation rates
+    cluster_key : str, optional (default: 'cell_type')
+        Key in adata.obs for cluster labels
+    x : np.ndarray, optional
+        Optional expression data. If None, uses stored sigmoid values
 
     Returns
     -------
@@ -240,9 +313,23 @@ def decompose_bias_energy(
     x: Optional[np.ndarray] = None
 ) -> np.ndarray:
     """
-    Calculate gene-wise bias energy.
+    Calculate gene-wise bias energy decomposition.
 
-    Adapted from Landscape.bias_energy_decomposed.
+    Computes the bias energy contribution for each gene separately,
+    allowing analysis of which genes contribute most to the total bias energy.
+
+    Parameters
+    ----------
+    adata : AnnData
+        Annotated data object with fitted parameters
+    cluster : str
+        Cluster name to use for bias vector
+    spliced_key : str, optional (default: 'Ms')
+        Key in adata.layers for spliced counts
+    cluster_key : str, optional (default: 'cell_type')
+        Key in adata.obs for cluster labels
+    x : np.ndarray, optional
+        Optional expression data. If None, uses stored sigmoid values
 
     Returns
     -------

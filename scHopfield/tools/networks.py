@@ -17,12 +17,16 @@ def network_correlations(
     """
     Compute various similarity metrics between cluster interaction networks.
 
-    Adapted from Landscape.network_correlations.
+    Computes pairwise similarity metrics between cluster-specific interaction
+    matrices, allowing comparison of gene regulatory network structures across
+    different cell types.
 
     Parameters
     ----------
     adata : AnnData
         Annotated data object with fitted interaction matrices
+    cluster_key : str, optional (default: 'cell_type')
+        Key in adata.obs for cluster labels
     copy : bool, optional (default: False)
         If True, return a copy instead of modifying in-place
 
