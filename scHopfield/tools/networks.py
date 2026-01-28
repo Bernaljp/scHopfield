@@ -301,7 +301,7 @@ def compute_network_centrality(
                 result_df[f"degree_centrality_{mode}"] = np.array(degrees) / (n_vertices - 1)
 
             result_df["betweenness_centrality"] = g.betweenness(directed=True, weights="weight")
-            result_df["eigenvector_centrality"] = g.eigenvector_centrality(directed=False, weights="weight")
+            result_df["eigenvector_centrality"] = g.eigen_centrality(directed=False, weights="weight")
 
         else:
             # Use NetworkX (fallback)
