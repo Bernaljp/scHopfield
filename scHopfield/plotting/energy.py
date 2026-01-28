@@ -94,6 +94,8 @@ def plot_energy_boxplots(
     order: Optional[List[str]] = None,
     plot_energy: str = 'all',
     colors: Optional[Union[List, Dict]] = None,
+    palette: Optional[str] = None,
+    show_points: bool = False,
     **fig_kws
 ) -> Union[np.ndarray, plt.Axes]:
     """
@@ -110,7 +112,11 @@ def plot_energy_boxplots(
     plot_energy : str, optional (default: 'all')
         Which energy to plot: 'all', 'total', 'interaction', 'degradation', or 'bias'
     colors : list or dict, optional
-        Colors for each cluster
+        Colors for each cluster. Overrides palette.
+    palette : str, optional
+        Seaborn palette name (e.g., 'Set2', 'husl', 'tab10')
+    show_points : bool, optional (default: False)
+        If True, overlay individual points as strip plot
     **fig_kws
         Additional keyword arguments for plt.subplots()
 
@@ -118,44 +124,87 @@ def plot_energy_boxplots(
     -------
     np.ndarray or plt.Axes
         Array of axes (if plot_energy='all') or single axes
+
+    Examples
+    --------
+    >>> import scHopfield as sch
+    >>> sch.pl.plot_energy_boxplots(adata, cluster_key='cell_type')
+    >>> sch.pl.plot_energy_boxplots(adata, plot_energy='interaction', palette='Set2')
     """
     if order is None:
         order = adata.obs[cluster_key].unique().tolist()
 
+    # Set up figure
     if plot_energy == 'all':
+        fig_kws.setdefault('figsize', (14, 10))
         fig, axs = plt.subplots(2, 2, **fig_kws)
-        axs[0, 0].set_title('Total Energy')
-        axs[0, 1].set_title('Interaction Energy')
-        axs[1, 0].set_title('Degradation Energy')
-        axs[1, 1].set_title('Bias Energy')
+        titles = ['Total Energy', 'Interaction Energy', 'Degradation Energy', 'Bias Energy']
+        for ax, title in zip(axs.flatten(), titles):
+            ax.set_title(title, fontsize=12, fontweight='bold', pad=10)
         axs = axs.flatten()
-
         energy_cols = ['energy_total', 'energy_interaction', 'energy_degradation', 'energy_bias']
     else:
+        fig_kws.setdefault('figsize', (10, 6))
         fig, axs = plt.subplots(1, 1, **fig_kws)
         axs = np.array([axs])
         energy_cols = [f'energy_{plot_energy.lower()}']
+        axs[0].set_title(f'{plot_energy.capitalize()} Energy', fontsize=12, fontweight='bold', pad=10)
 
     # Handle colors
+    plot_palette = None
     if colors is not None:
         if isinstance(colors, dict):
-            color_map = colors
-        else:
-            assert isinstance(colors, list) and len(colors) >= len(order), \
-                "Colors should be a list of length at least equal to the number of clusters."
-            color_map = {k: colors[i] for i, k in enumerate(order)}
-        plt.rcParams['axes.prop_cycle'] = plt.cycler(color=[color_map[k] for k in order])
+            plot_palette = [colors.get(k, 'gray') for k in order]
+        elif isinstance(colors, list):
+            assert len(colors) >= len(order), \
+                "Colors list should have at least as many colors as clusters."
+            plot_palette = colors[:len(order)]
+    elif palette is not None:
+        plot_palette = palette
 
     # Create boxplots
     for energy_col, ax in zip(energy_cols, axs):
+        # Check if energy column exists
+        if energy_col not in adata.obs.columns:
+            ax.text(0.5, 0.5, f'{energy_col} not found\nRun sch.tl.compute_energies() first',
+                   ha='center', va='center', transform=ax.transAxes, fontsize=10)
+            continue
+
         df = pd.DataFrame({
             'Cluster': adata.obs[cluster_key],
             'Energy': adata.obs[energy_col]
         })
-        sns.boxplot(data=df, x='Cluster', y='Energy', order=order, ax=ax)
+
+        # Create boxplot with better styling
+        bp = sns.boxplot(
+            data=df, x='Cluster', y='Energy', order=order,
+            ax=ax, palette=plot_palette,
+            linewidth=1.5,
+            fliersize=3,
+            width=0.6
+        )
+
+        # Optionally add strip plot for individual points
+        if show_points:
+            sns.stripplot(
+                data=df, x='Cluster', y='Energy', order=order,
+                ax=ax, color='black', alpha=0.3, size=2,
+                jitter=True
+            )
+
+        # Styling
+        ax.set_xlabel('Cell Type', fontsize=10, fontweight='bold')
+        ax.set_ylabel('Energy', fontsize=10, fontweight='bold')
+        ax.grid(True, alpha=0.3, linestyle='--', axis='y')
+        ax.spines['top'].set_visible(False)
+        ax.spines['right'].set_visible(False)
+
+        # Rotate x-axis labels if many clusters
+        if len(order) > 5:
+            ax.set_xticklabels(ax.get_xticklabels(), rotation=45, ha='right')
 
     plt.tight_layout()
-    return axs
+    return fig if plot_energy == 'all' else axs[0]
 
 
 def plot_energy_scatters(
@@ -164,9 +213,15 @@ def plot_energy_scatters(
     basis: str = 'umap',
     order: Optional[List[str]] = None,
     plot_energy: str = 'all',
-    show_legend: bool = False,
+    show_legend: bool = True,
+    colors: Optional[Union[List, Dict]] = None,
+    palette: Optional[str] = None,
+    alpha: float = 0.6,
+    s: float = 20,
+    elev: float = 30,
+    azim: float = -60,
     **fig_kws
-) -> Union[np.ndarray, plt.Axes]:
+) -> Union[plt.Figure, plt.Axes]:
     """
     Plot energy landscapes for different clusters using 3D scatter plots.
 
@@ -182,45 +237,109 @@ def plot_energy_scatters(
         Order of clusters to display
     plot_energy : str, optional (default: 'all')
         Which energy to plot: 'all', 'total', 'interaction', 'degradation', or 'bias'
-    show_legend : bool, optional (default: False)
+    show_legend : bool, optional (default: True)
         Whether to show legend
+    colors : list or dict, optional
+        Colors for each cluster. Overrides palette.
+    palette : str, optional
+        Seaborn or matplotlib colormap name (e.g., 'tab10', 'Set2')
+    alpha : float, optional (default: 0.6)
+        Transparency of points
+    s : float, optional (default: 20)
+        Size of points
+    elev : float, optional (default: 30)
+        Elevation viewing angle
+    azim : float, optional (default: -60)
+        Azimuthal viewing angle
     **fig_kws
         Additional keyword arguments for plt.subplots()
 
     Returns
     -------
-    np.ndarray or plt.Axes
-        Array of axes (if plot_energy='all') or single axes
+    plt.Figure or plt.Axes
+        Figure (if plot_energy='all') or single axes
+
+    Examples
+    --------
+    >>> import scHopfield as sch
+    >>> sch.pl.plot_energy_scatters(adata, cluster_key='cell_type')
+    >>> sch.pl.plot_energy_scatters(adata, plot_energy='interaction', palette='tab10')
     """
     if order is None:
         order = adata.obs[cluster_key].unique().tolist()
 
+    # Set up figure
     if plot_energy == 'all':
+        fig_kws.setdefault('figsize', (16, 12))
         fig, axs = plt.subplots(2, 2, subplot_kw={'projection': '3d'}, **fig_kws)
-        axs[0, 0].set_title('Total Energy')
-        axs[0, 1].set_title('Interaction Energy')
-        axs[1, 0].set_title('Degradation Energy')
-        axs[1, 1].set_title('Bias Energy')
-
+        titles = ['Total Energy', 'Interaction Energy', 'Degradation Energy', 'Bias Energy']
+        for ax, title in zip(axs.flatten(), titles):
+            ax.set_title(title, fontsize=12, fontweight='bold', pad=15)
         axs = axs.flatten()
         energy_cols = ['energy_total', 'energy_interaction', 'energy_degradation', 'energy_bias']
     else:
+        fig_kws.setdefault('figsize', (10, 8))
         fig, axs = plt.subplots(1, 1, subplot_kw={'projection': '3d'}, **fig_kws)
         axs = np.array([axs])
         energy_cols = [f'energy_{plot_energy.lower()}']
+        axs[0].set_title(f'{plot_energy.capitalize()} Energy', fontsize=12, fontweight='bold', pad=15)
+
+    # Handle colors
+    import matplotlib.cm as cm
+    if colors is not None:
+        if isinstance(colors, dict):
+            color_map = colors
+        elif isinstance(colors, list):
+            assert len(colors) >= len(order), \
+                "Colors list should have at least as many colors as clusters."
+            color_map = {k: colors[i] for i, k in enumerate(order)}
+    elif palette is not None:
+        # Use colormap
+        cmap = cm.get_cmap(palette)
+        color_map = {k: cmap(i / len(order)) for i, k in enumerate(order)}
+    else:
+        # Default to tab10
+        cmap = cm.get_cmap('tab10')
+        color_map = {k: cmap(i % 10) for i, k in enumerate(order)}
+
+    # Check if embedding exists
+    embedding_key = f'X_{basis}'
+    if embedding_key not in adata.obsm:
+        raise ValueError(f"Embedding '{embedding_key}' not found in adata.obsm. "
+                        f"Available: {list(adata.obsm.keys())}")
 
     # Plot each cluster
-    for k in order:
-        cluster_mask = (adata.obs[cluster_key] == k).values
-        cells = adata.obsm[f'X_{basis}'][cluster_mask, :2]
+    for ax, energy_col in zip(axs, energy_cols):
+        # Check if energy column exists
+        if energy_col not in adata.obs.columns:
+            ax.text2D(0.5, 0.5, f'{energy_col} not found\nRun sch.tl.compute_energies() first',
+                     ha='center', va='center', transform=ax.transAxes, fontsize=10)
+            continue
 
-        for ax, energy_col in zip(axs, energy_cols):
+        for k in order:
+            cluster_mask = (adata.obs[cluster_key] == k).values
+            cells = adata.obsm[embedding_key][cluster_mask, :2]
             energies = adata.obs[energy_col].values[cluster_mask]
-            ax.scatter(*cells.T, energies, label=k)
 
-    if show_legend:
-        for ax in axs:
-            ax.legend()
+            # Plot with cluster-specific color
+            ax.scatter(cells[:, 0], cells[:, 1], energies,
+                      c=[color_map[k]], label=k,
+                      alpha=alpha, s=s, edgecolors='none')
+
+        # Styling
+        ax.set_xlabel(f'{basis.upper()} 1', fontsize=10, labelpad=8)
+        ax.set_ylabel(f'{basis.upper()} 2', fontsize=10, labelpad=8)
+        ax.set_zlabel('Energy', fontsize=10, labelpad=8)
+        ax.view_init(elev=elev, azim=azim)
+
+        # Grid
+        ax.grid(True, alpha=0.3, linestyle='--')
+
+        # Legend
+        if show_legend:
+            # Place legend outside plot
+            ax.legend(loc='upper left', bbox_to_anchor=(1.05, 1),
+                     frameon=True, framealpha=0.9, fontsize=8)
 
     plt.tight_layout()
-    return axs
+    return fig if plot_energy == 'all' else axs[0]

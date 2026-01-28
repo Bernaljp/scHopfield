@@ -51,6 +51,9 @@ coverage.xml
 
 # Jupyter Notebook
 .ipynb_checkpoints
+cell_oracle_vs_schopfield.ipynb
+cell_oracle_vs_schopfield.py
+sctour_schopfield_pipeline.py
 
 # pyenv
 .python-version
@@ -83,3 +86,5 @@ IMPLEMENTATION_PLAN.md
 data/
 results/
 figures/
+scTour_inference_basic.ipynb
+sctorubasic.py
