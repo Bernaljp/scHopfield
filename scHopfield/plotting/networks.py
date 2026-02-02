@@ -12,7 +12,12 @@ from .._utils.io import get_genes_used
 def plot_interaction_matrix(
     adata: AnnData,
     cluster: str,
+    top_n: Optional[int] = None,
+    sort_by: str = 'degree',
     ax: Optional[plt.Axes] = None,
+    cmap: str = 'RdBu_r',
+    show_labels: bool = True,
+    label_fontsize: int = 8,
     **kwargs
 ) -> plt.Axes:
     """
@@ -21,11 +26,24 @@ def plot_interaction_matrix(
     Parameters
     ----------
     adata : AnnData
-        Annotated data object
+        Annotated data object with fitted interactions
     cluster : str
         Cluster name
+    top_n : int, optional
+        Number of top genes to show. If None, shows all genes.
+    sort_by : str, optional (default: 'degree')
+        How to select top genes: 'degree' (sum of absolute weights),
+        'variance' (variance of weights), or 'none' (original order)
     ax : plt.Axes, optional
-        Axes to plot on
+        Axes to plot on. If None, creates new figure.
+    cmap : str, optional (default: 'RdBu_r')
+        Colormap for the heatmap
+    show_labels : bool, optional (default: True)
+        Whether to show gene name labels on axes
+    label_fontsize : int, optional (default: 8)
+        Font size for gene labels
+    **kwargs
+        Additional keyword arguments for imshow (e.g., vmin, vmax)
 
     Returns
     -------
@@ -33,12 +51,49 @@ def plot_interaction_matrix(
         Axes with plot
     """
     if ax is None:
-        fig, ax = plt.subplots(figsize=(8, 8))
+        fig, ax = plt.subplots(figsize=(10, 10))
 
+    # Get interaction matrix
     W = adata.varp[f'W_{cluster}']
-    im = ax.imshow(W, cmap='RdBu_r', **kwargs)
-    ax.set_title(f'Interaction Matrix: {cluster}')
-    plt.colorbar(im, ax=ax)
+
+    # Get gene names
+    genes = get_genes_used(adata)
+    gene_names = adata.var_names[genes].values
+
+    # Select top genes if requested
+    if top_n is not None and top_n < W.shape[0]:
+        if sort_by == 'degree':
+            # Sort by sum of absolute weights (total connectivity)
+            degree = np.abs(W).sum(axis=0) + np.abs(W).sum(axis=1)
+            top_idx = np.argsort(degree)[-top_n:]
+        elif sort_by == 'variance':
+            # Sort by variance of weights
+            variance = np.var(W, axis=0) + np.var(W, axis=1)
+            top_idx = np.argsort(variance)[-top_n:]
+        else:
+            # Keep original order, just take first N
+            top_idx = np.arange(top_n)
+
+        W = W[np.ix_(top_idx, top_idx)]
+        gene_names = gene_names[top_idx]
+
+    # Plot heatmap
+    vmax = kwargs.pop('vmax', np.abs(W).max())
+    vmin = kwargs.pop('vmin', -vmax)
+    im = ax.imshow(W, cmap=cmap, vmin=vmin, vmax=vmax, **kwargs)
+
+    # Add labels
+    if show_labels and len(gene_names) <= 50:
+        ax.set_xticks(np.arange(len(gene_names)))
+        ax.set_yticks(np.arange(len(gene_names)))
+        ax.set_xticklabels(gene_names, rotation=90, fontsize=label_fontsize)
+        ax.set_yticklabels(gene_names, fontsize=label_fontsize)
+    else:
+        ax.set_xlabel('Genes', fontsize=10)
+        ax.set_ylabel('Genes', fontsize=10)
+
+    ax.set_title(f'Interaction Matrix: {cluster}', fontsize=12, fontweight='bold')
+    plt.colorbar(im, ax=ax, label='Interaction strength')
 
     return ax
 
