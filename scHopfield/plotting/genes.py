@@ -14,6 +14,7 @@ def plot_sigmoid_fit(
     spliced_key: str = 'Ms',
     color_clusters: bool = False,
     cluster_key: str = 'cell_type',
+    show_zeros: bool = True,
     ax: Optional[plt.Axes] = None,
     **kwargs
 ) -> plt.Axes:
@@ -32,6 +33,9 @@ def plot_sigmoid_fit(
         If True, color points by cluster
     cluster_key : str, optional (default: 'cell_type')
         Key in adata.obs for cluster labels (used if color_clusters=True)
+    show_zeros : bool, optional (default: True)
+        If True, show all expression values including zeros.
+        If False, filter out zero values and plot sigmoid without offset.
     ax : plt.Axes, optional
         Axes to plot on. If None, creates new figure.
     **kwargs
@@ -51,6 +55,7 @@ def plot_sigmoid_fit(
     >>> import scHopfield as sch
     >>> sch.pl.plot_sigmoid_fit(adata, 'Gata1')
     >>> sch.pl.plot_sigmoid_fit(adata, 'Gata1', color_clusters=True)
+    >>> sch.pl.plot_sigmoid_fit(adata, 'Gata1', show_zeros=False)  # Hide zeros
     """
     if ax is None:
         fig, ax = plt.subplots(figsize=(6, 5))
@@ -76,6 +81,16 @@ def plot_sigmoid_fit(
     # Get expression data for this gene
     gexp = to_numpy(get_matrix(adata, spliced_key, genes=[gene_idx])).flatten()
 
+    # Filter zeros if requested
+    if not show_zeros:
+        gexp = gexp[gexp > 0]
+        if len(gexp) == 0:
+            ax.text(0.5, 0.5, f'{gene}\nNo non-zero expression values',
+                    ha='center', va='center', transform=ax.transAxes)
+            ax.set_xlabel('Expression')
+            ax.set_ylabel('CDF')
+            return ax
+
     # Sort expression and create empirical CDF
     sorted_expr = np.sort(gexp)
     empirical_cdf = np.linspace(0, 1, len(sorted_expr))
@@ -94,20 +109,30 @@ def plot_sigmoid_fit(
 
     if color_clusters and cluster_key in adata.obs.columns:
         # Color by cluster
+        # Get original full expression array for cluster filtering
+        gexp_full = to_numpy(get_matrix(adata, spliced_key, genes=[gene_idx])).flatten()
         for cluster in adata.obs[cluster_key].unique():
             cluster_mask = (adata.obs[cluster_key] == cluster).values
-            cluster_expr = np.sort(gexp[cluster_mask])
-            cluster_cdf = np.linspace(0, 1, len(cluster_expr))
-            ax.scatter(cluster_expr, cluster_cdf, s=size, alpha=alpha,
-                      label=f'{cluster}', rasterized=True)
+            cluster_expr = gexp_full[cluster_mask]
+            if not show_zeros:
+                cluster_expr = cluster_expr[cluster_expr > 0]
+            if len(cluster_expr) > 0:
+                cluster_expr_sorted = np.sort(cluster_expr)
+                cluster_cdf = np.linspace(0, 1, len(cluster_expr_sorted))
+                ax.scatter(cluster_expr_sorted, cluster_cdf, s=size, alpha=alpha,
+                          label=f'{cluster}', rasterized=True)
     else:
         # Single color
         ax.scatter(sorted_expr, empirical_cdf, s=size, alpha=alpha,
                   color=c1, label='Expression', rasterized=True)
 
     # Compute fitted sigmoid curve
-    # The formula includes offset: sigmoid(x) * (1 - offset) + offset
-    fitted_curve = sigmoid(sorted_expr, threshold, exponent) * (1 - offset) + offset
+    if show_zeros:
+        # The formula includes offset: sigmoid(x) * (1 - offset) + offset
+        fitted_curve = sigmoid(sorted_expr, threshold, exponent) * (1 - offset) + offset
+    else:
+        # Without zeros, plot pure sigmoid (no offset)
+        fitted_curve = sigmoid(sorted_expr, threshold, exponent)
 
     # Plot fitted curve
     ax.plot(sorted_expr, fitted_curve, '-', linewidth=2.5,
@@ -119,7 +144,11 @@ def plot_sigmoid_fit(
     )
 
     # Position text in upper left
-    textstr = f'{sigmoid_formula}\nMSE = {mse:.4f}'
+    if show_zeros:
+        textstr = f'{sigmoid_formula}\nOffset = {offset:.3f}\nMSE = {mse:.4f}'
+    else:
+        textstr = f'{sigmoid_formula}\n(no offset, zeros excluded)\nMSE = {mse:.4f}'
+
     ax.text(0.05, 0.95, textstr, transform=ax.transAxes,
            fontsize=10, verticalalignment='top',
            bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.3))
