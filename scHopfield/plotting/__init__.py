@@ -30,6 +30,13 @@ from .jacobian import (
     plot_jacobian_stats_boxplots,
     plot_jacobian_element_grid
 )
+from .perturbation import (
+    plot_perturbation_effect_heatmap,
+    plot_perturbation_magnitude,
+    plot_gene_response,
+    plot_top_affected_genes_bar,
+    plot_simulation_comparison
+)
 
 __all__ = [
     'plot_energy_landscape',
@@ -54,4 +61,10 @@ __all__ = [
     'plot_jacobian_eigenvalue_boxplots',
     'plot_jacobian_stats_boxplots',
     'plot_jacobian_element_grid',
+    # Perturbation visualization
+    'plot_perturbation_effect_heatmap',
+    'plot_perturbation_magnitude',
+    'plot_gene_response',
+    'plot_top_affected_genes_bar',
+    'plot_simulation_comparison',
 ]
