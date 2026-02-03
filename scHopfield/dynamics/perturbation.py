@@ -147,6 +147,13 @@ def simulate_perturbation(
         threshold = adata.var['sigmoid_threshold'].values[genes]
         exponent = adata.var['sigmoid_exponent'].values[genes]
 
+        # Get gamma (decay rate)
+        if 'gamma' in adata.var.columns:
+            gamma = adata.var['gamma'].values[genes]
+        else:
+            # Default gamma = 1 if not fitted
+            gamma = np.ones(n_genes)
+
         # Get expression for this cluster
         X_cluster = simulation_input[cluster_mask, :]
         X_original = base_expression[cluster_mask, :]
@@ -156,6 +163,7 @@ def simulate_perturbation(
             X=X_cluster,
             W=W,
             I=I,
+            gamma=gamma,
             threshold=threshold,
             exponent=exponent,
             n_propagation=n_propagation,
@@ -198,19 +206,21 @@ def _propagate_signal(
     X: np.ndarray,
     W: np.ndarray,
     I: np.ndarray,
+    gamma: np.ndarray,
     threshold: np.ndarray,
     exponent: np.ndarray,
     n_propagation: int,
     perturb_condition: Dict[str, float],
-    gene_names: np.ndarray
+    gene_names: np.ndarray,
+    dt: float = 0.1
 ) -> np.ndarray:
     """
     Propagate signal through GRN using iterative updates.
 
-    The update rule is based on the Hopfield dynamics:
-    X_new = W @ sigmoid(X) + I
+    The update rule is based on the scHopfield dynamics:
+    dx/dt = W @ sigmoid(x) - gamma * x + I
 
-    But applied iteratively to simulate signal propagation.
+    Applied iteratively with Euler integration to simulate signal propagation.
 
     Parameters
     ----------
@@ -220,6 +230,8 @@ def _propagate_signal(
         Interaction matrix (n_genes, n_genes)
     I : np.ndarray
         Bias vector (n_genes,)
+    gamma : np.ndarray
+        Decay rate vector (n_genes,)
     threshold : np.ndarray
         Sigmoid threshold parameters
     exponent : np.ndarray
@@ -230,6 +242,8 @@ def _propagate_signal(
         Perturbation conditions
     gene_names : np.ndarray
         Gene names for indexing
+    dt : float, optional (default: 0.1)
+        Time step for Euler integration
 
     Returns
     -------
@@ -250,20 +264,19 @@ def _propagate_signal(
         sig = sigmoid(X_current, threshold[None, :], exponent[None, :])
         sig = np.nan_to_num(sig)
 
-        # Propagate through GRN: X_new = sigmoid(X) @ W.T + I
+        # Compute dx/dt = W @ sigmoid(x) - gamma * x + I
         # Note: Using sig @ W.T because W[i,j] represents effect of gene j on gene i
-        X_new = sig @ W.T + I[None, :]
+        dxdt = sig @ W.T - gamma[None, :] * X_current + I[None, :]
+
+        # Euler update: X_new = X + dt * dx/dt
+        X_new = X_current + dt * dxdt
 
         # Enforce perturbation conditions (keep perturbed genes fixed)
         for idx, value in perturb_indices.items():
             X_new[:, idx] = value
 
-        # Blend new values with current (damped update for stability)
-        alpha = 0.5  # Blending factor
-        X_current = alpha * X_new + (1 - alpha) * X_current
-
         # Ensure non-negative
-        X_current = np.maximum(X_current, 0)
+        X_current = np.maximum(X_new, 0)
 
     return X_current
 
@@ -485,12 +498,12 @@ def get_top_affected_genes(
 
 def compare_perturbations(
     adata: AnnData,
-    perturbations: List[Dict[str, float]],
+    perturbations: Union[Dict[str, Dict[str, float]], List[Dict[str, float]]],
     labels: Optional[List[str]] = None,
     cluster_key: str = 'cell_type',
     n_propagation: int = 3,
     verbose: bool = True
-) -> Dict[str, pd.DataFrame]:
+) -> pd.DataFrame:
     """
     Compare multiple perturbation conditions.
 
@@ -498,10 +511,13 @@ def compare_perturbations(
     ----------
     adata : AnnData
         Annotated data object with fitted interactions
-    perturbations : list of dict
-        List of perturbation conditions to compare
+    perturbations : dict or list
+        Either:
+        - Dict mapping labels to perturbation conditions: {"KO": {"Gata1": 0.0}, "OE": {"Gata1": 1.0}}
+        - List of perturbation conditions (requires labels parameter)
     labels : list of str, optional
-        Labels for each perturbation. If None, uses "perturb_1", "perturb_2", etc.
+        Labels for each perturbation. Required if perturbations is a list.
+        Ignored if perturbations is a dict (keys are used as labels).
     cluster_key : str, optional (default: 'cell_type')
         Key in adata.obs for cluster labels
     n_propagation : int, optional (default: 3)
@@ -511,20 +527,25 @@ def compare_perturbations(
 
     Returns
     -------
-    dict
-        Dictionary with:
-        - 'effect_scores': DataFrame comparing effect magnitudes
-        - 'top_genes': Dict of top affected genes for each perturbation
+    pd.DataFrame
+        DataFrame with genes as index and mean |delta_X| for each perturbation condition
     """
-    if labels is None:
-        labels = [f"perturb_{i+1}" for i in range(len(perturbations))]
+    # Handle dict input: {label: perturbation_condition}
+    if isinstance(perturbations, dict):
+        labels = list(perturbations.keys())
+        perturbations_list = list(perturbations.values())
+    else:
+        perturbations_list = perturbations
+        if labels is None:
+            labels = [f"perturb_{i+1}" for i in range(len(perturbations_list))]
 
-    assert len(labels) == len(perturbations), "Number of labels must match perturbations"
+    assert len(labels) == len(perturbations_list), "Number of labels must match perturbations"
 
-    all_scores = {}
-    all_top_genes = {}
+    genes = get_genes_used(adata)
+    gene_names = adata.var_names[genes].values
+    all_deltas = {}
 
-    for label, perturb in zip(labels, perturbations):
+    for label, perturb in zip(labels, perturbations_list):
         if verbose:
             print(f"\nRunning simulation for: {label}")
             print(f"  Condition: {perturb}")
@@ -537,18 +558,17 @@ def compare_perturbations(
             verbose=False
         )
 
-        # Get scores
-        scores = calculate_perturbation_effect_scores(adata, cluster_key)
-        scores['total_effect'] = scores.sum(axis=1)
-        all_scores[label] = scores['total_effect']
+        # Get mean |delta_X| per gene
+        delta_X = adata.layers['delta_X'][:, genes]
+        mean_abs_delta = np.abs(delta_X).mean(axis=0)
+        all_deltas[label] = mean_abs_delta
 
-        # Get top genes
-        all_top_genes[label] = get_top_affected_genes(adata, n_genes=10)
+    # Combine into DataFrame with genes as index
+    result = pd.DataFrame(all_deltas, index=gene_names)
 
-    # Combine scores
-    effect_comparison = pd.DataFrame(all_scores)
+    # Sort by total effect across conditions
+    result['_total'] = result.sum(axis=1)
+    result = result.sort_values('_total', ascending=False)
+    result = result.drop('_total', axis=1)
 
-    return {
-        'effect_scores': effect_comparison,
-        'top_genes': all_top_genes
-    }
+    return result
