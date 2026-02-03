@@ -10,6 +10,18 @@ from anndata import AnnData
 from .._utils.io import get_genes_used
 
 
+def _get_perturbed_genes(adata):
+    """Get list of perturbed gene names from adata.uns."""
+    if 'scHopfield' in adata.uns and 'perturb_condition' in adata.uns['scHopfield']:
+        return list(adata.uns['scHopfield']['perturb_condition'].keys())
+    return []
+
+
+def _filter_perturbed_genes(gene_names, perturbed_genes):
+    """Return mask for genes that are NOT perturbed."""
+    return ~np.isin(gene_names, perturbed_genes)
+
+
 def plot_perturbation_effect_heatmap(
     adata: AnnData,
     cluster_key: str = 'cell_type',
@@ -60,6 +72,10 @@ def plot_perturbation_effect_heatmap(
         cluster_effects[cluster] = delta_X[mask, :].mean(axis=0)
 
     df = pd.DataFrame(cluster_effects, index=gene_names)
+
+    # Exclude perturbed genes
+    perturbed_genes = _get_perturbed_genes(adata)
+    df = df.loc[~df.index.isin(perturbed_genes)]
 
     # Select top genes by variance across clusters
     gene_variance = df.var(axis=1)
@@ -123,9 +139,13 @@ def plot_perturbation_magnitude(
     if 'delta_X' not in adata.layers:
         raise ValueError("No simulation results found. Run simulate_shift first.")
 
-    # Calculate magnitude
+    # Calculate magnitude (excluding perturbed genes)
     genes = get_genes_used(adata)
-    delta_X = adata.layers['delta_X'][:, genes]
+    gene_names = adata.var_names[genes].values
+    perturbed_genes = _get_perturbed_genes(adata)
+    gene_mask = _filter_perturbed_genes(gene_names, perturbed_genes)
+
+    delta_X = adata.layers['delta_X'][:, genes][:, gene_mask]
     magnitude = np.linalg.norm(delta_X, axis=1)
     adata.obs['perturbation_magnitude'] = magnitude
 
@@ -281,12 +301,17 @@ def plot_top_affected_genes_bar(
     genes = get_genes_used(adata)
     gene_names = adata.var_names[genes].values
 
+    # Exclude perturbed genes
+    perturbed_genes = _get_perturbed_genes(adata)
+    gene_mask = _filter_perturbed_genes(gene_names, perturbed_genes)
+    gene_names = gene_names[gene_mask]
+
     if cluster is not None:
         mask = (adata.obs[cluster_key] == cluster).values
-        delta_X = adata.layers['delta_X'][mask, :][:, genes]
+        delta_X = adata.layers['delta_X'][mask, :][:, genes][:, gene_mask]
         title_suffix = f' ({cluster})'
     else:
-        delta_X = adata.layers['delta_X'][:, genes]
+        delta_X = adata.layers['delta_X'][:, genes][:, gene_mask]
         title_suffix = ' (All cells)'
 
     mean_delta = delta_X.mean(axis=0)

@@ -446,7 +446,8 @@ def get_top_affected_genes(
     adata: AnnData,
     n_genes: int = 20,
     cluster: Optional[str] = None,
-    cluster_key: str = 'cell_type'
+    cluster_key: str = 'cell_type',
+    exclude_perturbed: bool = True
 ) -> pd.DataFrame:
     """
     Get the top genes most affected by the perturbation.
@@ -461,6 +462,8 @@ def get_top_affected_genes(
         If specified, analyze only cells in this cluster
     cluster_key : str, optional (default: 'cell_type')
         Key in adata.obs for cluster labels
+    exclude_perturbed : bool, optional (default: True)
+        If True, exclude the perturbed genes from the results
 
     Returns
     -------
@@ -473,11 +476,20 @@ def get_top_affected_genes(
     genes = get_genes_used(adata)
     gene_names = adata.var_names[genes].values
 
+    # Exclude perturbed genes if requested
+    if exclude_perturbed and 'scHopfield' in adata.uns and 'perturb_condition' in adata.uns['scHopfield']:
+        perturbed_genes = list(adata.uns['scHopfield']['perturb_condition'].keys())
+        gene_mask = ~np.isin(gene_names, perturbed_genes)
+        gene_names = gene_names[gene_mask]
+        genes_filtered = genes[gene_mask]
+    else:
+        genes_filtered = genes
+
     if cluster is not None:
         mask = (adata.obs[cluster_key] == cluster).values
-        delta_X = adata.layers['delta_X'][mask, :][:, genes]
+        delta_X = adata.layers['delta_X'][mask, :][:, genes_filtered]
     else:
-        delta_X = adata.layers['delta_X'][:, genes]
+        delta_X = adata.layers['delta_X'][:, genes_filtered]
 
     # Mean change per gene
     mean_delta = delta_X.mean(axis=0)
