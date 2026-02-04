@@ -70,13 +70,14 @@ def calculate_perturbation_flow(
     genes = get_genes_used(adata)
     delta_X = adata.layers['delta_X'][:, genes]
 
-    # Get base expression (sigmoid transformed)
-    if 'sigmoid' in adata.layers:
-        X = adata.layers['sigmoid'][:, genes]
+    # Get base expression from spliced layer
+    spliced_key = adata.uns.get('scHopfield', {}).get('spliced_key', 'Ms')
+    if spliced_key in adata.layers:
+        X = adata.layers[spliced_key][:, genes]
     else:
         X = adata.X[:, genes]
-        if issparse(X):
-            X = X.toarray()
+    if issparse(X):
+        X = X.toarray()
 
     # Simulated expression
     X_sim = X + delta_X

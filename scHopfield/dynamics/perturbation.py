@@ -102,12 +102,9 @@ def simulate_perturbation(
     gene_names = adata.var_names[genes].values
     n_genes = len(genes)
 
-    # Get base expression (use sigmoid layer if available, else spliced)
-    if 'sigmoid' in adata.layers:
-        base_expression = to_numpy(get_matrix(adata, 'sigmoid', genes=genes))
-    else:
-        spliced_key = adata.uns.get('scHopfield', {}).get('spliced_key', 'Ms')
-        base_expression = to_numpy(get_matrix(adata, spliced_key, genes=genes))
+    # Get base expression from spliced layer
+    spliced_key = adata.uns.get('scHopfield', {}).get('spliced_key', 'Ms')
+    base_expression = to_numpy(get_matrix(adata, spliced_key, genes=genes))
 
     # Initialize simulation input with base expression
     simulation_input = base_expression.copy()
@@ -319,11 +316,8 @@ def _validate_perturb_condition(
 
         # Warn if value is far from observed range
         gene_idx = np.where(gene_names == gene)[0][0]
-        if 'sigmoid' in adata.layers:
-            expr = to_numpy(get_matrix(adata, 'sigmoid', genes=[genes[gene_idx]])).flatten()
-        else:
-            spliced_key = adata.uns.get('scHopfield', {}).get('spliced_key', 'Ms')
-            expr = to_numpy(get_matrix(adata, spliced_key, genes=[genes[gene_idx]])).flatten()
+        spliced_key = adata.uns.get('scHopfield', {}).get('spliced_key', 'Ms')
+        expr = to_numpy(get_matrix(adata, spliced_key, genes=[genes[gene_idx]])).flatten()
 
         min_val, max_val = expr.min(), expr.max()
         if value < min_val * 0.5 or value > max_val * 2:

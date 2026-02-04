@@ -446,13 +446,14 @@ def plot_simulation_comparison(
     gene_idx = np.where(gene_names == gene)[0][0]
     sch_gene_idx = genes[gene_idx]
 
-    # Get expression data
-    if 'sigmoid' in adata.layers:
-        original = adata.layers['sigmoid'][:, sch_gene_idx]
+    # Get expression data from spliced layer
+    spliced_key = adata.uns.get('scHopfield', {}).get('spliced_key', 'Ms')
+    if spliced_key in adata.layers:
+        original = adata.layers[spliced_key][:, sch_gene_idx]
     else:
         original = adata.X[:, sch_gene_idx]
-        if hasattr(original, 'toarray'):
-            original = original.toarray().flatten()
+    if hasattr(original, 'toarray'):
+        original = original.toarray().flatten()
 
     simulated = adata.layers['simulated_count'][:, sch_gene_idx]
 
