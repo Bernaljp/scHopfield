@@ -4,6 +4,12 @@ Perturbation simulation using GRN signal propagation.
 This module implements CellOracle-style perturbation simulations using
 the scHopfield GRN framework. It simulates how gene expression changes
 propagate through the inferred gene regulatory network.
+
+References
+----------
+Logic for the transition vector field is inspired by the perturbation
+simulation workflow in CellOracle:
+Kamimoto et al. (2023). Nature. https://doi.org/10.1038/s41586-022-05688-9
 """
 
 import numpy as np
@@ -71,6 +77,12 @@ def simulate_perturbation(
         And added to adata.uns['scHopfield']:
         - 'perturb_condition': The perturbation conditions used
         - 'n_propagation': Number of propagation steps
+
+    References
+    ----------
+    Logic for the transition vector field is inspired by the perturbation
+    simulation workflow in CellOracle:
+    Kamimoto et al. (2023). Nature. https://doi.org/10.1038/s41586-022-05688-9
 
     Examples
     --------
@@ -541,6 +553,12 @@ def compare_perturbations(
     -------
     pd.DataFrame
         DataFrame with genes as index and mean |delta_X| for each perturbation condition
+
+    References
+    ----------
+    Logic for the transition vector field is inspired by the perturbation
+    simulation workflow in CellOracle:
+    Kamimoto et al. (2023). Nature. https://doi.org/10.1038/s41586-022-05688-9
     """
     # Handle dict input: {label: perturbation_condition}
     if isinstance(perturbations, dict):

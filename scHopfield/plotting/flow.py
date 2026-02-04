@@ -3,6 +3,12 @@ Flow visualization functions for perturbation analysis.
 
 Inspired by CellOracle's development module visualization.
 Compares reference velocity flow with perturbation-induced flow.
+
+References
+----------
+Logic for the transition vector field is inspired by the perturbation
+simulation workflow in CellOracle:
+Kamimoto et al. (2023). Nature. https://doi.org/10.1038/s41586-022-05688-9
 """
 
 import numpy as np
@@ -44,6 +50,12 @@ def calculate_perturbation_flow(
     -------
     np.ndarray
         Perturbation flow vectors in embedding space (n_cells, 2)
+
+    References
+    ----------
+    Logic for the transition vector field is inspired by the perturbation
+    simulation workflow in CellOracle:
+    Kamimoto et al. (2023). Nature. https://doi.org/10.1038/s41586-022-05688-9
     """
     if 'delta_X' not in adata.layers:
         raise ValueError("No delta_X found. Run simulate_shift first.")
@@ -215,6 +227,12 @@ def calculate_inner_product(
     -------
     np.ndarray
         Inner product values for each cell
+
+    References
+    ----------
+    Logic for the transition vector field is inspired by the perturbation
+    simulation workflow in CellOracle:
+    Kamimoto et al. (2023). Nature. https://doi.org/10.1038/s41586-022-05688-9
     """
     # Get reference velocity
     if velocity_key is None:
@@ -572,6 +590,12 @@ def plot_inner_product_on_embedding(
     Returns
     -------
     plt.Axes
+
+    References
+    ----------
+    Logic for the transition vector field is inspired by the perturbation
+    simulation workflow in CellOracle:
+    Kamimoto et al. (2023). Nature. https://doi.org/10.1038/s41586-022-05688-9
     """
     if ax is None:
         fig, ax = plt.subplots(figsize=figsize)
@@ -635,6 +659,12 @@ def plot_inner_product_by_cluster(
     Returns
     -------
     plt.Axes
+
+    References
+    ----------
+    Logic for the transition vector field is inspired by the perturbation
+    simulation workflow in CellOracle:
+    Kamimoto et al. (2023). Nature. https://doi.org/10.1038/s41586-022-05688-9
     """
     if ax is None:
         fig, ax = plt.subplots(figsize=figsize)
@@ -710,6 +740,12 @@ def visualize_perturbation_flow(
     Returns
     -------
     plt.Figure
+
+    References
+    ----------
+    Logic for the transition vector field is inspired by the perturbation
+    simulation workflow in CellOracle:
+    Kamimoto et al. (2023). Nature. https://doi.org/10.1038/s41586-022-05688-9
     """
     # Get perturbation info for title
     perturb_str = "Perturbation"

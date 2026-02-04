@@ -1,4 +1,12 @@
-"""Visualization functions for perturbation simulation results."""
+"""
+Visualization functions for perturbation simulation results.
+
+References
+----------
+Logic for the transition vector field is inspired by the perturbation
+simulation workflow in CellOracle:
+Kamimoto et al. (2023). Nature. https://doi.org/10.1038/s41586-022-05688-9
+"""
 
 import numpy as np
 import pandas as pd
