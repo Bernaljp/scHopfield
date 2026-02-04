@@ -29,8 +29,11 @@ def plot_perturbation_effect_heatmap(
     figsize: Tuple[float, float] = (12, 8),
     cmap: str = 'RdBu_r',
     center: float = 0,
-    ax: Optional[plt.Axes] = None
-) -> plt.Axes:
+    cluster_cols: bool = True,
+    cluster_rows: bool = False,
+    order: Optional[List[str]] = None,
+    colors: Optional[Dict[str, str]] = None
+) -> sns.matrix.ClusterGrid:
     """
     Plot heatmap of perturbation effects across clusters and genes.
 
@@ -48,13 +51,19 @@ def plot_perturbation_effect_heatmap(
         Colormap
     center : float, optional (default: 0)
         Center value for colormap
-    ax : plt.Axes, optional
-        Axes to plot on
+    cluster_cols : bool, optional (default: True)
+        If True, cluster columns (clusters) with dendrogram
+    cluster_rows : bool, optional (default: False)
+        If True, cluster rows (genes) with dendrogram
+    order : list, optional
+        Order of clusters to plot. Ignored if cluster_cols=True.
+    colors : dict, optional
+        Dictionary mapping cluster names to colors for column color bar
 
     Returns
     -------
-    plt.Axes
-        Axes with plot
+    sns.matrix.ClusterGrid
+        ClusterGrid object with the heatmap
     """
     if 'delta_X' not in adata.layers:
         raise ValueError("No simulation results found. Run simulate_shift first.")
@@ -82,27 +91,39 @@ def plot_perturbation_effect_heatmap(
     top_genes = gene_variance.nlargest(n_genes).index
     df = df.loc[top_genes]
 
-    # Plot
-    if ax is None:
-        fig, ax = plt.subplots(figsize=figsize)
+    # Apply order if specified and not clustering
+    if order is not None and not cluster_cols:
+        order = [c for c in order if c in df.columns]
+        df = df[order]
 
-    sns.heatmap(
-        df, cmap=cmap, center=center, ax=ax,
+    # Create column colors if colors dict provided
+    col_colors = None
+    if colors is not None:
+        col_colors = pd.Series([colors.get(c, '#cccccc') for c in df.columns], index=df.columns)
+
+    # Plot with clustermap
+    g = sns.clustermap(
+        df, cmap=cmap, center=center, figsize=figsize,
+        col_cluster=cluster_cols, row_cluster=cluster_rows,
         xticklabels=True, yticklabels=True,
-        cbar_kws={'label': 'Mean Δ Expression'}
+        cbar_kws={'label': 'Mean Δ Expression'},
+        col_colors=col_colors,
+        dendrogram_ratio=(0.1, 0.15)
     )
-    ax.set_xlabel('Cluster', fontsize=11)
-    ax.set_ylabel('Gene', fontsize=11)
-    ax.set_title('Perturbation Effects by Cluster', fontsize=12, fontweight='bold')
 
-    # Get perturbation info
+    g.ax_heatmap.set_xlabel('Cluster', fontsize=11)
+    g.ax_heatmap.set_ylabel('Gene', fontsize=11)
+
+    # Get perturbation info for title
+    title = 'Perturbation Effects by Cluster'
     if 'scHopfield' in adata.uns and 'perturb_condition' in adata.uns['scHopfield']:
         perturb = adata.uns['scHopfield']['perturb_condition']
         perturb_str = ', '.join([f"{k}={v}" for k, v in perturb.items()])
-        ax.set_title(f'Perturbation Effects: {perturb_str}', fontsize=12, fontweight='bold')
+        title = f'Perturbation Effects: {perturb_str}'
 
-    plt.tight_layout()
-    return ax
+    g.fig.suptitle(title, fontsize=12, fontweight='bold', y=1.02)
+
+    return g
 
 
 def plot_perturbation_magnitude(
@@ -111,7 +132,9 @@ def plot_perturbation_magnitude(
     basis: str = 'umap',
     figsize: Tuple[float, float] = (12, 5),
     cmap: str = 'viridis',
-    vmax: Optional[float] = None
+    vmax: Optional[float] = None,
+    order: Optional[List[str]] = None,
+    colors: Optional[Dict[str, str]] = None
 ) -> plt.Figure:
     """
     Plot perturbation magnitude on embedding and as boxplot.
@@ -130,6 +153,10 @@ def plot_perturbation_magnitude(
         Colormap for scatter plot
     vmax : float, optional
         Maximum value for colormap
+    order : list, optional
+        Order of clusters in boxplot. If None, sorts by median magnitude.
+    colors : dict, optional
+        Dictionary mapping cluster names to colors for boxplot
 
     Returns
     -------
@@ -174,8 +201,17 @@ def plot_perturbation_magnitude(
         'Cluster': adata.obs[cluster_key].values,
         'Magnitude': magnitude
     })
-    order = df.groupby('Cluster')['Magnitude'].median().sort_values(ascending=False).index
-    sns.boxplot(data=df, x='Cluster', y='Magnitude', order=order, ax=axes[1])
+
+    # Determine order
+    if order is None:
+        order = df.groupby('Cluster')['Magnitude'].median().sort_values(ascending=False).index.tolist()
+
+    # Create palette from colors dict
+    palette = None
+    if colors is not None:
+        palette = [colors.get(c, '#cccccc') for c in order]
+
+    sns.boxplot(data=df, x='Cluster', y='Magnitude', order=order, palette=palette, ax=axes[1])
     axes[1].set_xlabel('Cluster', fontsize=10)
     axes[1].set_ylabel('Perturbation Magnitude', fontsize=10)
     axes[1].set_title('Effect by Cluster', fontsize=12, fontweight='bold')
@@ -192,7 +228,8 @@ def plot_gene_response(
     genes: Union[str, List[str]],
     cluster_key: str = 'cell_type',
     figsize: Optional[Tuple[float, float]] = None,
-    palette: Optional[str] = None
+    order: Optional[List[str]] = None,
+    colors: Optional[Dict[str, str]] = None
 ) -> plt.Figure:
     """
     Plot expression change for specific genes across clusters.
@@ -207,8 +244,10 @@ def plot_gene_response(
         Key in adata.obs for cluster labels
     figsize : tuple, optional
         Figure size
-    palette : str, optional
-        Seaborn palette
+    order : list, optional
+        Order of clusters to plot. If None, sorts by median effect.
+    colors : dict, optional
+        Dictionary mapping cluster names to colors
 
     Returns
     -------
@@ -247,16 +286,24 @@ def plot_gene_response(
             'Δ Expression': delta
         })
 
-        # Order by median effect
-        order = df.groupby('Cluster')['Δ Expression'].median().sort_values().index
+        # Determine order
+        if order is None:
+            plot_order = df.groupby('Cluster')['Δ Expression'].median().sort_values().index.tolist()
+        else:
+            plot_order = order
+
+        # Create palette from colors dict
+        palette = None
+        if colors is not None:
+            palette = [colors.get(c, '#cccccc') for c in plot_order]
 
         sns.violinplot(data=df, x='Cluster', y='Δ Expression',
-                      order=order, ax=ax, palette=palette, inner='box')
+                      order=plot_order, ax=ax, palette=palette, inner='box')
         ax.axhline(0, color='red', linestyle='--', alpha=0.5)
         ax.set_title(f'{gene}', fontsize=12, fontweight='bold')
         ax.set_xlabel('Cluster', fontsize=10)
         ax.set_ylabel('Δ Expression', fontsize=10)
-        if len(order) > 5:
+        if len(plot_order) > 5:
             ax.set_xticklabels(ax.get_xticklabels(), rotation=45, ha='right')
         ax.grid(True, alpha=0.3, axis='y')
 
@@ -355,7 +402,9 @@ def plot_simulation_comparison(
     adata: AnnData,
     gene: str,
     cluster_key: str = 'cell_type',
-    figsize: Tuple[float, float] = (12, 5)
+    figsize: Tuple[float, float] = (12, 5),
+    order: Optional[List[str]] = None,
+    colors: Optional[Dict[str, str]] = None
 ) -> plt.Figure:
     """
     Compare original and simulated expression for a gene.
@@ -370,6 +419,10 @@ def plot_simulation_comparison(
         Key in adata.obs for cluster labels
     figsize : tuple, optional
         Figure size
+    order : list, optional
+        Order of clusters in boxplot. If None, sorts by median delta.
+    colors : dict, optional
+        Dictionary mapping cluster names to colors for boxplot
 
     Returns
     -------
@@ -420,13 +473,24 @@ def plot_simulation_comparison(
         'Cluster': adata.obs[cluster_key].values,
         'Δ Expression': delta
     })
-    order = df.groupby('Cluster')['Δ Expression'].median().sort_values().index
-    sns.boxplot(data=df, x='Cluster', y='Δ Expression', order=order, ax=axes[2])
+
+    # Determine order
+    if order is None:
+        plot_order = df.groupby('Cluster')['Δ Expression'].median().sort_values().index.tolist()
+    else:
+        plot_order = order
+
+    # Create palette from colors dict
+    palette = None
+    if colors is not None:
+        palette = [colors.get(c, '#cccccc') for c in plot_order]
+
+    sns.boxplot(data=df, x='Cluster', y='Δ Expression', order=plot_order, palette=palette, ax=axes[2])
     axes[2].axhline(0, color='red', linestyle='--', alpha=0.5)
     axes[2].set_xlabel('Cluster', fontsize=10)
     axes[2].set_ylabel('Δ Expression', fontsize=10)
     axes[2].set_title('Change by Cluster', fontsize=12, fontweight='bold')
-    if len(order) > 5:
+    if len(plot_order) > 5:
         axes[2].set_xticklabels(axes[2].get_xticklabels(), rotation=45, ha='right')
 
     plt.tight_layout()
