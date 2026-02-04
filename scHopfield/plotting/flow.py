@@ -26,14 +26,19 @@ from .._utils.io import get_genes_used
 def calculate_perturbation_flow(
     adata: AnnData,
     basis: str = 'umap',
-    n_neighbors: int = 50,
-    method: str = 'knn_projection'
+    n_neighbors: int = 200,
+    sigma_corr: float = 0.05,
+    sampled_fraction: float = 0.3,
+    sampling_probs: Tuple[float, float] = (0.5, 0.1),
+    random_seed: int = 42,
+    n_jobs: int = 4,
+    verbose: bool = True
 ) -> np.ndarray:
     """
     Calculate perturbation-induced flow in embedding space.
 
     Projects delta_X (gene expression change) to embedding coordinates
-    to visualize how perturbation affects cell state transitions.
+    using correlation-based transition probabilities, similar to RNA velocity.
 
     Parameters
     ----------
@@ -41,10 +46,21 @@ def calculate_perturbation_flow(
         Annotated data with delta_X layer from perturbation simulation
     basis : str, optional (default: 'umap')
         Embedding basis to project onto
-    n_neighbors : int, optional (default: 50)
-        Number of neighbors for projection
-    method : str, optional (default: 'knn_projection')
-        Method for projection: 'knn_projection' or 'correlation'
+    n_neighbors : int, optional (default: 200)
+        Number of neighbors for KNN graph in embedding space
+    sigma_corr : float, optional (default: 0.05)
+        Kernel scaling for transition probability calculation.
+        Smaller values make the kernel sharper (more local).
+    sampled_fraction : float, optional (default: 0.3)
+        Fraction of neighbors to sample for speedup
+    sampling_probs : tuple, optional (default: (0.5, 0.1))
+        Probability gradient for neighbor sampling (near to far)
+    random_seed : int, optional (default: 42)
+        Random seed for reproducibility
+    n_jobs : int, optional (default: 4)
+        Number of parallel jobs for KNN calculation
+    verbose : bool, optional (default: True)
+        Show progress bar during correlation calculation
 
     Returns
     -------
@@ -57,6 +73,11 @@ def calculate_perturbation_flow(
     simulation workflow in CellOracle:
     Kamimoto et al. (2023). Nature. https://doi.org/10.1038/s41586-022-05688-9
     """
+    from sklearn.neighbors import NearestNeighbors
+    from scipy import sparse
+
+    np.random.seed(random_seed)
+
     if 'delta_X' not in adata.layers:
         raise ValueError("No delta_X found. Run simulate_shift first.")
 
@@ -65,6 +86,7 @@ def calculate_perturbation_flow(
         raise ValueError(f"Embedding {embedding_key} not found in adata.obsm")
 
     embedding = adata.obsm[embedding_key]
+    n_cells = embedding.shape[0]
 
     # Get delta_X for genes used in analysis
     genes = get_genes_used(adata)
@@ -79,34 +101,149 @@ def calculate_perturbation_flow(
     if issparse(X):
         X = X.toarray()
 
-    # Simulated expression
-    X_sim = X + delta_X
+    # Build KNN graph in embedding space
+    nn = NearestNeighbors(n_neighbors=n_neighbors + 1, n_jobs=n_jobs)
+    nn.fit(embedding)
+    embedding_knn = nn.kneighbors_graph(mode="connectivity")
 
-    # Project to embedding space using KNN
-    from sklearn.neighbors import NearestNeighbors
+    # Sample neighbors for speedup
+    neigh_ixs = embedding_knn.indices.reshape((-1, n_neighbors + 1))
 
-    nn = NearestNeighbors(n_neighbors=n_neighbors)
-    nn.fit(X)
+    # Probability gradient for sampling (favor closer neighbors)
+    p = np.linspace(sampling_probs[0], sampling_probs[1], neigh_ixs.shape[1])
+    p = p / p.sum()
 
-    # For each cell, find where the simulated state would be in embedding
-    distances, indices = nn.kneighbors(X_sim)
+    n_sampled = int(sampled_fraction * (n_neighbors + 1))
+    sampling_ixs = np.stack([
+        np.random.choice(neigh_ixs.shape[1], size=n_sampled, replace=False, p=p)
+        for _ in range(n_cells)
+    ], axis=0)
 
-    # Weight by inverse distance
-    weights = 1 / (distances + 1e-6)
-    weights = weights / weights.sum(axis=1, keepdims=True)
+    neigh_ixs = neigh_ixs[np.arange(n_cells)[:, None], sampling_ixs]
 
-    # Predicted embedding position after perturbation
-    predicted_embedding = np.zeros_like(embedding)
-    for i in range(len(embedding)):
-        predicted_embedding[i] = np.average(embedding[indices[i]], axis=0, weights=weights[i])
+    # Calculate correlation coefficient between delta_X and neighbor differences
+    # For each cell i and neighbor j: corr(delta_X[i], X[j] - X[i])
+    corrcoef = _calculate_neighbor_correlation(X, delta_X, neigh_ixs, verbose=verbose)
 
-    # Flow = predicted - current
-    flow = predicted_embedding - embedding
+    # Handle NaNs
+    corrcoef = np.nan_to_num(corrcoef, nan=0.0)
+
+    # Build sparse KNN matrix for sampled neighbors
+    nonzero = n_cells * n_sampled
+    embedding_knn_sampled = sparse.csr_matrix(
+        (np.ones(nonzero), neigh_ixs.ravel(), np.arange(0, nonzero + 1, n_sampled)),
+        shape=(n_cells, n_cells)
+    )
+
+    # Calculate transition probabilities using exponential kernel
+    transition_prob = np.exp(corrcoef / sigma_corr) * embedding_knn_sampled.toarray()
+    transition_prob /= transition_prob.sum(axis=1, keepdims=True) + 1e-10
+
+    # Calculate delta_embedding using transition probabilities
+    # Unitary vectors from each cell to all other cells
+    unitary_vectors = embedding.T[:, None, :] - embedding.T[:, :, None]  # (2, n_cells, n_cells)
+    with np.errstate(divide='ignore', invalid='ignore'):
+        norms = np.linalg.norm(unitary_vectors, ord=2, axis=0)
+        unitary_vectors = unitary_vectors / (norms + 1e-10)
+        np.fill_diagonal(unitary_vectors[0], 0)
+        np.fill_diagonal(unitary_vectors[1], 0)
+
+    # Weighted sum of directions based on transition probabilities
+    delta_embedding = (transition_prob * unitary_vectors).sum(axis=2)
+
+    # Subtract baseline (uniform distribution over neighbors)
+    knn_array = embedding_knn_sampled.toarray()
+    baseline = (knn_array * unitary_vectors).sum(axis=2) / (knn_array.sum(axis=1) + 1e-10)
+    delta_embedding = delta_embedding - baseline
+    delta_embedding = delta_embedding.T
 
     # Store in adata
-    adata.obsm[f'perturbation_flow_{basis}'] = flow
+    adata.obsm[f'perturbation_flow_{basis}'] = delta_embedding
+    adata.uns['perturbation_flow_params'] = {
+        'basis': basis,
+        'n_neighbors': n_neighbors,
+        'sigma_corr': sigma_corr,
+        'sampled_fraction': sampled_fraction
+    }
 
-    return flow
+    return delta_embedding
+
+
+def _calculate_neighbor_correlation(
+    X: np.ndarray,
+    delta_X: np.ndarray,
+    neigh_ixs: np.ndarray,
+    verbose: bool = True
+) -> np.ndarray:
+    """
+    Calculate correlation between delta_X and neighbor expression differences.
+
+    For each cell i and its neighbor j, computes:
+    corr(delta_X[i], X[j] - X[i])
+
+    Parameters
+    ----------
+    X : np.ndarray
+        Expression matrix (n_cells, n_genes)
+    delta_X : np.ndarray
+        Delta expression matrix (n_cells, n_genes)
+    neigh_ixs : np.ndarray
+        Neighbor indices (n_cells, n_neighbors)
+    verbose : bool, optional (default: True)
+        Show progress bar
+
+    Returns
+    -------
+    np.ndarray
+        Correlation matrix (n_cells, n_cells)
+    """
+    from tqdm.auto import tqdm
+
+    n_cells, n_neighbors = neigh_ixs.shape
+    n_genes = X.shape[1]
+    corrcoef = np.zeros((n_cells, n_cells))
+
+    # Pre-compute centered and normalized delta_X
+    delta_X_centered = delta_X - delta_X.mean(axis=1, keepdims=True)
+    delta_X_std = delta_X_centered.std(axis=1)
+    delta_X_norm = delta_X_centered / (delta_X_std[:, None] + 1e-10)
+
+    iterator = range(n_cells)
+    if verbose:
+        iterator = tqdm(iterator, desc="Calculating correlations")
+
+    for i in iterator:
+        if delta_X_std[i] < 1e-10:
+            continue
+
+        # Get neighbors
+        neighbors = neigh_ixs[i]
+
+        # Compute X[neighbors] - X[i] for all neighbors at once
+        diffs = X[neighbors] - X[i]  # (n_neighbors, n_genes)
+
+        # Center the differences
+        diffs_centered = diffs - diffs.mean(axis=1, keepdims=True)
+        diffs_std = diffs_centered.std(axis=1)
+
+        # Compute correlations vectorized
+        # corr = (delta_X_norm[i] @ diffs_centered.T) / (diffs_std * n_genes + 1e-10)
+        valid_mask = diffs_std > 1e-10
+        if valid_mask.sum() == 0:
+            continue
+
+        diffs_norm = np.zeros_like(diffs_centered)
+        diffs_norm[valid_mask] = diffs_centered[valid_mask] / (diffs_std[valid_mask, None])
+
+        # Correlation as dot product of normalized vectors
+        corrs = (delta_X_norm[i] @ diffs_norm.T) / n_genes
+
+        # Store in matrix
+        for j_idx, j in enumerate(neighbors):
+            if j != i and valid_mask[j_idx]:
+                corrcoef[i, j] = corrs[j_idx]
+
+    return corrcoef
 
 
 def calculate_grid_flow(
