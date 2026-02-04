@@ -37,6 +37,17 @@ from .perturbation import (
     plot_top_affected_genes_bar,
     plot_simulation_comparison
 )
+from .flow import (
+    calculate_perturbation_flow,
+    calculate_grid_flow,
+    calculate_inner_product,
+    plot_reference_flow,
+    plot_perturbation_flow,
+    plot_flow_on_grid,
+    plot_inner_product_on_embedding,
+    plot_inner_product_by_cluster,
+    visualize_perturbation_flow
+)
 
 __all__ = [
     'plot_energy_landscape',
@@ -67,4 +78,14 @@ __all__ = [
     'plot_gene_response',
     'plot_top_affected_genes_bar',
     'plot_simulation_comparison',
+    # Flow visualization (CellOracle-style)
+    'calculate_perturbation_flow',
+    'calculate_grid_flow',
+    'calculate_inner_product',
+    'plot_reference_flow',
+    'plot_perturbation_flow',
+    'plot_flow_on_grid',
+    'plot_inner_product_on_embedding',
+    'plot_inner_product_by_cluster',
+    'visualize_perturbation_flow',
 ]
