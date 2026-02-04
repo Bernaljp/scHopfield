@@ -13,8 +13,8 @@ Classes
 
    ODESolver
 
-Functions
----------
+ODE-based Simulation
+--------------------
 
 .. autosummary::
    :toctree: generated/
@@ -22,6 +22,21 @@ Functions
    create_solver
    simulate_trajectory
    simulate_perturbation
+
+CellOracle-style GRN Propagation
+--------------------------------
+
+These functions implement perturbation simulation using GRN signal propagation,
+inspired by CellOracle (Kamimoto et al., 2023).
+
+.. autosummary::
+   :toctree: generated/
+
+   simulate_shift
+   calculate_perturbation_effect_scores
+   calculate_cell_transition_scores
+   get_top_affected_genes
+   compare_perturbations
 
 Detailed API
 ------------
@@ -48,3 +63,31 @@ simulate_perturbation
 ~~~~~~~~~~~~~~~~~~~~~
 
 .. autofunction:: simulate_perturbation
+
+CellOracle-style GRN Propagation
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+simulate_shift
+^^^^^^^^^^^^^^
+
+.. autofunction:: simulate_shift
+
+calculate_perturbation_effect_scores
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+.. autofunction:: calculate_perturbation_effect_scores
+
+calculate_cell_transition_scores
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+.. autofunction:: calculate_cell_transition_scores
+
+get_top_affected_genes
+^^^^^^^^^^^^^^^^^^^^^^
+
+.. autofunction:: get_top_affected_genes
+
+compare_perturbations
+^^^^^^^^^^^^^^^^^^^^^
+
+.. autofunction:: compare_perturbations
