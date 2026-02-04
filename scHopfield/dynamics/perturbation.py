@@ -27,6 +27,7 @@ def simulate_perturbation(
     perturb_condition: Dict[str, float],
     cluster_key: str = 'cell_type',
     n_propagation: int = 3,
+    dt: float = 0.1,
     use_cluster_specific_GRN: bool = True,
     clip_delta_X: bool = True,
     store_intermediate: bool = False,
@@ -55,6 +56,9 @@ def simulate_perturbation(
     n_propagation : int, optional (default: 3)
         Number of signal propagation steps through the GRN.
         Higher values capture more indirect effects but may add noise.
+    dt : float, optional (default: 0.1)
+        Time step for Euler integration in signal propagation.
+        Smaller values give more accurate but slower simulations.
     use_cluster_specific_GRN : bool, optional (default: True)
         If True, uses cluster-specific W matrices.
         If False, uses the 'all' W matrix for all cells.
@@ -177,7 +181,8 @@ def simulate_perturbation(
             exponent=exponent,
             n_propagation=n_propagation,
             perturb_condition=perturb_condition,
-            gene_names=gene_names
+            gene_names=gene_names,
+            dt=dt
         )
 
         # Store results
