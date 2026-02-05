@@ -22,24 +22,123 @@ from .._utils.math import sigmoid
 from .._utils.io import get_matrix, to_numpy, get_genes_used
 
 
+def _propagate_signal(
+    X_current: np.ndarray,
+    X_original: np.ndarray,
+    W: np.ndarray,
+    source_indices: np.ndarray,
+    threshold: np.ndarray,
+    exponent: np.ndarray,
+    dt: float = 1.0
+) -> np.ndarray:
+    """
+    Propagate signal through the GRN for one step.
+
+    Computes the effect of source genes on all other genes using:
+
+    x_i^new = x_i^current + dt * sum_k W_ik * (sigmoid_k(x_k^current) - sigmoid_k(x_k^original))
+
+    Where k iterates over the source genes (source_indices).
+
+    Parameters
+    ----------
+    X_current : np.ndarray
+        Current expression matrix (n_cells, n_genes)
+    X_original : np.ndarray
+        Original expression matrix (n_cells, n_genes)
+    W : np.ndarray
+        Interaction matrix (n_genes, n_genes), W[i,k] = effect of gene k on gene i
+    source_indices : np.ndarray
+        Indices of source genes to propagate from
+    threshold : np.ndarray
+        Sigmoid threshold parameters for all genes
+    exponent : np.ndarray
+        Sigmoid exponent parameters for all genes
+    dt : float, optional (default: 1.0)
+        Scaling factor for the propagation step
+
+    Returns
+    -------
+    np.ndarray
+        Updated expression matrix after one propagation step
+    """
+    # Compute sigmoid of current expression for source genes
+    sig_current = sigmoid(
+        X_current[:, source_indices],
+        threshold[source_indices],
+        exponent[source_indices]
+    )
+
+    # Compute sigmoid of original expression for source genes
+    sig_original = sigmoid(
+        X_original[:, source_indices],
+        threshold[source_indices],
+        exponent[source_indices]
+    )
+
+    # Compute delta sigmoid: sigmoid(x^current) - sigmoid(x^original)
+    delta_sig = sig_current - sig_original  # (n_cells, n_source)
+
+    # Get W columns for source genes: W[:, source_indices]
+    W_source = W[:, source_indices]  # (n_genes, n_source)
+
+    # Compute delta_X for this step:
+    # delta_X_i = dt * sum_k W[i,k] * delta_sig[k]
+    delta_X_step = dt * (delta_sig @ W_source.T)  # (n_cells, n_genes)
+
+    # Update expression
+    X_new = X_current + delta_X_step
+
+    # Ensure non-negative
+    X_new = np.maximum(X_new, 0)
+
+    return X_new
+
+
+def _get_tf_indices(W: np.ndarray) -> np.ndarray:
+    """
+    Get indices of transcription factors (genes with outgoing edges in GRN).
+
+    Parameters
+    ----------
+    W : np.ndarray
+        Interaction matrix (n_genes, n_genes), W[i,k] = effect of gene k on gene i
+
+    Returns
+    -------
+    np.ndarray
+        Indices of genes that have at least one non-zero outgoing edge
+    """
+    # TFs are genes that regulate at least one other gene (non-zero column sum)
+    has_targets = np.abs(W).sum(axis=0) > 0
+    return np.where(has_targets)[0]
+
+
 def simulate_perturbation(
     adata: AnnData,
     perturb_condition: Dict[str, float],
     cluster_key: str = 'cell_type',
     n_propagation: int = 3,
-    dt: float = 0.1,
+    dt: float = 1.0,
     use_cluster_specific_GRN: bool = True,
     clip_delta_X: bool = True,
-    store_intermediate: bool = False,
     verbose: bool = True
 ) -> AnnData:
     """
-    Simulate gene expression changes after perturbation using GRN signal propagation.
+    Simulate gene expression changes after perturbation using direct GRN effects.
 
-    This function implements a CellOracle-style simulation where:
-    1. Initial perturbation is applied to specific genes
-    2. Signal propagates through the GRN iteratively
-    3. Final simulated expression and delta_X are computed
+    Computes the effect of perturbed genes on all other genes using iterative
+    signal propagation:
+
+    x_i^new = x_i^current + dt * sum_k W_ik * (sigmoid_k(x_k^current) - sigmoid_k(x_k^original))
+
+    The propagation works as follows:
+    - Step 1: Only the manually perturbed genes propagate their effects
+    - Steps 2+: All TFs (genes with outgoing edges in the GRN) that have changed
+      from their original state propagate their effects
+
+    This captures the cascade where perturbed genes affect other TFs, which
+    then also contribute to further propagation through the network.
 
     Parameters
     ----------
@@ -55,18 +154,15 @@ def simulate_perturbation(
         Key in adata.obs for cluster labels
     n_propagation : int, optional (default: 3)
         Number of signal propagation steps through the GRN.
-        Higher values capture more indirect effects but may add noise.
-    dt : float, optional (default: 0.1)
-        Time step for Euler integration in signal propagation.
-        Smaller values give more accurate but slower simulations.
+        Higher values capture more indirect effects.
+    dt : float, optional (default: 1.0)
+        Scaling factor for each propagation step.
     use_cluster_specific_GRN : bool, optional (default: True)
         If True, uses cluster-specific W matrices.
         If False, uses the 'all' W matrix for all cells.
     clip_delta_X : bool, optional (default: True)
         If True, clips simulated values to the observed expression range
         to avoid out-of-distribution predictions.
-    store_intermediate : bool, optional (default: False)
-        If True, stores intermediate propagation steps.
     verbose : bool, optional (default: True)
         Whether to show progress information.
 
@@ -76,11 +172,11 @@ def simulate_perturbation(
         Modified adata with added layers:
         - 'simulated_count': Simulated gene expression after perturbation
         - 'delta_X': Difference between simulated and original expression
-        - 'perturbation_input': Expression values used as simulation input
 
         And added to adata.uns['scHopfield']:
         - 'perturb_condition': The perturbation conditions used
         - 'n_propagation': Number of propagation steps
+        - 'dt': Scaling factor used
 
     References
     ----------
@@ -110,27 +206,27 @@ def simulate_perturbation(
     spliced_key = adata.uns.get('scHopfield', {}).get('spliced_key', 'Ms')
     base_expression = to_numpy(get_matrix(adata, spliced_key, genes=genes))
 
-    # Initialize simulation input with base expression
-    simulation_input = base_expression.copy()
+    # Get sigmoid parameters
+    threshold = adata.var['sigmoid_threshold'].values[genes]
+    exponent = adata.var['sigmoid_exponent'].values[genes]
 
-    # Apply perturbation to initial conditions
+    # Get indices and values of perturbed genes
+    perturb_indices = []
+    perturb_values = []
     for gene, value in perturb_condition.items():
         if gene in gene_names:
-            gene_idx = np.where(gene_names == gene)[0][0]
-            simulation_input[:, gene_idx] = value
+            idx = np.where(gene_names == gene)[0][0]
+            perturb_indices.append(idx)
+            perturb_values.append(value)
 
-    # Store perturbation input
-    _store_layer(adata, simulation_input, 'perturbation_input', genes)
+    perturb_indices = np.array(perturb_indices)
+    perturb_values = np.array(perturb_values)
 
     # Get clusters
     clusters = adata.obs[cluster_key].unique()
 
-    # Initialize output array
-    simulated = np.zeros_like(base_expression)
-
-    # Store intermediate results if requested
-    if store_intermediate:
-        intermediates = [simulation_input.copy()]
+    # Initialize simulated array with base expression
+    simulated = base_expression.copy()
 
     # Run simulation for each cluster
     if verbose:
@@ -149,44 +245,46 @@ def simulate_perturbation(
         # Get cluster-specific or global W matrix
         if use_cluster_specific_GRN and f'W_{cluster}' in adata.varp:
             W = adata.varp[f'W_{cluster}']
-            I = adata.var[f'I_{cluster}'].values[genes] if f'I_{cluster}' in adata.var else np.zeros(n_genes)
         elif 'W_all' in adata.varp:
             W = adata.varp['W_all']
-            I = adata.var['I_all'].values[genes] if 'I_all' in adata.var else np.zeros(n_genes)
         else:
             raise ValueError(f"No W matrix found for cluster '{cluster}'. Run fit_interactions first.")
 
-        # Get sigmoid parameters
-        threshold = adata.var['sigmoid_threshold'].values[genes]
-        exponent = adata.var['sigmoid_exponent'].values[genes]
-
-        # Get gamma (decay rate)
-        if 'gamma' in adata.var.columns:
-            gamma = adata.var['gamma'].values[genes]
-        else:
-            # Default gamma = 1 if not fitted
-            gamma = np.ones(n_genes)
+        # Get TF indices for this cluster (genes with outgoing edges)
+        tf_indices = _get_tf_indices(W)
 
         # Get expression for this cluster
-        X_cluster = simulation_input[cluster_mask, :]
-        X_original = base_expression[cluster_mask, :]
+        X_current = simulated[cluster_mask, :].copy()
+        X_original = base_expression[cluster_mask, :].copy()
 
-        # Run signal propagation
-        X_simulated = _propagate_signal(
-            X=X_cluster,
-            W=W,
-            I=I,
-            gamma=gamma,
-            threshold=threshold,
-            exponent=exponent,
-            n_propagation=n_propagation,
-            perturb_condition=perturb_condition,
-            gene_names=gene_names,
-            dt=dt
-        )
+        # Apply initial perturbation: set perturbed genes to their target values
+        X_current[:, perturb_indices] = perturb_values[None, :]
+
+        # Iterative propagation
+        for step in range(n_propagation):
+            if step == 0:
+                # First step: only propagate from manually perturbed genes
+                source_indices = perturb_indices
+            else:
+                # Subsequent steps: propagate from all TFs
+                source_indices = tf_indices
+
+            # Propagate signal
+            X_current = _propagate_signal(
+                X_current=X_current,
+                X_original=X_original,
+                W=W,
+                source_indices=source_indices,
+                threshold=threshold,
+                exponent=exponent,
+                dt=dt
+            )
+
+            # Keep perturbed genes fixed at their perturbed values
+            X_current[:, perturb_indices] = perturb_values[None, :]
 
         # Store results
-        simulated[cluster_mask, :] = X_simulated
+        simulated[cluster_mask, :] = X_current
 
     # Clip to observed range if requested
     if clip_delta_X:
@@ -206,93 +304,16 @@ def simulate_perturbation(
         adata.uns['scHopfield'] = {}
     adata.uns['scHopfield']['perturb_condition'] = perturb_condition
     adata.uns['scHopfield']['n_propagation'] = n_propagation
+    adata.uns['scHopfield']['dt'] = dt
 
     if verbose:
-        print(f"✓ Perturbation simulation complete")
+        print(f"Perturbation simulation complete")
         print(f"  Genes perturbed: {list(perturb_condition.keys())}")
         print(f"  Propagation steps: {n_propagation}")
+        print(f"  dt (scaling): {dt}")
         print(f"  Results stored in adata.layers['simulated_count'] and adata.layers['delta_X']")
 
     return adata
-
-
-def _propagate_signal(
-    X: np.ndarray,
-    W: np.ndarray,
-    I: np.ndarray,
-    gamma: np.ndarray,
-    threshold: np.ndarray,
-    exponent: np.ndarray,
-    n_propagation: int,
-    perturb_condition: Dict[str, float],
-    gene_names: np.ndarray,
-    dt: float = 0.1
-) -> np.ndarray:
-    """
-    Propagate signal through GRN using iterative updates.
-
-    The update rule is based on the scHopfield dynamics:
-    dx/dt = W @ sigmoid(x) - gamma * x + I
-
-    Applied iteratively with Euler integration to simulate signal propagation.
-
-    Parameters
-    ----------
-    X : np.ndarray
-        Initial expression matrix (n_cells, n_genes)
-    W : np.ndarray
-        Interaction matrix (n_genes, n_genes)
-    I : np.ndarray
-        Bias vector (n_genes,)
-    gamma : np.ndarray
-        Decay rate vector (n_genes,)
-    threshold : np.ndarray
-        Sigmoid threshold parameters
-    exponent : np.ndarray
-        Sigmoid exponent parameters
-    n_propagation : int
-        Number of propagation steps
-    perturb_condition : dict
-        Perturbation conditions
-    gene_names : np.ndarray
-        Gene names for indexing
-    dt : float, optional (default: 0.1)
-        Time step for Euler integration
-
-    Returns
-    -------
-    np.ndarray
-        Simulated expression after propagation
-    """
-    X_current = X.copy()
-
-    # Get indices of perturbed genes
-    perturb_indices = {}
-    for gene, value in perturb_condition.items():
-        if gene in gene_names:
-            idx = np.where(gene_names == gene)[0][0]
-            perturb_indices[idx] = value
-
-    for step in range(n_propagation):
-        # Compute sigmoid activation
-        sig = sigmoid(X_current, threshold[None, :], exponent[None, :])
-        sig = np.nan_to_num(sig)
-
-        # Compute dx/dt = W @ sigmoid(x) - gamma * x + I
-        # Note: Using sig @ W.T because W[i,j] represents effect of gene j on gene i
-        dxdt = sig @ W.T - gamma[None, :] * X_current + I[None, :]
-
-        # Euler update: X_new = X + dt * dx/dt
-        X_new = X_current + dt * dxdt
-
-        # Enforce perturbation conditions (keep perturbed genes fixed)
-        for idx, value in perturb_indices.items():
-            X_new[:, idx] = value
-
-        # Ensure non-negative
-        X_current = np.maximum(X_new, 0)
-
-    return X_current
 
 
 def _validate_perturb_condition(
