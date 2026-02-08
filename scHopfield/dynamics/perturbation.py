@@ -546,6 +546,7 @@ def compare_perturbations(
     labels: Optional[List[str]] = None,
     cluster_key: str = 'cell_type',
     n_propagation: int = 3,
+    dt: float = 1.0,
     verbose: bool = True
 ) -> pd.DataFrame:
     """
@@ -605,6 +606,7 @@ def compare_perturbations(
             adata, perturb,
             cluster_key=cluster_key,
             n_propagation=n_propagation,
+            dt=dt,
             verbose=False
         )
 
