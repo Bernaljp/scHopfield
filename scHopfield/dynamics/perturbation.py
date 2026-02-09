@@ -29,7 +29,9 @@ def _propagate_signal(
     source_indices: np.ndarray,
     threshold: np.ndarray,
     exponent: np.ndarray,
-    dt: float = 1.0
+    dt: float = 1.0,
+    x_min: float = 0.0,
+    x_max: Optional[np.ndarray] = None
 ) -> np.ndarray:
     """
     Propagate signal through the GRN for one step.
@@ -56,6 +58,10 @@ def _propagate_signal(
         Sigmoid exponent parameters for all genes
     dt : float, optional (default: 1.0)
         Scaling factor for the propagation step
+    x_min : float, optional (default: 0.0)
+        Minimum expression value (non-negative constraint)
+    x_max : np.ndarray, optional
+        Maximum expression values per gene. If None, no upper bound.
 
     Returns
     -------
@@ -89,8 +95,10 @@ def _propagate_signal(
     # Update expression
     X_new = X_current + delta_X_step
 
-    # Ensure non-negative
-    X_new = np.maximum(X_new, 0)
+    # Clip to valid range (prevents divergence)
+    X_new = np.maximum(X_new, x_min)
+    if x_max is not None:
+        X_new = np.minimum(X_new, x_max)
 
     return X_new
 
@@ -122,6 +130,7 @@ def simulate_perturbation(
     dt: float = 1.0,
     use_cluster_specific_GRN: bool = True,
     clip_delta_X: bool = True,
+    x_max_percentile: float = 99.0,
     verbose: bool = True
 ) -> AnnData:
     """
@@ -161,8 +170,12 @@ def simulate_perturbation(
         If True, uses cluster-specific W matrices.
         If False, uses the 'all' W matrix for all cells.
     clip_delta_X : bool, optional (default: True)
-        If True, clips simulated values to the observed expression range
+        If True, clips final simulated values to the observed expression range
         to avoid out-of-distribution predictions.
+    x_max_percentile : float, optional (default: 99.0)
+        Percentile of expression to use as upper bound during propagation.
+        This prevents divergence by clipping values at each step.
+        Set to None to disable step-wise upper bound clipping.
     verbose : bool, optional (default: True)
         Whether to show progress information.
 
@@ -209,6 +222,16 @@ def simulate_perturbation(
     # Get sigmoid parameters
     threshold = adata.var['sigmoid_threshold'].values[genes]
     exponent = adata.var['sigmoid_exponent'].values[genes]
+
+    # Compute expression bounds for stability
+    x_min = 0.0
+    if x_max_percentile is not None:
+        # Use percentile to avoid outliers setting unreasonable bounds
+        x_max = np.percentile(base_expression, x_max_percentile, axis=0)
+        # Add margin to allow some growth beyond observed values
+        x_max = x_max * 2.0
+    else:
+        x_max = None
 
     # Get indices and values of perturbed genes
     perturb_indices = []
@@ -277,7 +300,9 @@ def simulate_perturbation(
                 source_indices=source_indices,
                 threshold=threshold,
                 exponent=exponent,
-                dt=dt
+                dt=dt,
+                x_min=x_min,
+                x_max=x_max
             )
 
             # Keep perturbed genes fixed at their perturbed values
