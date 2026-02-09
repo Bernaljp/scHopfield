@@ -126,6 +126,7 @@ def simulate_perturbation(
     adata: AnnData,
     perturb_condition: Dict[str, float],
     cluster_key: str = 'cell_type',
+    target_clusters: Optional[List[str]] = None,
     n_propagation: int = 3,
     dt: float = 1.0,
     use_cluster_specific_GRN: bool = True,
@@ -161,6 +162,10 @@ def simulate_perturbation(
         - Multiple: {"Gata1": 0.0, "Tal1": 2.0}
     cluster_key : str, optional (default: 'cell_type')
         Key in adata.obs for cluster labels
+    target_clusters : list of str, optional
+        List of cluster names to simulate perturbation in.
+        If None, simulates in all clusters.
+        Cells not in target clusters will have delta_X = 0.
     n_propagation : int, optional (default: 3)
         Number of signal propagation steps through the GRN.
         Higher values capture more indirect effects.
@@ -245,8 +250,18 @@ def simulate_perturbation(
     perturb_indices = np.array(perturb_indices)
     perturb_values = np.array(perturb_values)
 
-    # Get clusters
-    clusters = adata.obs[cluster_key].unique()
+    # Get clusters to simulate
+    all_clusters = adata.obs[cluster_key].unique()
+    if target_clusters is not None:
+        # Validate target clusters
+        invalid_clusters = set(target_clusters) - set(all_clusters)
+        if invalid_clusters:
+            raise ValueError(f"Target clusters not found in data: {invalid_clusters}")
+        clusters = [c for c in target_clusters if c in all_clusters]
+        if verbose:
+            print(f"Simulating perturbation in {len(clusters)} target clusters: {clusters}")
+    else:
+        clusters = all_clusters
 
     # Initialize simulated array with base expression
     simulated = base_expression.copy()
@@ -570,6 +585,7 @@ def compare_perturbations(
     perturbations: Union[Dict[str, Dict[str, float]], List[Dict[str, float]]],
     labels: Optional[List[str]] = None,
     cluster_key: str = 'cell_type',
+    target_clusters: Optional[List[str]] = None,
     n_propagation: int = 3,
     dt: float = 1.0,
     verbose: bool = True
@@ -590,8 +606,13 @@ def compare_perturbations(
         Ignored if perturbations is a dict (keys are used as labels).
     cluster_key : str, optional (default: 'cell_type')
         Key in adata.obs for cluster labels
+    target_clusters : list of str, optional
+        List of cluster names to simulate perturbation in.
+        If None, simulates in all clusters.
     n_propagation : int, optional (default: 3)
         Number of propagation steps
+    dt : float, optional (default: 1.0)
+        Scaling factor for each propagation step
     verbose : bool, optional (default: True)
         Whether to show progress
 
@@ -630,6 +651,7 @@ def compare_perturbations(
         simulate_perturbation(
             adata, perturb,
             cluster_key=cluster_key,
+            target_clusters=target_clusters,
             n_propagation=n_propagation,
             dt=dt,
             verbose=False
