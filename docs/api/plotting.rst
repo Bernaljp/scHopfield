@@ -73,10 +73,12 @@ Flow Plots (CellOracle-style)
 
    calculate_perturbation_flow
    calculate_grid_flow
+   calculate_grid_flow_knn
    calculate_inner_product
    plot_reference_flow
    plot_perturbation_flow
    plot_flow_on_grid
+   plot_simulation_flow_on_grid
    plot_inner_product_on_embedding
    plot_inner_product_by_cluster
    visualize_perturbation_flow
@@ -259,6 +261,11 @@ calculate_grid_flow
 
 .. autofunction:: calculate_grid_flow
 
+calculate_grid_flow_knn
+^^^^^^^^^^^^^^^^^^^^^^^
+
+.. autofunction:: calculate_grid_flow_knn
+
 calculate_inner_product
 ^^^^^^^^^^^^^^^^^^^^^^^
 
@@ -278,6 +285,11 @@ plot_flow_on_grid
 ^^^^^^^^^^^^^^^^^
 
 .. autofunction:: plot_flow_on_grid
+
+plot_simulation_flow_on_grid
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+.. autofunction:: plot_simulation_flow_on_grid
 
 plot_inner_product_on_embedding
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
