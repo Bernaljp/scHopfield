@@ -16,7 +16,8 @@ class ODESolver:
     Solves: dx/dt = W * sigmoid(x) - gamma * x + I
 
     With constraints to ensure expression values remain non-negative
-    and bounded to prevent divergence.
+    and bounded to prevent divergence. Supports fixing certain genes
+    at constant values (e.g., for knockout/overexpression simulations).
     """
 
     def __init__(
@@ -27,7 +28,9 @@ class ODESolver:
         threshold: np.ndarray,
         exponent: np.ndarray,
         x_min: float = 0.0,
-        x_max: Optional[np.ndarray] = None
+        x_max: Optional[np.ndarray] = None,
+        fixed_indices: Optional[np.ndarray] = None,
+        fixed_values: Optional[np.ndarray] = None
     ):
         """
         Initialize ODE solver.
@@ -48,6 +51,10 @@ class ODESolver:
             Minimum expression value (non-negative constraint)
         x_max : np.ndarray, optional
             Maximum expression values per gene. If None, no upper bound.
+        fixed_indices : np.ndarray, optional
+            Indices of genes to keep fixed (e.g., perturbed genes)
+        fixed_values : np.ndarray, optional
+            Values to fix the genes at (must match length of fixed_indices)
         """
         self.W = W
         self.I = I
@@ -56,6 +63,26 @@ class ODESolver:
         self.exponent = exponent
         self.x_min = x_min
         self.x_max = x_max
+        self.fixed_indices = fixed_indices
+        self.fixed_values = fixed_values
+
+    def set_fixed_genes(
+        self,
+        fixed_indices: Optional[np.ndarray],
+        fixed_values: Optional[np.ndarray]
+    ) -> None:
+        """
+        Set genes to be held fixed during simulation.
+
+        Parameters
+        ----------
+        fixed_indices : np.ndarray
+            Indices of genes to keep fixed
+        fixed_values : np.ndarray
+            Values to fix the genes at
+        """
+        self.fixed_indices = fixed_indices
+        self.fixed_values = fixed_values
 
     def dynamics(self, x: np.ndarray, t: float) -> np.ndarray:
         """Compute dx/dt with soft boundary enforcement."""
@@ -75,6 +102,10 @@ class ODESolver:
         if self.x_max is not None:
             at_upper = x >= self.x_max
             dxdt[at_upper] = np.minimum(dxdt[at_upper], 0)
+
+        # Fixed genes have zero derivative (they don't change)
+        if self.fixed_indices is not None and len(self.fixed_indices) > 0:
+            dxdt[self.fixed_indices] = 0.0
 
         return dxdt
 
@@ -116,6 +147,10 @@ class ODESolver:
         if self.x_max is not None:
             x0 = np.minimum(x0, self.x_max)
 
+        # Set fixed genes to their fixed values in initial condition
+        if self.fixed_indices is not None and len(self.fixed_indices) > 0:
+            x0[self.fixed_indices] = self.fixed_values
+
         if method == 'euler':
             return self._solve_euler(x0, t_span, clip_each_step)
         elif method == 'odeint':
@@ -124,6 +159,9 @@ class ODESolver:
                 trajectory = np.maximum(trajectory, self.x_min)
                 if self.x_max is not None:
                     trajectory = np.minimum(trajectory, self.x_max)
+            # Enforce fixed genes in trajectory
+            if self.fixed_indices is not None and len(self.fixed_indices) > 0:
+                trajectory[:, self.fixed_indices] = self.fixed_values
             return trajectory
         elif method in ['RK45', 'RK23', 'DOP853', 'Radau', 'BDF', 'LSODA']:
             return self._solve_ivp(x0, t_span, method, clip_each_step)
@@ -140,6 +178,7 @@ class ODESolver:
         Solve ODE using Euler method with clipping at each step.
 
         This is more stable for stiff systems and ensures non-negativity.
+        Fixed genes (if any) are held constant throughout the simulation.
         """
         n_steps = len(t_span)
         n_genes = len(x0)
@@ -161,6 +200,10 @@ class ODESolver:
                 x = np.maximum(x, self.x_min)
                 if self.x_max is not None:
                     x = np.minimum(x, self.x_max)
+
+            # Enforce fixed genes (KO/OE genes stay at their perturbed values)
+            if self.fixed_indices is not None and len(self.fixed_indices) > 0:
+                x[self.fixed_indices] = self.fixed_values
 
             trajectory[i] = x
 
@@ -189,6 +232,10 @@ class ODESolver:
             trajectory = np.maximum(trajectory, self.x_min)
             if self.x_max is not None:
                 trajectory = np.minimum(trajectory, self.x_max)
+
+        # Enforce fixed genes (KO/OE genes stay at their perturbed values)
+        if self.fixed_indices is not None and len(self.fixed_indices) > 0:
+            trajectory[:, self.fixed_indices] = self.fixed_values
 
         return trajectory
 

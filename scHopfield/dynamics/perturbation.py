@@ -132,6 +132,7 @@ def simulate_perturbation(
     use_cluster_specific_GRN: bool = True,
     clip_delta_X: bool = True,
     x_max_percentile: float = 99.0,
+    residual_gene_dynamics: bool = False,
     verbose: bool = True
 ) -> AnnData:
     """
@@ -181,6 +182,11 @@ def simulate_perturbation(
         Percentile of expression to use as upper bound during propagation.
         This prevents divergence by clipping values at each step.
         Set to None to disable step-wise upper bound clipping.
+    residual_gene_dynamics : bool, optional (default: False)
+        If False, perturbed genes are held fixed at their perturbed values
+        throughout all propagation steps.
+        If True, perturbed genes can change according to the GRN dynamics
+        after the initial perturbation is applied.
     verbose : bool, optional (default: True)
         Whether to show progress information.
 
@@ -320,8 +326,9 @@ def simulate_perturbation(
                 x_max=x_max
             )
 
-            # Keep perturbed genes fixed at their perturbed values
-            X_current[:, perturb_indices] = perturb_values[None, :]
+            # Keep perturbed genes fixed at their perturbed values (unless residual dynamics allowed)
+            if not residual_gene_dynamics:
+                X_current[:, perturb_indices] = perturb_values[None, :]
 
         # Store results
         simulated[cluster_mask, :] = X_current
@@ -351,6 +358,10 @@ def simulate_perturbation(
         print(f"  Genes perturbed: {list(perturb_condition.keys())}")
         print(f"  Propagation steps: {n_propagation}")
         print(f"  dt (scaling): {dt}")
+        if residual_gene_dynamics:
+            print(f"  Perturbed genes: can evolve (residual_gene_dynamics=True)")
+        else:
+            print(f"  Perturbed genes: held constant")
         print(f"  Results stored in adata.layers['simulated_count'] and adata.layers['delta_X']")
 
     return adata

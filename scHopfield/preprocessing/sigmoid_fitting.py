@@ -50,9 +50,12 @@ def fit_all_sigmoids(
     """
     adata = adata.copy() if copy else adata
 
-    # Initialize scHopfield namespace 
+    # Initialize scHopfield namespace
     if 'scHopfield' not in adata.uns:
         adata.uns['scHopfield'] = {}
+
+    # Store spliced_key for downstream functions
+    adata.uns['scHopfield']['spliced_key'] = spliced_key
 
     # Parse genes
     gene_indices = parse_genes(adata, genes)
@@ -116,6 +119,12 @@ def compute_sigmoid(
     if 'scHopfield_used' not in adata.var:
         raise ValueError("No sigmoid parameters found. Run fit_all_sigmoids() first.")
     gene_indices = np.where(adata.var['scHopfield_used'].values)[0]
+
+    # Store spliced_key if not already set
+    if 'scHopfield' not in adata.uns:
+        adata.uns['scHopfield'] = {}
+    if 'spliced_key' not in adata.uns['scHopfield']:
+        adata.uns['scHopfield']['spliced_key'] = spliced_key
 
     # Get expression data
     x = to_numpy(get_matrix(adata, spliced_key, genes=gene_indices))

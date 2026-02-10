@@ -89,12 +89,16 @@ def simulate_perturbation_ode(
     degradation_key: str = 'gamma',
     method: str = 'euler',
     x_max_percentile: float = 99.0,
+    residual_gene_dynamics: bool = False,
     verbose: bool = False
 ) -> np.ndarray:
     """
     Simulate trajectory with gene perturbations using ODE integration.
 
-    This simulates the full ODE dynamics with perturbed initial conditions.
+    By default, perturbed genes (KO/OE) are held fixed at their perturbed values
+    throughout the entire simulation. Set residual_gene_dynamics=True to allow
+    perturbed genes to evolve according to the ODE dynamics after initial perturbation.
+
     For CellOracle-style perturbation simulation, use sch.dyn.simulate_perturbation instead.
 
     Parameters
@@ -107,9 +111,8 @@ def simulate_perturbation_ode(
         Cell index for initial condition
     gene_perturbations : dict
         Dictionary mapping gene names to perturbation values.
-        Can be:
-        - Fold changes: {"Gata1": 0.0} for knockout, {"Gata1": 2.0} for 2x overexpression
-        - Absolute values: {"Gata1": 5.0} sets expression to 5.0
+        - Knockout: {"Gata1": 0.0} sets Gata1 to 0
+        - Overexpression: {"Gata1": 5.0} sets Gata1 to 5.0
     t_span : np.ndarray
         Time points
     spliced_key : str, optional
@@ -120,6 +123,10 @@ def simulate_perturbation_ode(
         Integration method ('euler', 'odeint', 'RK45', etc.)
     x_max_percentile : float, optional (default: 99.0)
         Percentile for upper bound. Set to None to disable.
+    residual_gene_dynamics : bool, optional (default: False)
+        If False, perturbed genes are held fixed at their perturbed values.
+        If True, perturbed genes can evolve according to ODE dynamics after
+        the initial perturbation is applied.
     verbose : bool, optional (default: False)
         Print simulation info
 
@@ -134,20 +141,24 @@ def simulate_perturbation_ode(
     x0 = to_numpy(get_matrix(adata, spliced_key, genes=genes)[cell_idx])
     x0 = np.maximum(x0, 0)  # Ensure non-negative
 
-    # Apply perturbations
+    # Collect perturbation indices and values
+    fixed_indices = []
+    fixed_values = []
+
     for gene_name, value in gene_perturbations.items():
         if gene_name in gene_names:
             gene_idx = np.where(gene_names == gene_name)[0][0]
-            if value == 0:
-                # Knockout: set to 0
-                x0[gene_idx] = 0
-            elif value < 0:
+            if value < 0:
                 raise ValueError(f"Perturbation value must be non-negative, got {value} for {gene_name}")
-            else:
-                # Could be fold change or absolute value
-                # If value < 10, treat as fold change; otherwise absolute
-                # (This is a heuristic - user should be explicit)
-                x0[gene_idx] = value
+            # Set initial condition
+            x0[gene_idx] = value
+            # Mark as fixed (only if not allowing residual dynamics)
+            if not residual_gene_dynamics:
+                fixed_indices.append(gene_idx)
+                fixed_values.append(value)
+
+    fixed_indices = np.array(fixed_indices) if fixed_indices else None
+    fixed_values = np.array(fixed_values) if fixed_values else None
 
     solver = create_solver(
         adata, cluster, degradation_key,
@@ -155,9 +166,17 @@ def simulate_perturbation_ode(
         x_max_percentile=x_max_percentile
     )
 
+    # Set fixed genes (they won't change during simulation) unless residual dynamics allowed
+    if not residual_gene_dynamics:
+        solver.set_fixed_genes(fixed_indices, fixed_values)
+
     if verbose:
         print(f"Simulating perturbation for cell {cell_idx} in cluster '{cluster}'")
         print(f"  Perturbations: {gene_perturbations}")
+        if residual_gene_dynamics:
+            print(f"  Perturbed genes: can evolve (residual_gene_dynamics=True)")
+        else:
+            print(f"  Perturbed genes: held constant")
         print(f"  Method: {method}")
 
     trajectory = solver.solve(x0, t_span, method=method, clip_each_step=True)

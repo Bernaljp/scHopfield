@@ -96,10 +96,13 @@ def fit_interactions(
     """
     adata = adata.copy() if copy else adata
 
-    # Store cluster_key
+    # Store keys for downstream functions
     if 'scHopfield' not in adata.uns:
         adata.uns['scHopfield'] = {}
     adata.uns['scHopfield']['cluster_key'] = cluster_key
+    adata.uns['scHopfield']['spliced_key'] = spliced_key
+    adata.uns['scHopfield']['velocity_key'] = velocity_key
+    adata.uns['scHopfield']['degradation_key'] = degradation_key
 
     # Get gene indices
     genes = get_genes_used(adata)
