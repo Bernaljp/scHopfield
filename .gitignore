@@ -52,6 +52,7 @@ coverage.xml
 # Jupyter Notebook
 .ipynb_checkpoints
 cell_oracle_vs_schopfield.ipynb
+cell_oracle_vs_schopfield copy.ipynb
 cell_oracle_vs_schopfield.py
 sctour_schopfield_pipeline.py
 
