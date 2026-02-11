@@ -82,7 +82,7 @@ def compute_hopfield_velocity(
         raise ValueError(f"Interaction matrix {W_key} not found. Run fit_interactions first.")
 
     W = adata.varp[W_key][np.ix_(genes, genes)]
-    I = adata.varm[I_key][genes] if I_key in adata.varm else np.zeros(genes.sum())
+    I = adata.var[I_key][genes].values if I_key in adata.var else np.zeros(genes.sum())
 
     # Get sigmoid parameters
     threshold = adata.var.loc[gene_names, 'sigmoid_threshold'].values
@@ -101,7 +101,7 @@ def compute_hopfield_velocity(
     velocity = sig_X @ W.T - gamma * X + I
 
     return velocity
-
+    
 
 def compute_hopfield_velocity_delta(
     adata: AnnData,
