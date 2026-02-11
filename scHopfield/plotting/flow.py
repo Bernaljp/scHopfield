@@ -4,6 +4,10 @@ Flow visualization functions for perturbation analysis.
 Inspired by CellOracle's development module visualization.
 Compares reference velocity flow with perturbation-induced flow.
 
+Supports two methods for calculating perturbation flow:
+1. 'celloracle': Correlation-based projection (like CellOracle)
+2. 'hopfield': Direct computation using Hopfield model dynamics
+
 References
 ----------
 Logic for the transition vector field is inspired by the perturbation
@@ -21,16 +25,772 @@ from anndata import AnnData
 from scipy.sparse import issparse
 
 from .._utils.io import get_genes_used
+from .._utils.math import sigmoid
+
+
+# =============================================================================
+# Hopfield Model Velocity Computation
+# =============================================================================
+
+def compute_hopfield_velocity(
+    adata: AnnData,
+    cluster: str,
+    X: Optional[np.ndarray] = None,
+    spliced_key: str = 'Ms'
+) -> np.ndarray:
+    """
+    Compute velocity using the Hopfield model dynamics.
+
+    Calculates: velocity = W @ sigmoid(X) - gamma * X + I
+
+    This is the instantaneous rate of change predicted by the fitted
+    Hopfield network for each cell's expression state.
+
+    Parameters
+    ----------
+    adata : AnnData
+        Annotated data with fitted interactions (W, I, sigmoid params)
+    cluster : str
+        Cluster name to use for getting W and I matrices
+    X : np.ndarray, optional
+        Expression matrix (n_cells, n_genes). If None, uses adata.layers[spliced_key]
+    spliced_key : str, optional (default: 'Ms')
+        Key for expression data if X is not provided
+
+    Returns
+    -------
+    np.ndarray
+        Velocity matrix (n_cells, n_genes)
+    """
+    genes = get_genes_used(adata)
+    gene_names = adata.var.index[genes]
+
+    # Get expression matrix
+    if X is None:
+        if spliced_key in adata.layers:
+            X = adata.layers[spliced_key][:, genes]
+        else:
+            X = adata.X[:, genes]
+        if issparse(X):
+            X = X.toarray()
+
+    # Get model parameters for this cluster
+    W_key = f'W_{cluster}'
+    I_key = f'I_{cluster}'
+
+    if W_key not in adata.varp:
+        raise ValueError(f"Interaction matrix {W_key} not found. Run fit_interactions first.")
+
+    W = adata.varp[W_key][np.ix_(genes, genes)]
+    I = adata.varm[I_key][genes] if I_key in adata.varm else np.zeros(genes.sum())
+
+    # Get sigmoid parameters
+    threshold = adata.var.loc[gene_names, 'sigmoid_threshold'].values
+    exponent = adata.var.loc[gene_names, 'sigmoid_exponent'].values
+
+    # Get gamma
+    if 'gamma' in adata.var.columns:
+        gamma = adata.var.loc[gene_names, 'gamma'].values
+    else:
+        gamma = np.ones(len(gene_names))
+
+    # Compute sigmoid activation
+    sig_X = sigmoid(X, threshold, exponent)
+
+    # Compute velocity: dX/dt = W @ sigmoid(X) - gamma * X + I
+    velocity = sig_X @ W.T - gamma * X + I
+
+    return velocity
+
+
+def compute_hopfield_velocity_delta(
+    adata: AnnData,
+    cluster_key: str = 'cell_type',
+    use_cluster_specific_GRN: bool = True,
+    spliced_key: str = 'Ms'
+) -> np.ndarray:
+    """
+    Compute delta velocity (perturbed - original) using Hopfield model.
+
+    This computes the difference between velocity at perturbed state
+    and velocity at original state, using the Hopfield dynamics directly.
+
+    Parameters
+    ----------
+    adata : AnnData
+        Annotated data with 'simulated_X' and original expression
+    cluster_key : str, optional (default: 'cell_type')
+        Key for cluster labels
+    use_cluster_specific_GRN : bool, optional (default: True)
+        Whether to use cluster-specific interaction matrices
+    spliced_key : str, optional (default: 'Ms')
+        Key for original expression data
+
+    Returns
+    -------
+    np.ndarray
+        Delta velocity matrix (n_cells, n_genes)
+    """
+    if 'simulated_X' not in adata.layers:
+        raise ValueError("simulated_X not found. Run simulate_shift first.")
+
+    genes = get_genes_used(adata)
+
+    # Get original and perturbed expression
+    if spliced_key in adata.layers:
+        X_original = adata.layers[spliced_key][:, genes]
+    else:
+        X_original = adata.X[:, genes]
+    if issparse(X_original):
+        X_original = X_original.toarray()
+
+    X_perturbed = adata.layers['simulated_X'][:, genes]
+    if issparse(X_perturbed):
+        X_perturbed = X_perturbed.toarray()
+
+    n_cells = adata.n_obs
+    n_genes = genes.sum()
+    delta_velocity = np.zeros((n_cells, n_genes))
+
+    if use_cluster_specific_GRN:
+        clusters = adata.obs[cluster_key].unique()
+
+        for cluster in clusters:
+            mask = adata.obs[cluster_key] == cluster
+            cell_indices = np.where(mask)[0]
+
+            # Compute velocities for this cluster
+            v_original = compute_hopfield_velocity(
+                adata, cluster, X=X_original[mask], spliced_key=spliced_key
+            )
+            v_perturbed = compute_hopfield_velocity(
+                adata, cluster, X=X_perturbed[mask], spliced_key=spliced_key
+            )
+
+            delta_velocity[cell_indices] = v_perturbed - v_original
+    else:
+        # Use global/all cluster
+        cluster = 'all'
+        if f'W_{cluster}' not in adata.varp:
+            # Fall back to first cluster
+            cluster = adata.obs[cluster_key].unique()[0]
+
+        v_original = compute_hopfield_velocity(adata, cluster, X=X_original, spliced_key=spliced_key)
+        v_perturbed = compute_hopfield_velocity(adata, cluster, X=X_perturbed, spliced_key=spliced_key)
+        delta_velocity = v_perturbed - v_original
+
+    return delta_velocity
+
+
+def project_velocity_to_embedding(
+    adata: AnnData,
+    velocity: np.ndarray,
+    basis: str = 'umap',
+    n_neighbors: int = 30,
+    n_jobs: int = 4
+) -> np.ndarray:
+    """
+    Project gene-space velocity to embedding space using neighbor averaging.
+
+    Uses a simple approach: for each cell, compute the weighted average
+    of neighbor directions based on the dot product with the velocity vector.
+
+    Parameters
+    ----------
+    adata : AnnData
+        Annotated data with embedding
+    velocity : np.ndarray
+        Velocity in gene space (n_cells, n_genes)
+    basis : str, optional (default: 'umap')
+        Embedding basis
+    n_neighbors : int, optional (default: 30)
+        Number of neighbors for projection
+    n_jobs : int, optional (default: 4)
+        Number of parallel jobs
+
+    Returns
+    -------
+    np.ndarray
+        Velocity in embedding space (n_cells, 2)
+    """
+    from sklearn.neighbors import NearestNeighbors
+
+    embedding_key = f'X_{basis}'
+    embedding = adata.obsm[embedding_key]
+    n_cells = embedding.shape[0]
+
+    genes = get_genes_used(adata)
+    spliced_key = adata.uns.get('scHopfield', {}).get('spliced_key', 'Ms')
+
+    if spliced_key in adata.layers:
+        X = adata.layers[spliced_key][:, genes]
+    else:
+        X = adata.X[:, genes]
+    if issparse(X):
+        X = X.toarray()
+
+    # Build KNN in gene space
+    nn = NearestNeighbors(n_neighbors=n_neighbors + 1, n_jobs=n_jobs)
+    nn.fit(X)
+    distances, indices = nn.kneighbors(X)
+
+    # Project velocity to embedding
+    embedding_velocity = np.zeros((n_cells, 2))
+
+    for i in range(n_cells):
+        neighbors = indices[i, 1:]  # Exclude self
+
+        # Direction to neighbors in gene space
+        dX = X[neighbors] - X[i]
+
+        # Compute alignment of velocity with direction to each neighbor
+        # (positive = moving towards neighbor)
+        alignment = (velocity[i] * dX).sum(axis=1)
+
+        # Normalize by distance (give more weight to closer neighbors)
+        dists = distances[i, 1:]
+        weights = np.exp(-dists / (np.median(dists) + 1e-10))
+        weights = weights * np.maximum(alignment, 0)  # Only positive alignment
+        weights = weights / (weights.sum() + 1e-10)
+
+        # Direction to neighbors in embedding space
+        dE = embedding[neighbors] - embedding[i]
+
+        # Weighted average direction
+        embedding_velocity[i] = (weights[:, None] * dE).sum(axis=0)
+
+    return embedding_velocity
+
+
+def compute_hopfield_velocity_at_state(
+    adata: AnnData,
+    X: np.ndarray,
+    cluster_key: str = 'cell_type',
+    use_cluster_specific_GRN: bool = True
+) -> np.ndarray:
+    """
+    Compute Hopfield velocity at a given expression state for all cells.
+
+    Parameters
+    ----------
+    adata : AnnData
+        Annotated data with fitted interactions
+    X : np.ndarray
+        Expression matrix (n_cells, n_genes) to compute velocity at
+    cluster_key : str, optional (default: 'cell_type')
+        Key for cluster labels
+    use_cluster_specific_GRN : bool, optional (default: True)
+        Whether to use cluster-specific W matrices
+
+    Returns
+    -------
+    np.ndarray
+        Velocity matrix (n_cells, n_genes)
+    """
+    genes = get_genes_used(adata)
+    n_cells = adata.n_obs
+    n_genes = genes.sum()
+    velocity = np.zeros((n_cells, n_genes))
+
+    if use_cluster_specific_GRN:
+        clusters = adata.obs[cluster_key].unique()
+
+        for cluster in clusters:
+            mask = adata.obs[cluster_key] == cluster
+            cell_indices = np.where(mask)[0]
+
+            v = compute_hopfield_velocity(adata, cluster, X=X[mask])
+            velocity[cell_indices] = v
+    else:
+        cluster = 'all'
+        if f'W_{cluster}' not in adata.varp:
+            cluster = adata.obs[cluster_key].unique()[0]
+        velocity = compute_hopfield_velocity(adata, cluster, X=X)
+
+    return velocity
+
+
+def calculate_perturbed_velocity_flow(
+    adata: AnnData,
+    basis: str = 'umap',
+    cluster_key: str = 'cell_type',
+    use_cluster_specific_GRN: bool = True,
+    n_neighbors: int = 30,
+    n_jobs: int = 4,
+    verbose: bool = True
+) -> np.ndarray:
+    """
+    Calculate flow from the absolute velocity at the perturbed state.
+
+    Unlike delta velocity (perturbed - original), this computes the actual
+    velocity field at the perturbed expression state, showing where
+    perturbed cells would "go" according to Hopfield dynamics.
+
+    v_perturbed = W @ sigmoid(X_perturbed) - gamma * X_perturbed + I
+
+    Parameters
+    ----------
+    adata : AnnData
+        Annotated data with perturbation results (simulated_X layer)
+    basis : str, optional (default: 'umap')
+        Embedding basis for visualization
+    cluster_key : str, optional (default: 'cell_type')
+        Key for cluster labels
+    use_cluster_specific_GRN : bool, optional (default: True)
+        Whether to use cluster-specific W matrices
+    n_neighbors : int, optional (default: 30)
+        Number of neighbors for embedding projection
+    n_jobs : int, optional (default: 4)
+        Number of parallel jobs
+    verbose : bool, optional (default: True)
+        Print progress
+
+    Returns
+    -------
+    np.ndarray
+        Perturbed velocity flow in embedding space (n_cells, 2)
+    """
+    if 'simulated_X' not in adata.layers:
+        raise ValueError("simulated_X not found. Run simulate_shift first.")
+
+    genes = get_genes_used(adata)
+
+    # Get perturbed expression
+    X_perturbed = adata.layers['simulated_X'][:, genes]
+    if issparse(X_perturbed):
+        X_perturbed = X_perturbed.toarray()
+
+    if verbose:
+        print("Computing Hopfield velocity at perturbed state...")
+
+    # Compute velocity at perturbed state
+    velocity_perturbed = compute_hopfield_velocity_at_state(
+        adata, X_perturbed,
+        cluster_key=cluster_key,
+        use_cluster_specific_GRN=use_cluster_specific_GRN
+    )
+
+    if verbose:
+        print("Projecting to embedding space...")
+
+    # Project to embedding
+    embedding_flow = project_velocity_to_embedding(
+        adata, velocity_perturbed, basis=basis,
+        n_neighbors=n_neighbors, n_jobs=n_jobs
+    )
+
+    # Store results
+    adata.obsm[f'perturbed_velocity_flow_{basis}'] = embedding_flow
+    adata.layers['velocity_perturbed_hopfield'] = velocity_perturbed
+
+    if verbose:
+        print(f"Perturbed velocity flow stored in adata.obsm['perturbed_velocity_flow_{basis}']")
+
+    return embedding_flow
+
+
+def calculate_original_velocity_flow(
+    adata: AnnData,
+    basis: str = 'umap',
+    cluster_key: str = 'cell_type',
+    use_cluster_specific_GRN: bool = True,
+    spliced_key: str = 'Ms',
+    n_neighbors: int = 30,
+    n_jobs: int = 4,
+    verbose: bool = True
+) -> np.ndarray:
+    """
+    Calculate flow from the Hopfield velocity at the original (unperturbed) state.
+
+    v_original = W @ sigmoid(X_original) - gamma * X_original + I
+
+    Parameters
+    ----------
+    adata : AnnData
+        Annotated data with fitted interactions
+    basis : str, optional (default: 'umap')
+        Embedding basis for visualization
+    cluster_key : str, optional (default: 'cell_type')
+        Key for cluster labels
+    use_cluster_specific_GRN : bool, optional (default: True)
+        Whether to use cluster-specific W matrices
+    spliced_key : str, optional (default: 'Ms')
+        Key for original expression data
+    n_neighbors : int, optional (default: 30)
+        Number of neighbors for embedding projection
+    n_jobs : int, optional (default: 4)
+        Number of parallel jobs
+    verbose : bool, optional (default: True)
+        Print progress
+
+    Returns
+    -------
+    np.ndarray
+        Original velocity flow in embedding space (n_cells, 2)
+    """
+    genes = get_genes_used(adata)
+
+    # Get original expression
+    if spliced_key in adata.layers:
+        X_original = adata.layers[spliced_key][:, genes]
+    else:
+        X_original = adata.X[:, genes]
+    if issparse(X_original):
+        X_original = X_original.toarray()
+
+    if verbose:
+        print("Computing Hopfield velocity at original state...")
+
+    # Compute velocity at original state
+    velocity_original = compute_hopfield_velocity_at_state(
+        adata, X_original,
+        cluster_key=cluster_key,
+        use_cluster_specific_GRN=use_cluster_specific_GRN
+    )
+
+    if verbose:
+        print("Projecting to embedding space...")
+
+    # Project to embedding
+    embedding_flow = project_velocity_to_embedding(
+        adata, velocity_original, basis=basis,
+        n_neighbors=n_neighbors, n_jobs=n_jobs
+    )
+
+    # Store results
+    adata.obsm[f'original_velocity_flow_{basis}'] = embedding_flow
+    adata.layers['velocity_original_hopfield'] = velocity_original
+
+    if verbose:
+        print(f"Original velocity flow stored in adata.obsm['original_velocity_flow_{basis}']")
+
+    return embedding_flow
+
+
+def calculate_perturbation_flow_hopfield(
+    adata: AnnData,
+    basis: str = 'umap',
+    cluster_key: str = 'cell_type',
+    use_cluster_specific_GRN: bool = True,
+    velocity_type: str = 'delta',
+    n_neighbors: int = 30,
+    n_jobs: int = 4,
+    verbose: bool = True
+) -> np.ndarray:
+    """
+    Calculate perturbation flow using Hopfield model dynamics directly.
+
+    Supports three velocity types:
+    - 'delta': Velocity difference (v_perturbed - v_original)
+    - 'perturbed': Absolute velocity at perturbed state
+    - 'original': Absolute velocity at original state (for comparison)
+
+    Parameters
+    ----------
+    adata : AnnData
+        Annotated data with perturbation results (simulated_X layer)
+    basis : str, optional (default: 'umap')
+        Embedding basis for visualization
+    cluster_key : str, optional (default: 'cell_type')
+        Key for cluster labels
+    use_cluster_specific_GRN : bool, optional (default: True)
+        Whether to use cluster-specific W matrices
+    velocity_type : str, optional (default: 'delta')
+        Type of velocity to compute:
+        - 'delta': v(X_perturbed) - v(X_original)
+        - 'perturbed': v(X_perturbed) only
+        - 'original': v(X_original) only
+    n_neighbors : int, optional (default: 30)
+        Number of neighbors for embedding projection
+    n_jobs : int, optional (default: 4)
+        Number of parallel jobs
+    verbose : bool, optional (default: True)
+        Print progress
+
+    Returns
+    -------
+    np.ndarray
+        Perturbation flow in embedding space (n_cells, 2)
+    """
+    if velocity_type == 'perturbed':
+        return calculate_perturbed_velocity_flow(
+            adata, basis=basis, cluster_key=cluster_key,
+            use_cluster_specific_GRN=use_cluster_specific_GRN,
+            n_neighbors=n_neighbors, n_jobs=n_jobs, verbose=verbose
+        )
+    elif velocity_type == 'original':
+        return calculate_original_velocity_flow(
+            adata, basis=basis, cluster_key=cluster_key,
+            use_cluster_specific_GRN=use_cluster_specific_GRN,
+            n_neighbors=n_neighbors, n_jobs=n_jobs, verbose=verbose
+        )
+
+    # Default: delta velocity
+    if verbose:
+        print("Computing Hopfield velocity difference...")
+
+    # Compute delta velocity in gene space
+    delta_velocity = compute_hopfield_velocity_delta(
+        adata,
+        cluster_key=cluster_key,
+        use_cluster_specific_GRN=use_cluster_specific_GRN
+    )
+
+    if verbose:
+        print("Projecting to embedding space...")
+
+    # Project to embedding
+    embedding_flow = project_velocity_to_embedding(
+        adata, delta_velocity, basis=basis,
+        n_neighbors=n_neighbors, n_jobs=n_jobs
+    )
+
+    # Store results
+    adata.obsm[f'perturbation_flow_{basis}'] = embedding_flow
+    adata.layers['delta_velocity_hopfield'] = delta_velocity
+
+    adata.uns['perturbation_flow_params'] = {
+        'basis': basis,
+        'method': 'hopfield',
+        'velocity_type': velocity_type,
+        'cluster_key': cluster_key,
+        'use_cluster_specific_GRN': use_cluster_specific_GRN,
+        'n_neighbors': n_neighbors
+    }
+
+    if verbose:
+        print(f"Perturbation flow (Hopfield) stored in adata.obsm['perturbation_flow_{basis}']")
+
+    return embedding_flow
+
+
+def plot_perturbed_velocity_flow(
+    adata: AnnData,
+    basis: str = 'umap',
+    ax: Optional[plt.Axes] = None,
+    scale: float = 1.0,
+    color: str = '#27AE60',
+    alpha: float = 0.8,
+    show_background: bool = True,
+    cluster_key: Optional[str] = None,
+    colors: Optional[Dict[str, str]] = None,
+    s: float = 10,
+    figsize: Tuple[float, float] = (8, 8),
+    title: str = 'Velocity at Perturbed State',
+    **quiver_kwargs
+) -> plt.Axes:
+    """
+    Plot the absolute velocity at the perturbed state.
+
+    Parameters
+    ----------
+    adata : AnnData
+        Annotated data with perturbed velocity flow
+    basis : str, optional (default: 'umap')
+        Embedding basis
+    ax : plt.Axes, optional
+        Axes to plot on
+    scale : float, optional (default: 1.0)
+        Arrow scale
+    color : str, optional (default: '#27AE60')
+        Arrow color (green by default)
+    alpha : float, optional (default: 0.8)
+        Arrow transparency
+    show_background : bool, optional (default: True)
+        Show background scatter
+    cluster_key : str, optional
+        Cluster key for coloring
+    colors : dict, optional
+        Cluster colors
+    s : float, optional (default: 10)
+        Point size
+    figsize : tuple, optional
+        Figure size
+    title : str, optional
+        Plot title
+    **quiver_kwargs
+        Additional quiver arguments
+
+    Returns
+    -------
+    plt.Axes
+    """
+    flow_key = f'perturbed_velocity_flow_{basis}'
+
+    if flow_key not in adata.obsm:
+        raise ValueError(f"Perturbed velocity flow not found. "
+                        "Run calculate_perturbed_velocity_flow first.")
+
+    if ax is None:
+        fig, ax = plt.subplots(figsize=figsize)
+
+    embedding = adata.obsm[f'X_{basis}']
+    flow = adata.obsm[flow_key]
+
+    # Background
+    if show_background:
+        if cluster_key is not None and colors is not None:
+            c = [colors.get(cl, 'lightgray') for cl in adata.obs[cluster_key]]
+        else:
+            c = 'lightgray'
+        ax.scatter(embedding[:, 0], embedding[:, 1], c=c,
+                  s=s, alpha=0.5, rasterized=True)
+
+    # Quiver
+    default_quiver = dict(headaxislength=4, headlength=5, headwidth=4,
+                         linewidths=0.5, width=0.003)
+    default_quiver.update(quiver_kwargs)
+
+    ax.quiver(embedding[:, 0], embedding[:, 1],
+             flow[:, 0], flow[:, 1],
+             color=color, alpha=alpha, scale=scale,
+             **default_quiver)
+
+    ax.set_title(title, fontsize=12, fontweight='bold')
+    ax.axis('off')
+    ax.set_aspect('equal')
+
+    return ax
+
+
+def visualize_velocity_comparison(
+    adata: AnnData,
+    basis: str = 'umap',
+    cluster_key: str = 'cell_type',
+    colors: Optional[Dict[str, str]] = None,
+    use_cluster_specific_GRN: bool = True,
+    n_neighbors: int = 30,
+    scale: float = 1.0,
+    figsize: Tuple[float, float] = (20, 6),
+    n_jobs: int = 4
+) -> plt.Figure:
+    """
+    Visualize comparison of original, perturbed, and delta velocities.
+
+    Creates a 1x4 figure showing:
+    1. Clusters
+    2. Original Hopfield velocity
+    3. Perturbed Hopfield velocity
+    4. Delta velocity (perturbed - original)
+
+    Parameters
+    ----------
+    adata : AnnData
+        Annotated data with perturbation results
+    basis : str, optional (default: 'umap')
+        Embedding basis
+    cluster_key : str, optional (default: 'cell_type')
+        Cluster key
+    colors : dict, optional
+        Cluster colors
+    use_cluster_specific_GRN : bool, optional (default: True)
+        Use cluster-specific GRNs
+    n_neighbors : int, optional (default: 30)
+        Neighbors for projection
+    scale : float, optional (default: 1.0)
+        Arrow scale
+    figsize : tuple, optional
+        Figure size
+    n_jobs : int, optional (default: 4)
+        Parallel jobs
+
+    Returns
+    -------
+    plt.Figure
+    """
+    # Calculate all three velocity types
+    print("Calculating original velocity...")
+    calculate_original_velocity_flow(
+        adata, basis=basis, cluster_key=cluster_key,
+        use_cluster_specific_GRN=use_cluster_specific_GRN,
+        n_neighbors=n_neighbors, n_jobs=n_jobs, verbose=False
+    )
+
+    print("Calculating perturbed velocity...")
+    calculate_perturbed_velocity_flow(
+        adata, basis=basis, cluster_key=cluster_key,
+        use_cluster_specific_GRN=use_cluster_specific_GRN,
+        n_neighbors=n_neighbors, n_jobs=n_jobs, verbose=False
+    )
+
+    print("Calculating delta velocity...")
+    calculate_perturbation_flow_hopfield(
+        adata, basis=basis, cluster_key=cluster_key,
+        use_cluster_specific_GRN=use_cluster_specific_GRN,
+        velocity_type='delta',
+        n_neighbors=n_neighbors, n_jobs=n_jobs, verbose=False
+    )
+
+    # Get perturbation info
+    perturb_str = "Perturbation"
+    if 'scHopfield' in adata.uns and 'perturb_condition' in adata.uns['scHopfield']:
+        perturb = adata.uns['scHopfield']['perturb_condition']
+        perturb_str = ', '.join([f"{k}={'KO' if v==0 else v}" for k, v in perturb.items()])
+
+    fig, axes = plt.subplots(1, 4, figsize=figsize)
+    embedding = adata.obsm[f'X_{basis}']
+
+    # Panel 1: Clusters
+    ax = axes[0]
+    if colors is not None:
+        c = [colors.get(cl, 'gray') for cl in adata.obs[cluster_key]]
+    else:
+        c = adata.obs[cluster_key].astype('category').cat.codes
+    ax.scatter(embedding[:, 0], embedding[:, 1], c=c, s=10, alpha=0.7)
+    ax.set_title('Clusters', fontsize=12, fontweight='bold')
+    ax.axis('off')
+
+    # Panel 2: Original velocity
+    ax = axes[1]
+    flow_orig = adata.obsm[f'original_velocity_flow_{basis}']
+    if colors is not None:
+        c = [colors.get(cl, 'lightgray') for cl in adata.obs[cluster_key]]
+    else:
+        c = 'lightgray'
+    ax.scatter(embedding[:, 0], embedding[:, 1], c=c, s=10, alpha=0.5)
+    ax.quiver(embedding[:, 0], embedding[:, 1], flow_orig[:, 0], flow_orig[:, 1],
+             color='#3498DB', alpha=0.8, scale=scale,
+             headaxislength=4, headlength=5, headwidth=4)
+    ax.set_title('Original Hopfield Velocity', fontsize=12, fontweight='bold')
+    ax.axis('off')
+
+    # Panel 3: Perturbed velocity
+    ax = axes[2]
+    flow_pert = adata.obsm[f'perturbed_velocity_flow_{basis}']
+    ax.scatter(embedding[:, 0], embedding[:, 1], c=c, s=10, alpha=0.5)
+    ax.quiver(embedding[:, 0], embedding[:, 1], flow_pert[:, 0], flow_pert[:, 1],
+             color='#27AE60', alpha=0.8, scale=scale,
+             headaxislength=4, headlength=5, headwidth=4)
+    ax.set_title(f'Perturbed Velocity\n({perturb_str})', fontsize=12, fontweight='bold')
+    ax.axis('off')
+
+    # Panel 4: Delta velocity
+    ax = axes[3]
+    flow_delta = adata.obsm[f'perturbation_flow_{basis}']
+    ax.scatter(embedding[:, 0], embedding[:, 1], c=c, s=10, alpha=0.5)
+    ax.quiver(embedding[:, 0], embedding[:, 1], flow_delta[:, 0], flow_delta[:, 1],
+             color='#E74C3C', alpha=0.8, scale=scale,
+             headaxislength=4, headlength=5, headwidth=4)
+    ax.set_title('Delta Velocity\n(Perturbed - Original)', fontsize=12, fontweight='bold')
+    ax.axis('off')
+
+    fig.suptitle(f'Hopfield Velocity Analysis: {perturb_str}', fontsize=14, fontweight='bold', y=1.02)
+    plt.tight_layout()
+
+    return fig
 
 
 def calculate_perturbation_flow(
     adata: AnnData,
     basis: str = 'umap',
+    method: str = 'celloracle',
     n_neighbors: int = 200,
     sigma_corr: float = 0.05,
     correlation_mode: str = 'sampled',
     sampled_fraction: float = 0.3,
     sampling_probs: Tuple[float, float] = (0.5, 0.1),
+    cluster_key: str = 'cell_type',
+    use_cluster_specific_GRN: bool = True,
     random_seed: int = 42,
     n_jobs: int = 4,
     verbose: bool = True
@@ -38,14 +798,21 @@ def calculate_perturbation_flow(
     """
     Calculate perturbation-induced flow in embedding space.
 
-    Projects delta_X (gene expression change) to embedding coordinates
-    using correlation-based transition probabilities, similar to RNA velocity.
+    Two methods are available:
+    1. 'celloracle': Correlation-based projection (default, like CellOracle)
+    2. 'hopfield': Direct computation using Hopfield model dynamics
 
-    The algorithm follows CellOracle's approach:
+    The CellOracle method:
     1. Build KNN graph in embedding space
     2. Compute correlation between delta_X[i] and (X[j] - X[i]) for neighbors
     3. Convert correlations to transition probabilities: exp(corr / sigma_corr)
     4. Compute embedding shift as weighted sum of unit vectors to neighbors
+
+    The Hopfield method:
+    1. Compute velocity at original state: v_orig = W @ sigmoid(X) - gamma*X + I
+    2. Compute velocity at perturbed state: v_pert = W @ sigmoid(X') - gamma*X' + I
+    3. Delta velocity = v_pert - v_orig
+    4. Project delta velocity to embedding space
 
     Parameters
     ----------
@@ -53,26 +820,32 @@ def calculate_perturbation_flow(
         Annotated data with delta_X layer from perturbation simulation
     basis : str, optional (default: 'umap')
         Embedding basis to project onto
+    method : str, optional (default: 'celloracle')
+        Method for computing flow:
+        - 'celloracle': Correlation-based projection (like CellOracle/scVelo)
+        - 'hopfield': Direct Hopfield model velocity computation
     n_neighbors : int, optional (default: 200)
-        Number of neighbors for KNN graph in embedding space
+        Number of neighbors for KNN graph
     sigma_corr : float, optional (default: 0.05)
-        Kernel scaling for transition probability calculation.
-        Smaller values make the kernel sharper (more local).
+        Kernel scaling for transition probability (CellOracle method only)
     correlation_mode : str, optional (default: 'sampled')
-        How to compute correlations:
+        How to compute correlations (CellOracle method only):
         - 'sampled': Sample a fraction of neighbors for faster computation
         - 'full': Compute full correlation matrix for all cell pairs
     sampled_fraction : float, optional (default: 0.3)
-        Fraction of neighbors to sample (only used if correlation_mode='sampled')
+        Fraction of neighbors to sample (CellOracle method, sampled mode)
     sampling_probs : tuple, optional (default: (0.5, 0.1))
-        Probability gradient for neighbor sampling (near to far).
-        Only used if correlation_mode='sampled'.
+        Probability gradient for neighbor sampling (CellOracle method)
+    cluster_key : str, optional (default: 'cell_type')
+        Key for cluster labels (Hopfield method)
+    use_cluster_specific_GRN : bool, optional (default: True)
+        Use cluster-specific GRNs (Hopfield method)
     random_seed : int, optional (default: 42)
         Random seed for reproducibility
     n_jobs : int, optional (default: 4)
-        Number of parallel jobs for KNN calculation
+        Number of parallel jobs
     verbose : bool, optional (default: True)
-        Show progress bar during correlation calculation
+        Show progress
 
     Returns
     -------
@@ -81,10 +854,20 @@ def calculate_perturbation_flow(
 
     References
     ----------
-    Logic for the transition vector field is inspired by the perturbation
-    simulation workflow in CellOracle:
+    CellOracle method inspired by:
     Kamimoto et al. (2023). Nature. https://doi.org/10.1038/s41586-022-05688-9
     """
+    if method == 'hopfield':
+        return calculate_perturbation_flow_hopfield(
+            adata, basis=basis,
+            cluster_key=cluster_key,
+            use_cluster_specific_GRN=use_cluster_specific_GRN,
+            n_neighbors=min(n_neighbors, 50),  # Fewer neighbors for Hopfield
+            n_jobs=n_jobs,
+            verbose=verbose
+        )
+    elif method != 'celloracle':
+        raise ValueError(f"Unknown method: {method}. Use 'celloracle' or 'hopfield'.")
     from sklearn.neighbors import NearestNeighbors
     from scipy import sparse
 
@@ -1374,6 +2157,480 @@ def visualize_perturbation_flow(
         ax.axis('off')
 
     fig.suptitle(f'Perturbation Analysis: {perturb_str}', fontsize=14, fontweight='bold', y=1.02)
+    plt.tight_layout()
+
+    return fig
+
+
+# =============================================================================
+# ODE Trajectory Flow Functions
+# =============================================================================
+
+def calculate_ode_trajectory_flow(
+    adata: AnnData,
+    wt_trajectories: Dict[str, np.ndarray],
+    perturbed_trajectories: Dict[str, np.ndarray],
+    cluster_key: str = 'cell_type',
+    basis: str = 'umap',
+    time_point: int = -1,
+    method: str = 'hopfield',
+    n_neighbors: int = 30,
+    use_cluster_specific_GRN: bool = True,
+    n_jobs: int = 4,
+    verbose: bool = True
+) -> np.ndarray:
+    """
+    Calculate perturbation flow from ODE trajectory results.
+
+    Takes the final (or specified) time point from ODE trajectories and
+    computes the flow in embedding space.
+
+    Parameters
+    ----------
+    adata : AnnData
+        Annotated data with cell information
+    wt_trajectories : dict
+        Dictionary mapping cluster -> WT trajectory (n_time, n_genes)
+    perturbed_trajectories : dict
+        Dictionary mapping cluster -> perturbed trajectory (n_time, n_genes)
+    cluster_key : str, optional (default: 'cell_type')
+        Key for cluster labels
+    basis : str, optional (default: 'umap')
+        Embedding basis
+    time_point : int, optional (default: -1)
+        Which time point to use (-1 for final)
+    method : str, optional (default: 'hopfield')
+        Flow calculation method:
+        - 'hopfield': Use Hopfield model velocity directly
+        - 'celloracle': Use correlation-based projection
+        - 'difference': Simple difference in gene space projected to embedding
+    n_neighbors : int, optional (default: 30)
+        Number of neighbors for projection
+    use_cluster_specific_GRN : bool, optional (default: True)
+        Use cluster-specific W matrices
+    n_jobs : int, optional (default: 4)
+        Number of parallel jobs
+    verbose : bool, optional (default: True)
+        Print progress
+
+    Returns
+    -------
+    np.ndarray
+        Perturbation flow in embedding space (n_cells, 2)
+    """
+    genes = get_genes_used(adata)
+    n_cells = adata.n_obs
+    n_genes = genes.sum()
+
+    # Initialize arrays
+    delta_X = np.zeros((n_cells, n_genes))
+    X_wt_final = np.zeros((n_cells, n_genes))
+    X_pert_final = np.zeros((n_cells, n_genes))
+
+    # Get final states from trajectories for each cluster
+    for cluster in wt_trajectories.keys():
+        if cluster not in perturbed_trajectories:
+            continue
+
+        mask = adata.obs[cluster_key] == cluster
+        if not mask.any():
+            continue
+
+        # Get final time point
+        wt_final = wt_trajectories[cluster][time_point]
+        pert_final = perturbed_trajectories[cluster][time_point]
+
+        # Assign to all cells in this cluster (they share the same trajectory)
+        cell_indices = np.where(mask)[0]
+        for idx in cell_indices:
+            X_wt_final[idx] = wt_final
+            X_pert_final[idx] = pert_final
+            delta_X[idx] = pert_final - wt_final
+
+    # Store delta_X temporarily
+    adata.layers['delta_X_ode'] = delta_X
+
+    if method == 'hopfield':
+        # Compute velocity difference using Hopfield model
+        if verbose:
+            print("Computing Hopfield velocities...")
+
+        delta_velocity = np.zeros((n_cells, n_genes))
+
+        for cluster in wt_trajectories.keys():
+            mask = adata.obs[cluster_key] == cluster
+            if not mask.any():
+                continue
+
+            cell_indices = np.where(mask)[0]
+
+            # Compute velocity at WT and perturbed states
+            v_wt = compute_hopfield_velocity(
+                adata, cluster, X=X_wt_final[mask]
+            )
+            v_pert = compute_hopfield_velocity(
+                adata, cluster, X=X_pert_final[mask]
+            )
+
+            delta_velocity[cell_indices] = v_pert - v_wt
+
+        # Project to embedding
+        if verbose:
+            print("Projecting to embedding...")
+        embedding_flow = project_velocity_to_embedding(
+            adata, delta_velocity, basis=basis,
+            n_neighbors=n_neighbors, n_jobs=n_jobs
+        )
+
+    elif method == 'difference':
+        # Simple projection of expression difference
+        if verbose:
+            print("Projecting expression difference to embedding...")
+        embedding_flow = project_velocity_to_embedding(
+            adata, delta_X, basis=basis,
+            n_neighbors=n_neighbors, n_jobs=n_jobs
+        )
+
+    else:  # celloracle
+        # Use correlation-based projection
+        # Temporarily store simulated_X
+        spliced_key = adata.uns.get('scHopfield', {}).get('spliced_key', 'Ms')
+        original_simulated = adata.layers.get('simulated_X', None)
+
+        # Set simulated_X to perturbed final state
+        adata.layers['simulated_X'] = X_pert_final
+        adata.layers['delta_X'] = delta_X
+
+        embedding_flow = calculate_perturbation_flow(
+            adata, basis=basis, method='celloracle',
+            n_neighbors=n_neighbors, n_jobs=n_jobs, verbose=verbose
+        )
+
+        # Restore
+        if original_simulated is not None:
+            adata.layers['simulated_X'] = original_simulated
+
+    # Store results
+    adata.obsm[f'ode_perturbation_flow_{basis}'] = embedding_flow
+    adata.uns['ode_perturbation_flow_params'] = {
+        'basis': basis,
+        'method': method,
+        'time_point': time_point,
+        'clusters': list(wt_trajectories.keys())
+    }
+
+    if verbose:
+        print(f"ODE perturbation flow stored in adata.obsm['ode_perturbation_flow_{basis}']")
+
+    return embedding_flow
+
+
+def calculate_ode_trajectory_inner_product(
+    adata: AnnData,
+    basis: str = 'umap',
+    velocity_key: Optional[str] = None,
+    flow_key: Optional[str] = None
+) -> np.ndarray:
+    """
+    Calculate inner product between reference velocity and ODE perturbation flow.
+
+    Parameters
+    ----------
+    adata : AnnData
+        Annotated data with ODE perturbation flow
+    basis : str, optional (default: 'umap')
+        Embedding basis
+    velocity_key : str, optional
+        Key for reference velocity
+    flow_key : str, optional
+        Key for ODE perturbation flow
+
+    Returns
+    -------
+    np.ndarray
+        Inner product values
+    """
+    if velocity_key is None:
+        velocity_key = f'velocity_{basis}'
+
+    if flow_key is None:
+        flow_key = f'ode_perturbation_flow_{basis}'
+
+    if velocity_key not in adata.obsm:
+        raise ValueError(f"Velocity {velocity_key} not found")
+
+    if flow_key not in adata.obsm:
+        raise ValueError(f"ODE flow {flow_key} not found. Run calculate_ode_trajectory_flow first.")
+
+    ref_velocity = adata.obsm[velocity_key]
+    ode_flow = adata.obsm[flow_key]
+
+    # Normalize and compute inner product
+    ref_norm = np.linalg.norm(ref_velocity, axis=1, keepdims=True) + 1e-10
+    ode_norm = np.linalg.norm(ode_flow, axis=1, keepdims=True) + 1e-10
+
+    ref_unit = ref_velocity / ref_norm
+    ode_unit = ode_flow / ode_norm
+
+    inner_product = np.sum(ref_unit * ode_unit, axis=1)
+
+    adata.obs['ode_perturbation_inner_product'] = inner_product
+
+    return inner_product
+
+
+def plot_ode_perturbation_flow(
+    adata: AnnData,
+    basis: str = 'umap',
+    ax: Optional[plt.Axes] = None,
+    scale: float = 1.0,
+    color: str = '#9B59B6',
+    alpha: float = 0.8,
+    show_background: bool = True,
+    cluster_key: Optional[str] = None,
+    colors: Optional[Dict[str, str]] = None,
+    s: float = 10,
+    figsize: Tuple[float, float] = (8, 8),
+    title: str = 'ODE Perturbation Flow',
+    **quiver_kwargs
+) -> plt.Axes:
+    """
+    Plot ODE trajectory perturbation flow.
+
+    Parameters
+    ----------
+    adata : AnnData
+        Annotated data with ODE perturbation flow
+    basis : str, optional (default: 'umap')
+        Embedding basis
+    ax : plt.Axes, optional
+        Axes to plot on
+    scale : float, optional (default: 1.0)
+        Arrow scale
+    color : str, optional (default: '#9B59B6')
+        Arrow color
+    alpha : float, optional (default: 0.8)
+        Arrow transparency
+    show_background : bool, optional (default: True)
+        Show background scatter
+    cluster_key : str, optional
+        Cluster key for coloring
+    colors : dict, optional
+        Cluster colors
+    s : float, optional (default: 10)
+        Point size
+    figsize : tuple, optional
+        Figure size
+    title : str, optional
+        Plot title
+    **quiver_kwargs
+        Additional quiver arguments
+
+    Returns
+    -------
+    plt.Axes
+    """
+    flow_key = f'ode_perturbation_flow_{basis}'
+
+    if flow_key not in adata.obsm:
+        raise ValueError(f"ODE flow {flow_key} not found. Run calculate_ode_trajectory_flow first.")
+
+    if ax is None:
+        fig, ax = plt.subplots(figsize=figsize)
+
+    embedding_key = f'X_{basis}'
+    embedding = adata.obsm[embedding_key]
+    flow = adata.obsm[flow_key]
+
+    # Background
+    if show_background:
+        if cluster_key is not None and colors is not None:
+            c = [colors.get(cl, 'lightgray') for cl in adata.obs[cluster_key]]
+        else:
+            c = 'lightgray'
+        ax.scatter(embedding[:, 0], embedding[:, 1], c=c,
+                  s=s, alpha=0.5, rasterized=True)
+
+    # Quiver
+    default_quiver = dict(headaxislength=4, headlength=5, headwidth=4,
+                         linewidths=0.5, width=0.003)
+    default_quiver.update(quiver_kwargs)
+
+    ax.quiver(embedding[:, 0], embedding[:, 1],
+             flow[:, 0], flow[:, 1],
+             color=color, alpha=alpha, scale=scale,
+             **default_quiver)
+
+    ax.set_title(title, fontsize=12, fontweight='bold')
+    ax.axis('off')
+    ax.set_aspect('equal')
+
+    return ax
+
+
+def visualize_ode_perturbation(
+    adata: AnnData,
+    wt_trajectories: Dict[str, np.ndarray],
+    perturbed_trajectories: Dict[str, np.ndarray],
+    gene_perturbations: Dict[str, float],
+    t_span: np.ndarray,
+    cluster_key: str = 'cell_type',
+    basis: str = 'umap',
+    velocity_key: Optional[str] = None,
+    colors: Optional[Dict[str, str]] = None,
+    method: str = 'hopfield',
+    figsize: Tuple[float, float] = (20, 10),
+    scale_flow: float = 1.0,
+    vm: float = 1.0
+) -> plt.Figure:
+    """
+    Create comprehensive visualization of ODE perturbation analysis.
+
+    Parameters
+    ----------
+    adata : AnnData
+        Annotated data
+    wt_trajectories : dict
+        WT trajectories per cluster
+    perturbed_trajectories : dict
+        Perturbed trajectories per cluster
+    gene_perturbations : dict
+        Perturbation conditions
+    t_span : np.ndarray
+        Time points
+    cluster_key : str, optional
+        Cluster key
+    basis : str, optional
+        Embedding basis
+    velocity_key : str, optional
+        Reference velocity key
+    colors : dict, optional
+        Cluster colors
+    method : str, optional (default: 'hopfield')
+        Flow calculation method
+    figsize : tuple, optional
+        Figure size
+    scale_flow : float, optional
+        Arrow scale
+    vm : float, optional
+        Inner product colorscale max
+
+    Returns
+    -------
+    plt.Figure
+    """
+    # Calculate flow
+    calculate_ode_trajectory_flow(
+        adata, wt_trajectories, perturbed_trajectories,
+        cluster_key=cluster_key, basis=basis, method=method
+    )
+
+    # Calculate inner product
+    if velocity_key is None:
+        velocity_key = f'velocity_{basis}'
+
+    if velocity_key in adata.obsm:
+        calculate_ode_trajectory_inner_product(
+            adata, basis=basis, velocity_key=velocity_key
+        )
+
+    # Create figure
+    perturb_str = ', '.join([f"{k}={'KO' if v==0 else 'OE' if v>0 else v}"
+                             for k, v in gene_perturbations.items()])
+
+    fig, axes = plt.subplots(2, 3, figsize=figsize)
+
+    embedding = adata.obsm[f'X_{basis}']
+
+    # Row 0, Col 0: Clusters
+    ax = axes[0, 0]
+    if colors is not None:
+        c = [colors.get(cl, 'gray') for cl in adata.obs[cluster_key]]
+    else:
+        c = adata.obs[cluster_key].astype('category').cat.codes
+    ax.scatter(embedding[:, 0], embedding[:, 1], c=c, s=10, alpha=0.7)
+    ax.set_title('Clusters', fontsize=12, fontweight='bold')
+    ax.axis('off')
+
+    # Row 0, Col 1: Reference velocity
+    ax = axes[0, 1]
+    try:
+        plot_reference_flow(adata, basis=basis, velocity_key=velocity_key,
+                          ax=ax, scale=scale_flow*5, title='Reference Velocity')
+    except:
+        ax.text(0.5, 0.5, 'No velocity data', ha='center', va='center',
+               transform=ax.transAxes)
+        ax.axis('off')
+
+    # Row 0, Col 2: ODE perturbation flow
+    ax = axes[0, 2]
+    plot_ode_perturbation_flow(
+        adata, basis=basis, ax=ax, scale=scale_flow,
+        cluster_key=cluster_key, colors=colors,
+        title=f'ODE Perturbation Flow\n({perturb_str})'
+    )
+
+    # Row 1, Col 0: Inner product
+    ax = axes[1, 0]
+    if 'ode_perturbation_inner_product' in adata.obs:
+        try:
+            norm = plt.matplotlib.colors.TwoSlopeNorm(vmin=-vm, vcenter=0, vmax=vm)
+        except:
+            norm = plt.matplotlib.colors.Normalize(vmin=-vm, vmax=vm)
+        sc = ax.scatter(embedding[:, 0], embedding[:, 1],
+                       c=adata.obs['ode_perturbation_inner_product'],
+                       cmap='RdBu_r', norm=norm, s=15)
+        plt.colorbar(sc, ax=ax, shrink=0.6)
+        ax.set_title('Inner Product (ODE)', fontsize=12, fontweight='bold')
+        ax.axis('off')
+    else:
+        ax.text(0.5, 0.5, 'No inner product', ha='center', va='center',
+               transform=ax.transAxes)
+        ax.axis('off')
+
+    # Row 1, Col 1: Trajectory examples
+    ax = axes[1, 1]
+    genes = get_genes_used(adata)
+    gene_names = adata.var.index[genes]
+
+    # Plot trajectory for first cluster
+    cluster = list(wt_trajectories.keys())[0]
+    wt = wt_trajectories[cluster]
+    pert = perturbed_trajectories[cluster]
+
+    # Find most changed gene
+    delta_final = np.abs(pert[-1] - wt[-1])
+    top_gene_idx = np.argsort(delta_final)[-3:]
+
+    for idx in top_gene_idx:
+        ax.plot(t_span, wt[:, idx], '-', label=f'{gene_names[idx]} (WT)')
+        ax.plot(t_span, pert[:, idx], '--', label=f'{gene_names[idx]} (Pert)')
+
+    ax.set_xlabel('Time')
+    ax.set_ylabel('Expression')
+    ax.set_title(f'Trajectory ({cluster})', fontsize=12, fontweight='bold')
+    ax.legend(fontsize=8)
+    ax.grid(True, alpha=0.3)
+
+    # Row 1, Col 2: Inner product by cluster
+    ax = axes[1, 2]
+    if 'ode_perturbation_inner_product' in adata.obs:
+        df = pd.DataFrame({
+            'Cluster': adata.obs[cluster_key],
+            'Inner Product': adata.obs['ode_perturbation_inner_product']
+        })
+        cluster_order = df.groupby('Cluster')['Inner Product'].median().sort_values().index
+        palette = [colors.get(c, 'gray') for c in cluster_order] if colors else None
+        sns.boxplot(data=df, x='Cluster', y='Inner Product',
+                   order=cluster_order, palette=palette, ax=ax)
+        ax.axhline(0, color='gray', linestyle='--', alpha=0.5)
+        ax.set_title('Inner Product by Cluster', fontsize=12, fontweight='bold')
+        if len(cluster_order) > 5:
+            ax.set_xticklabels(ax.get_xticklabels(), rotation=45, ha='right')
+    else:
+        ax.axis('off')
+
+    fig.suptitle(f'ODE Perturbation Analysis: {perturb_str}', fontsize=14, fontweight='bold', y=1.02)
     plt.tight_layout()
 
     return fig

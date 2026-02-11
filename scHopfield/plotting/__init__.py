@@ -38,10 +38,28 @@ from .perturbation import (
     plot_simulation_comparison
 )
 from .flow import (
+    # Hopfield model velocity computation
+    compute_hopfield_velocity,
+    compute_hopfield_velocity_delta,
+    compute_hopfield_velocity_at_state,
+    project_velocity_to_embedding,
+    calculate_perturbation_flow_hopfield,
+    # Absolute velocity at perturbed/original states
+    calculate_perturbed_velocity_flow,
+    calculate_original_velocity_flow,
+    plot_perturbed_velocity_flow,
+    visualize_velocity_comparison,
+    # Main flow calculation (supports 'celloracle' and 'hopfield' methods)
     calculate_perturbation_flow,
     calculate_grid_flow,
     calculate_grid_flow_knn,
     calculate_inner_product,
+    # ODE trajectory flow functions
+    calculate_ode_trajectory_flow,
+    calculate_ode_trajectory_inner_product,
+    plot_ode_perturbation_flow,
+    visualize_ode_perturbation,
+    # Plotting functions
     plot_reference_flow,
     plot_perturbation_flow,
     plot_flow_on_grid,
@@ -80,11 +98,22 @@ __all__ = [
     'plot_gene_response',
     'plot_top_affected_genes_bar',
     'plot_simulation_comparison',
-    # Flow visualization (CellOracle-style)
+    # Hopfield model velocity computation
+    'compute_hopfield_velocity',
+    'compute_hopfield_velocity_delta',
+    'project_velocity_to_embedding',
+    'calculate_perturbation_flow_hopfield',
+    # Flow visualization (supports 'celloracle' and 'hopfield' methods)
     'calculate_perturbation_flow',
     'calculate_grid_flow',
     'calculate_grid_flow_knn',
     'calculate_inner_product',
+    # ODE trajectory flow functions
+    'calculate_ode_trajectory_flow',
+    'calculate_ode_trajectory_inner_product',
+    'plot_ode_perturbation_flow',
+    'visualize_ode_perturbation',
+    # Plotting functions
     'plot_reference_flow',
     'plot_perturbation_flow',
     'plot_flow_on_grid',
