@@ -118,7 +118,7 @@ def compute_hopfield_velocity_delta(
     Parameters
     ----------
     adata : AnnData
-        Annotated data with 'simulated_X' and original expression
+        Annotated data with 'simulated_count' (perturbed expression) from simulate_shift
     cluster_key : str, optional (default: 'cell_type')
         Key for cluster labels
     use_cluster_specific_GRN : bool, optional (default: True)
@@ -131,8 +131,9 @@ def compute_hopfield_velocity_delta(
     np.ndarray
         Delta velocity matrix (n_cells, n_genes)
     """
-    if 'simulated_X' not in adata.layers:
-        raise ValueError("simulated_X not found. Run simulate_shift first.")
+    # Check for perturbed expression layer (simulated_count from simulate_shift)
+    if 'simulated_count' not in adata.layers:
+        raise ValueError("simulated_count not found. Run simulate_shift first.")
 
     genes = get_genes_used(adata)
 
@@ -144,7 +145,7 @@ def compute_hopfield_velocity_delta(
     if issparse(X_original):
         X_original = X_original.toarray()
 
-    X_perturbed = adata.layers['simulated_X'][:, genes]
+    X_perturbed = adata.layers['simulated_count'][:, genes]
     if issparse(X_perturbed):
         X_perturbed = X_perturbed.toarray()
 
@@ -331,7 +332,7 @@ def calculate_perturbed_velocity_flow(
     Parameters
     ----------
     adata : AnnData
-        Annotated data with perturbation results (simulated_X layer)
+        Annotated data with perturbation results (simulated_count layer from simulate_shift)
     basis : str, optional (default: 'umap')
         Embedding basis for visualization
     cluster_key : str, optional (default: 'cell_type')
@@ -350,13 +351,13 @@ def calculate_perturbed_velocity_flow(
     np.ndarray
         Perturbed velocity flow in embedding space (n_cells, 2)
     """
-    if 'simulated_X' not in adata.layers:
-        raise ValueError("simulated_X not found. Run simulate_shift first.")
+    if 'simulated_count' not in adata.layers:
+        raise ValueError("simulated_count not found. Run simulate_shift first.")
 
     genes = get_genes_used(adata)
 
     # Get perturbed expression
-    X_perturbed = adata.layers['simulated_X'][:, genes]
+    X_perturbed = adata.layers['simulated_count'][:, genes]
     if issparse(X_perturbed):
         X_perturbed = X_perturbed.toarray()
 
@@ -488,7 +489,7 @@ def calculate_perturbation_flow_hopfield(
     Parameters
     ----------
     adata : AnnData
-        Annotated data with perturbation results (simulated_X layer)
+        Annotated data with perturbation results (simulated_count layer from simulate_shift)
     basis : str, optional (default: 'umap')
         Embedding basis for visualization
     cluster_key : str, optional (default: 'cell_type')
@@ -791,6 +792,7 @@ def calculate_perturbation_flow(
     sampling_probs: Tuple[float, float] = (0.5, 0.1),
     cluster_key: str = 'cell_type',
     use_cluster_specific_GRN: bool = True,
+    velocity_type: str = 'delta',
     random_seed: int = 42,
     n_jobs: int = 4,
     verbose: bool = True
@@ -840,6 +842,11 @@ def calculate_perturbation_flow(
         Key for cluster labels (Hopfield method)
     use_cluster_specific_GRN : bool, optional (default: True)
         Use cluster-specific GRNs (Hopfield method)
+    velocity_type : str, optional (default: 'delta')
+        Type of velocity to compute (Hopfield method only):
+        - 'delta': v(X_perturbed) - v(X_original)
+        - 'perturbed': v(X_perturbed) only (absolute velocity at perturbed state)
+        - 'original': v(X_original) only (absolute velocity at original state)
     random_seed : int, optional (default: 42)
         Random seed for reproducibility
     n_jobs : int, optional (default: 4)
@@ -862,6 +869,7 @@ def calculate_perturbation_flow(
             adata, basis=basis,
             cluster_key=cluster_key,
             use_cluster_specific_GRN=use_cluster_specific_GRN,
+            velocity_type=velocity_type,
             n_neighbors=min(n_neighbors, 50),  # Fewer neighbors for Hopfield
             n_jobs=n_jobs,
             verbose=verbose
