@@ -101,7 +101,7 @@ def compute_hopfield_velocity(
     velocity = sig_X @ W.T - gamma * X + I
 
     return velocity
-    
+
 
 def compute_hopfield_velocity_delta(
     adata: AnnData,
@@ -149,7 +149,7 @@ def compute_hopfield_velocity_delta(
         X_perturbed = X_perturbed.toarray()
 
     n_cells = adata.n_obs
-    n_genes = genes.sum()
+    n_genes = len(genes)
     delta_velocity = np.zeros((n_cells, n_genes))
 
     if use_cluster_specific_GRN:
