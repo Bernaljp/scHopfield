@@ -2228,7 +2228,7 @@ def calculate_ode_trajectory_flow(
     """
     genes = get_genes_used(adata)
     n_cells = adata.n_obs
-    n_genes = genes.sum()
+    n_genes = len(genes)
 
     # Initialize arrays
     delta_X = np.zeros((n_cells, n_genes))
