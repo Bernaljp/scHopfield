@@ -290,7 +290,7 @@ def compute_hopfield_velocity_at_state(
     """
     genes = get_genes_used(adata)
     n_cells = adata.n_obs
-    n_genes = genes.sum()
+    n_genes = len(genes)
     velocity = np.zeros((n_cells, n_genes))
 
     if use_cluster_specific_GRN:
