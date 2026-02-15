@@ -2,6 +2,7 @@
 
 import numpy as np
 import torch
+from torch.utils.data import WeightedRandomSampler
 from typing import Optional, Union, List, Dict, Tuple
 from anndata import AnnData
 
@@ -150,6 +151,9 @@ def fit_interactions(
     hierarchical_pretrain: bool = False,
     hierarchy_keys: Optional[List[str]] = None,
     hierarchy_mappings: Optional[List[Dict[str, str]]] = None,
+    drop_last: bool = True,
+    balanced_sampling: bool = False,
+    normalize_regularization: bool = False,
     copy: bool = False
 ) -> Optional[AnnData]:
     """
@@ -223,6 +227,17 @@ def fit_interactions(
         List of mappings between consecutive hierarchy levels. Each mapping is
         {fine_cluster: coarse_cluster}. Must have len(hierarchy_keys) - 1 elements.
         Example: [{'T_cell': 'immune', 'B_cell': 'immune', 'Fibroblast': 'stromal'}]
+    drop_last : bool, optional (default: True)
+        If True, drop the last incomplete batch to ensure consistent batch sizes.
+        This reduces gradient variance from small tail-end batches.
+    balanced_sampling : bool, optional (default: False)
+        If True, use weighted sampling to balance cluster representation when
+        training on multiple clusters (e.g., when training 'all' during
+        hierarchical pretraining). Requires hierarchical_pretrain=True.
+    normalize_regularization : bool, optional (default: False)
+        If True, normalize scaffold and bias regularization losses by batch size.
+        This keeps regularization balanced with reconstruction loss when batch
+        sizes vary. Alternative to drop_last for handling batch inconsistency.
     copy : bool, optional (default: False)
         If True, return a copy instead of modifying in-place
 
@@ -289,6 +304,11 @@ def fit_interactions(
                 # Use parent gamma if available, otherwise use default
                 cluster_g = parent_gamma if parent_gamma is not None else g
 
+                # Compute sample weights for balanced sampling (only for 'all' cluster)
+                cluster_weights = None
+                if balanced_sampling and cluster == 'all':
+                    cluster_weights = _compute_cluster_weights(adata, idx, cluster_key)
+
                 # Fit interactions for this cluster
                 _fit_interactions_for_cluster(
                     adata=adata,
@@ -320,6 +340,9 @@ def fit_interactions(
                     plateau_min_lr=plateau_min_lr,
                     parent_W=parent_W,
                     parent_I=parent_I,
+                    sample_weights=cluster_weights,
+                    drop_last=drop_last,
+                    normalize_regularization=normalize_regularization,
                 )
     else:
         # Original non-hierarchical behavior
@@ -367,6 +390,9 @@ def fit_interactions(
                 plateau_min_lr=plateau_min_lr,
                 parent_W=None,
                 parent_I=None,
+                sample_weights=None,
+                drop_last=drop_last,
+                normalize_regularization=normalize_regularization,
             )
 
     return adata if copy else None
@@ -402,6 +428,9 @@ def _fit_interactions_for_cluster(
     get_plots: bool,
     parent_W: Optional[np.ndarray] = None,
     parent_I: Optional[np.ndarray] = None,
+    sample_weights: Optional[np.ndarray] = None,
+    drop_last: bool = True,
+    normalize_regularization: bool = False,
 ):
     """
     Fit interaction matrix W and bias I for a single cluster.
@@ -441,9 +470,14 @@ def _fit_interactions_for_cluster(
             bias_regularization=bias_regularization,
             use_masked_linear=only_TFs,
             pre_initialized_W=W,
-            pre_initialized_I=I
+            pre_initialized_I=I,
+            normalize_regularization=normalize_regularization
         )
-        train_loader = _create_train_loader(sig, v, x, device, batch_size)
+        train_loader = _create_train_loader(
+            sig, v, x, device, batch_size,
+            sample_weights=sample_weights,
+            drop_last=drop_last
+        )
 
         # Set up scheduler - plateau scheduler takes precedence
         if use_plateau_scheduler:
@@ -491,7 +525,82 @@ def _fit_interactions_for_cluster(
         adata.var.iloc[gene_indices, adata.var.columns.get_loc(f'gamma_{cluster}')] = g
 
 
-def _create_train_loader(sig, v, x, device, batch_size=64):
-    """Helper to create PyTorch DataLoader."""
+def _compute_cluster_weights(adata, indices, cluster_key):
+    """
+    Compute per-sample weights to balance cluster representation.
+
+    Each sample gets weight = 1 / (frequency of its cluster).
+    This ensures smaller clusters are over-sampled.
+
+    Parameters
+    ----------
+    adata : AnnData
+        Annotated data object
+    indices : np.ndarray
+        Boolean array indicating which cells to include
+    cluster_key : str
+        Key in adata.obs containing cluster annotations
+
+    Returns
+    -------
+    np.ndarray
+        Per-sample weights (same length as sum of indices)
+    """
+    cluster_labels = adata.obs.loc[indices, cluster_key].values
+    unique_clusters, inverse_indices, counts = np.unique(
+        cluster_labels, return_inverse=True, return_counts=True
+    )
+    # Weight = 1 / frequency
+    weights_per_cluster = 1.0 / counts
+    sample_weights = weights_per_cluster[inverse_indices]
+    # Normalize so weights sum to len(sample_weights)
+    sample_weights = sample_weights / sample_weights.sum() * len(sample_weights)
+    return torch.DoubleTensor(sample_weights)
+
+
+def _create_train_loader(sig, v, x, device, batch_size=64, sample_weights=None, drop_last=True):
+    """
+    Helper to create PyTorch DataLoader.
+
+    Parameters
+    ----------
+    sig : np.ndarray
+        Sigmoid-transformed expression matrix
+    v : np.ndarray
+        Velocity matrix
+    x : np.ndarray
+        Expression matrix
+    device : str
+        Device for computation
+    batch_size : int
+        Batch size for training
+    sample_weights : np.ndarray, optional
+        Per-sample weights for WeightedRandomSampler. If provided,
+        weighted sampling is used instead of uniform sampling.
+    drop_last : bool, optional (default: True)
+        Drop the last incomplete batch to ensure consistent batch sizes
+    """
     dataset = CustomDataset(sig, v, x, device)
-    return torch.utils.data.DataLoader(dataset, batch_size=batch_size, shuffle=True)
+
+    # Clamp batch_size to dataset size
+    effective_batch_size = min(batch_size, len(dataset))
+
+    if sample_weights is not None:
+        sampler = WeightedRandomSampler(
+            weights=sample_weights,
+            num_samples=len(dataset),
+            replacement=True
+        )
+        return torch.utils.data.DataLoader(
+            dataset,
+            batch_size=effective_batch_size,
+            sampler=sampler,
+            drop_last=drop_last
+        )
+    else:
+        return torch.utils.data.DataLoader(
+            dataset,
+            batch_size=effective_batch_size,
+            shuffle=True,
+            drop_last=drop_last
+        )
