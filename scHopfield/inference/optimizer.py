@@ -171,7 +171,6 @@ class ScaffoldOptimizer(nn.Module):
                 patience=plateau_patience,
                 threshold=plateau_threshold,
                 min_lr=plateau_min_lr,
-                verbose=verbose
             )
             is_plateau_scheduler = True
         elif scheduler_fn is not None:
