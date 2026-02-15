@@ -30,6 +30,10 @@ def fit_interactions(
     skip_all: bool = False,
     use_scheduler: bool = False,
     scheduler_kws: Optional[Dict] = None,
+    use_plateau_scheduler: bool = False,
+    plateau_patience: int = 50,
+    plateau_factor: float = 0.5,
+    plateau_min_lr: float = 1e-6,
     get_plots: bool = False,
     copy: bool = False
 ) -> Optional[AnnData]:
@@ -76,9 +80,18 @@ def fit_interactions(
     skip_all : bool, optional (default: False)
         If True, skip fitting on all cells combined
     use_scheduler : bool, optional (default: False)
-        If True, use learning rate scheduler
+        If True, use StepLR learning rate scheduler
     scheduler_kws : dict, optional
-        Keyword arguments for scheduler
+        Keyword arguments for StepLR scheduler
+    use_plateau_scheduler : bool, optional (default: False)
+        If True, use ReduceLROnPlateau scheduler that decreases learning rate
+        when the loss plateaus. This overrides use_scheduler.
+    plateau_patience : int, optional (default: 50)
+        Number of epochs with no improvement after which learning rate will be reduced
+    plateau_factor : float, optional (default: 0.5)
+        Factor by which the learning rate will be reduced (new_lr = lr * factor)
+    plateau_min_lr : float, optional (default: 1e-6)
+        Minimum learning rate for plateau scheduler
     get_plots : bool, optional (default: False)
         If True, show training plots
     copy : bool, optional (default: False)
@@ -216,14 +229,28 @@ def _fit_interactions_for_cluster(
             pre_initialized_I=I
         )
         train_loader = _create_train_loader(sig, v, x, device, batch_size)
-        scheduler_fn = torch.optim.lr_scheduler.StepLR if use_scheduler else None
-        scheduler_kwargs = {"step_size": 100, "gamma": 0.4} if scheduler_kws == {} else scheduler_kws
+
+        # Set up scheduler - plateau scheduler takes precedence
+        if use_plateau_scheduler:
+            scheduler_fn = None  # Will use built-in plateau scheduler
+            scheduler_kwargs = {}
+        elif use_scheduler:
+            scheduler_fn = torch.optim.lr_scheduler.StepLR
+            scheduler_kwargs = {"step_size": 100, "gamma": 0.4} if scheduler_kws is None or scheduler_kws == {} else scheduler_kws
+        else:
+            scheduler_fn = None
+            scheduler_kwargs = {}
+
         model.train_model(
             train_loader, n_epochs,
             learning_rate=0.1,
             criterion=criterion,
             scheduler_fn=scheduler_fn,
             scheduler_kwargs=scheduler_kwargs,
+            use_plateau_scheduler=use_plateau_scheduler,
+            plateau_patience=plateau_patience,
+            plateau_factor=plateau_factor,
+            plateau_min_lr=plateau_min_lr,
             get_plots=get_plots
         )
         W = model.W.weight.detach().cpu().numpy()

@@ -103,9 +103,55 @@ class ScaffoldOptimizer(nn.Module):
         criterion: str = "L1",
         scheduler_fn=None,
         scheduler_kwargs={},
+        use_plateau_scheduler: bool = False,
+        plateau_patience: int = 50,
+        plateau_factor: float = 0.5,
+        plateau_min_lr: float = 1e-6,
+        plateau_threshold: float = 1e-4,
         get_plots=False,
         display_epoch=100,
+        verbose: bool = True,
     ):
+        """
+        Train the model.
+
+        Parameters
+        ----------
+        train_loader : DataLoader
+            Training data loader
+        epochs : int, optional (default: 1000)
+            Number of training epochs
+        learning_rate : float, optional (default: 0.001)
+            Initial learning rate
+        criterion : str, optional (default: "L1")
+            Loss function: "L1", "MSE", or "L2"
+        scheduler_fn : callable, optional
+            Learning rate scheduler function (ignored if use_plateau_scheduler=True)
+        scheduler_kwargs : dict, optional
+            Keyword arguments for scheduler_fn
+        use_plateau_scheduler : bool, optional (default: False)
+            If True, use ReduceLROnPlateau scheduler that decreases learning rate
+            when the loss plateaus. This overrides scheduler_fn.
+        plateau_patience : int, optional (default: 50)
+            Number of epochs with no improvement after which learning rate will be reduced
+        plateau_factor : float, optional (default: 0.5)
+            Factor by which the learning rate will be reduced (new_lr = lr * factor)
+        plateau_min_lr : float, optional (default: 1e-6)
+            Minimum learning rate
+        plateau_threshold : float, optional (default: 1e-4)
+            Threshold for measuring the new optimum
+        get_plots : bool, optional (default: False)
+            Show training plots
+        display_epoch : int, optional (default: 100)
+            Display progress every N epochs
+        verbose : bool, optional (default: True)
+            Print training progress
+
+        Returns
+        -------
+        tuple
+            (loss_history, reconstruction_loss_history)
+        """
         if scheduler_kwargs is None:
             scheduler_kwargs = {}
 
@@ -115,13 +161,32 @@ class ScaffoldOptimizer(nn.Module):
         loss_fn = loss_mapping[criterion]()
 
         optimizer = optim.Adam(self.parameters(), lr=learning_rate)
-        scheduler = scheduler_fn(optimizer, **scheduler_kwargs) if scheduler_fn else None
+
+        # Set up scheduler
+        if use_plateau_scheduler:
+            scheduler = optim.lr_scheduler.ReduceLROnPlateau(
+                optimizer,
+                mode='min',
+                factor=plateau_factor,
+                patience=plateau_patience,
+                threshold=plateau_threshold,
+                min_lr=plateau_min_lr,
+                verbose=verbose
+            )
+            is_plateau_scheduler = True
+        elif scheduler_fn is not None:
+            scheduler = scheduler_fn(optimizer, **scheduler_kwargs)
+            is_plateau_scheduler = False
+        else:
+            scheduler = None
+            is_plateau_scheduler = False
 
         loss_history, reconstruction_loss_history = [], []
+        lr_history = []
 
         mask_m = 1.0 - self.scaffold_raw
 
-        for epoch in tqdm(range(epochs), desc="Training Epochs"):
+        for epoch in tqdm(range(epochs), desc="Training Epochs", disable=not verbose):
             epoch_loss, epoch_reconstruction_loss = 0.0, 0.0
 
             for (s_batch, x_batch), target in train_loader:
@@ -141,18 +206,28 @@ class ScaffoldOptimizer(nn.Module):
                 epoch_loss += total_loss.item()
                 epoch_reconstruction_loss += reconstruction_loss.item()
 
-            if scheduler is not None:
-                scheduler.step()
-
             avg_loss = epoch_loss / len(train_loader)
             avg_reconstruction_loss = epoch_reconstruction_loss / len(train_loader)
             loss_history.append(avg_loss)
             reconstruction_loss_history.append(avg_reconstruction_loss)
 
-            if (epoch % display_epoch == 0) or (epoch == epochs - 1):
+            # Step the scheduler
+            if scheduler is not None:
+                if is_plateau_scheduler:
+                    # ReduceLROnPlateau needs the metric
+                    scheduler.step(avg_loss)
+                else:
+                    scheduler.step()
+
+            # Track learning rate
+            current_lr = optimizer.param_groups[0]['lr']
+            lr_history.append(current_lr)
+
+            if verbose and ((epoch % display_epoch == 0) or (epoch == epochs - 1)):
                 tqdm.write(f"[Epoch {epoch+1}/{epochs}] "
                            f"Total Loss: {avg_loss:.6f}, "
                            f"Reconstruction Loss: {avg_reconstruction_loss:.6f}, "
+                           f"LR: {current_lr:.2e}, "
                            f"Batch size: {s_batch.shape[0]}")
 
                 if get_plots:
@@ -167,5 +242,8 @@ class ScaffoldOptimizer(nn.Module):
 
                     axs[1].imshow(self.W.weight.detach().cpu().numpy())
                     plt.show()
+
+        # Store learning rate history
+        self.lr_history = lr_history
 
         return loss_history, reconstruction_loss_history
