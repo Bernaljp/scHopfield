@@ -73,6 +73,9 @@ def compute_hopfield_velocity(
             X = adata.X[:, genes]
         if issparse(X):
             X = X.toarray()
+    
+    cell_indices = np.where(adata.obs[cluster_key] == cluster)[0]
+    X = X[cell_indices]
 
     # Get model parameters for this cluster
     W_key = f'W_{cluster}'
