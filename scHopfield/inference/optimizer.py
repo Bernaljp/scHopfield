@@ -197,7 +197,8 @@ class ScaffoldOptimizer(nn.Module):
 
                 reconstruction_loss = loss_fn(output, target)
                 graph_constr_loss = self.scaffold_lambda * ((self.W.weight * mask_m).norm(2) + (self.W.weight * mask_m).norm(1))
-                bias_loss = (torch.abs(self.I) + 10).norm(2)
+                # bias_loss = (torch.abs(self.I) + 10).norm(2)
+                bias_loss = torch.abs(self.I).norm(2)
                 total_loss = reconstruction_loss + graph_constr_loss + bias_loss
 
                 total_loss.backward()

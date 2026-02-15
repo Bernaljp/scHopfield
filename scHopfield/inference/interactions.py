@@ -28,6 +28,7 @@ def fit_interactions(
     batch_size: int = 64,
     device: str = 'cpu',
     skip_all: bool = False,
+    learning_rate: float = 0.1,
     use_scheduler: bool = False,
     scheduler_kws: Optional[Dict] = None,
     use_plateau_scheduler: bool = False,
@@ -79,6 +80,8 @@ def fit_interactions(
         Device for computation: 'cpu' or 'cuda'
     skip_all : bool, optional (default: False)
         If True, skip fitting on all cells combined
+    learning_rate : float, optional (default: 0.1)
+        Initial learning rate for training
     use_scheduler : bool, optional (default: False)
         If True, use StepLR learning rate scheduler
     scheduler_kws : dict, optional
@@ -165,9 +168,14 @@ def fit_interactions(
             criterion=criterion,
             batch_size=batch_size,
             device=device,
+            learning_rate=learning_rate,
             use_scheduler=use_scheduler,
             scheduler_kws=scheduler_kws,
-            get_plots=get_plots
+            get_plots=get_plots,
+            use_plateau_scheduler=use_plateau_scheduler,
+            plateau_patience=plateau_patience,
+            plateau_factor=plateau_factor,
+            plateau_min_lr=plateau_min_lr,
         )
 
     return adata if copy else None
@@ -191,8 +199,13 @@ def _fit_interactions_for_cluster(
     criterion: str,
     batch_size: int,
     device: str,
+    learning_rate: float,
     use_scheduler: bool,
     scheduler_kws: Optional[Dict],
+    use_plateau_scheduler: bool,
+    plateau_patience: int,
+    plateau_factor: float,
+    plateau_min_lr: float,
     get_plots: bool
 ):
     """
@@ -243,7 +256,7 @@ def _fit_interactions_for_cluster(
 
         model.train_model(
             train_loader, n_epochs,
-            learning_rate=0.1,
+            learning_rate=learning_rate,
             criterion=criterion,
             scheduler_fn=scheduler_fn,
             scheduler_kwargs=scheduler_kwargs,
