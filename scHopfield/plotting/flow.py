@@ -36,7 +36,8 @@ def compute_hopfield_velocity(
     adata: AnnData,
     cluster: str,
     X: Optional[np.ndarray] = None,
-    spliced_key: str = 'Ms'
+    spliced_key: str = 'Ms',
+    cluster_key: str = 'cell_type',
 ) -> np.ndarray:
     """
     Compute velocity using the Hopfield model dynamics.
