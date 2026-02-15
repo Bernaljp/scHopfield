@@ -49,6 +49,8 @@ class ScaffoldOptimizer(nn.Module):
         device: torch.device,
         refit_gamma: bool = False,
         scaffold_regularization: float = 1.0,
+        reconstruction_regularization: float = 1.0,
+        bias_regularization: float = 1.0,
         use_masked_linear: bool = False,
         pre_initialized_W: torch.Tensor = None,
         pre_initialized_I: torch.Tensor = None,
@@ -68,6 +70,9 @@ class ScaffoldOptimizer(nn.Module):
         self.register_buffer("scaffold", scaffold_tfs)
 
         self.scaffold_lambda = scaffold_regularization
+        self.reconstruction_lambda = reconstruction_regularization
+        self.bias_lambda = bias_regularization
+        
         n = g.shape[0]
 
         init_I = torch.rand((n,), device=device) if pre_initialized_I is None else torch.tensor(pre_initialized_I, dtype=torch.float32, device=device)
@@ -194,10 +199,10 @@ class ScaffoldOptimizer(nn.Module):
                 optimizer.zero_grad()
                 output = self((s_batch, x_batch))
 
-                reconstruction_loss = loss_fn(output, target)
+                reconstruction_loss = self.reconstruction_lambda * loss_fn(output, target)
                 graph_constr_loss = self.scaffold_lambda * ((self.W.weight * mask_m).norm(2) + (self.W.weight * mask_m).norm(1))
                 # bias_loss = (torch.abs(self.I) + 10).norm(2)
-                bias_loss = torch.abs(self.I).norm(2)
+                bias_loss = self.bias_lambda * torch.abs(self.I).norm(2)
                 total_loss = reconstruction_loss + graph_constr_loss + bias_loss
 
                 total_loss.backward()
