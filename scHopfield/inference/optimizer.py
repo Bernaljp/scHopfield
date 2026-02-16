@@ -51,6 +51,7 @@ class ScaffoldOptimizer(nn.Module):
         scaffold_regularization: float = 1.0,
         reconstruction_regularization: float = 1.0,
         bias_regularization: float = 1.0,
+        bias_basis: float = 0.0,
         use_masked_linear: bool = False,
         pre_initialized_W: torch.Tensor = None,
         pre_initialized_I: torch.Tensor = None,
@@ -207,12 +208,10 @@ class ScaffoldOptimizer(nn.Module):
                 if self.normalize_regularization:
                     batch_size = s_batch.shape[0]
                     graph_constr_loss = self.scaffold_lambda * ((self.W.weight * mask_m).norm(2) + (self.W.weight * mask_m).norm(1)) / batch_size
-                    # bias_loss = self.bias_lambda * torch.abs(self.I).norm(2) / batch_size
-                    bias_loss = self.bias_lambda * torch.abs(self.I+10).norm(2) / batch_size
+                    bias_loss = self.bias_lambda * torch.abs(self.I+self.bias_bias).norm(2) / batch_size
                 else:
                     graph_constr_loss = self.scaffold_lambda * ((self.W.weight * mask_m).norm(2) + (self.W.weight * mask_m).norm(1))
-                    # bias_loss = self.bias_lambda * torch.abs(self.I).norm(2)
-                    bias_loss = self.bias_lambda * torch.abs(self.I+10).norm(2)
+                    bias_loss = self.bias_lambda * torch.abs(self.I+self.bias_bias).norm(2)
 
                 total_loss = reconstruction_loss + graph_constr_loss + bias_loss
 

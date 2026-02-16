@@ -205,6 +205,7 @@ def fit_interactions(
     scaffold_regularization: float = 1.0,
     reconstruction_regularization: float = 1.0,
     bias_regularization: float = 1.0,
+    bias_bias: float = 0.0,
     only_TFs: bool = False,
     infer_I: bool = False,
     refit_gamma: bool = False,
@@ -257,6 +258,12 @@ def fit_interactions(
         Binary scaffold matrix constraining network topology
     scaffold_regularization : float, optional (default: 1.0)
         Regularization strength for scaffold constraint
+    reconstruction_regularization : float, optional (default: 1.0)
+        Regularization strength for reconstruction loss
+    bias_regularization : float, optional (default: 1.0)
+        Regularization strength for bias vector
+    bias_bias : float, optional (default: 0.0)
+        Additional bias term to encourage bias values (e.g., negative bias_bias encourages more positive biases)
     only_TFs : bool, optional (default: False)
         If True, use masked linear layer (requires w_scaffold)
     infer_I : bool, optional (default: False)
@@ -433,6 +440,7 @@ def fit_interactions(
                     scaffold_regularization=scaffold_regularization,
                     reconstruction_regularization=reconstruction_regularization,
                     bias_regularization=bias_regularization,
+                    bias_bias=bias_bias,
                     only_TFs=only_TFs,
                     infer_I=infer_I,
                     refit_gamma=refit_gamma,
@@ -493,6 +501,7 @@ def fit_interactions(
                 scaffold_regularization=scaffold_regularization,
                 reconstruction_regularization=reconstruction_regularization,
                 bias_regularization=bias_regularization,
+                bias_bias=bias_bias,
                 only_TFs=only_TFs,
                 infer_I=infer_I,
                 refit_gamma=refit_gamma,
@@ -531,6 +540,7 @@ def _fit_interactions_for_cluster(
     scaffold_regularization: float,
     reconstruction_regularization: float,
     bias_regularization: float,
+    bias_bias: float,
     only_TFs: bool,
     infer_I: bool,
     refit_gamma: bool,
@@ -589,6 +599,7 @@ def _fit_interactions_for_cluster(
             scaffold_regularization=scaffold_regularization,
             reconstruction_regularization=reconstruction_regularization,
             bias_regularization=bias_regularization,
+            bias_bias=bias_bias,
             use_masked_linear=only_TFs,
             pre_initialized_W=W,
             pre_initialized_I=I,
