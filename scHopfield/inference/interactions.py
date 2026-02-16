@@ -1,5 +1,6 @@
 """Inference of gene regulatory network interactions."""
 
+import math
 import numpy as np
 import torch
 from torch.utils.data import WeightedRandomSampler
@@ -72,6 +73,79 @@ def _build_hierarchy_levels(
             levels.append((fine_key, fine_clusters, fine_to_coarse))
 
     return levels
+
+
+def _get_cluster_with_neighbors(adata, cluster_idx, neighbors_key='connectivities'):
+    """
+    Expand cluster selection to include neighboring cells.
+
+    Parameters
+    ----------
+    adata : AnnData
+        Annotated data object
+    cluster_idx : np.ndarray
+        Boolean array of cells in the cluster
+    neighbors_key : str
+        Key in adata.obsp for connectivity matrix
+
+    Returns
+    -------
+    np.ndarray
+        Boolean array including cluster cells and their neighbors
+    """
+    import scanpy as sc
+    from scipy import sparse
+
+    # Get or compute connectivity matrix
+    if neighbors_key not in adata.obsp:
+        print(f"  Computing neighbors ('{neighbors_key}' not found in adata.obsp)")
+        sc.pp.neighbors(adata)
+
+    conn = adata.obsp[neighbors_key]
+
+    # Get indices of cluster cells
+    cluster_cell_indices = np.where(cluster_idx)[0]
+
+    # Find all neighbors of cluster cells
+    if sparse.issparse(conn):
+        # Get rows for cluster cells, find non-zero columns (neighbors)
+        neighbor_rows = conn[cluster_cell_indices, :]
+        neighbor_indices = set(neighbor_rows.nonzero()[1])
+    else:
+        neighbor_indices = set()
+        for i in cluster_cell_indices:
+            neighbor_indices.update(np.where(conn[i, :] > 0)[0])
+
+    # Create expanded boolean mask
+    expanded_idx = cluster_idx.copy()
+    for ni in neighbor_indices:
+        expanded_idx[ni] = True
+
+    n_original = cluster_idx.sum()
+    n_expanded = expanded_idx.sum()
+    n_neighbors = n_expanded - n_original
+    print(f"  Including {n_neighbors} neighboring cells ({n_original} cluster + {n_neighbors} neighbors = {n_expanded} total)")
+
+    return expanded_idx
+
+
+def _compute_child_lr(parent_final_lr, base_lr):
+    """
+    Compute child learning rate from parent's final LR.
+
+    Uses exponent halving: if parent ended at 1e-8 (exp=-8),
+    child starts at 1e-4 (exp=-4, half of -8).
+
+    Returns base_lr if parent_final_lr is None.
+    """
+    if parent_final_lr is None or parent_final_lr <= 0:
+        return base_lr
+
+    parent_exp = math.log10(parent_final_lr)  # e.g., -8 for 1e-8
+    child_exp = parent_exp / 2  # e.g., -4
+    child_lr = 10 ** child_exp  # e.g., 1e-4
+
+    return child_lr
 
 
 def _get_parent_params(
@@ -154,6 +228,9 @@ def fit_interactions(
     drop_last: bool = True,
     balanced_sampling: bool = False,
     normalize_regularization: bool = False,
+    include_neighbors: bool = False,
+    neighbors_key: str = 'connectivities',
+    hierarchical_scaling: bool = False,
     copy: bool = False
 ) -> Optional[AnnData]:
     """
@@ -238,6 +315,19 @@ def fit_interactions(
         If True, normalize scaffold and bias regularization losses by batch size.
         This keeps regularization balanced with reconstruction loss when batch
         sizes vary. Alternative to drop_last for handling batch inconsistency.
+    include_neighbors : bool, optional (default: False)
+        If True, include neighboring cells (from any cluster) when training
+        cluster-specific models. Neighbors are determined from the connectivity
+        matrix. Only applies to non-'all' clusters.
+    neighbors_key : str, optional (default: 'connectivities')
+        Key in adata.obsp containing the cell-cell connectivity matrix.
+        If not found, neighbors will be computed using scanpy.
+    hierarchical_scaling : bool, optional (default: False)
+        If True and hierarchical_pretrain=True, use half epochs for pretraining
+        levels (all levels except the finest) and adjust initial learning rate
+        based on parent's final learning rate. Child levels start with LR
+        exponent = parent_final_lr_exponent / 2 (e.g., parent ends at 1e-8,
+        child starts at 1e-4).
     copy : bool, optional (default: False)
         If True, return a copy instead of modifying in-place
 
@@ -281,6 +371,9 @@ def fit_interactions(
         adata.uns['scHopfield']['hierarchy_levels'] = [(l[0], l[1]) for l in levels]
 
         for level_idx, (level_key, clusters, parent_mapping) in enumerate(levels):
+            # Determine if this is a pretraining level (not the final level)
+            is_final_level = (level_idx == len(levels) - 1)
+
             print(f"\n{'='*60}")
             print(f"=== Training Level {level_idx}: {level_key} ({len(clusters)} clusters) ===")
             print(f"{'='*60}")
@@ -300,6 +393,9 @@ def fit_interactions(
                     idx = np.ones(adata.n_obs, dtype=bool)
                 else:
                     idx = adata.obs[level_key].values == cluster
+                    # Include neighbors if requested
+                    if include_neighbors:
+                        idx = _get_cluster_with_neighbors(adata, idx, neighbors_key)
 
                 # Use parent gamma if available, otherwise use default
                 cluster_g = parent_gamma if parent_gamma is not None else g
@@ -308,6 +404,21 @@ def fit_interactions(
                 cluster_weights = None
                 if balanced_sampling and cluster == 'all':
                     cluster_weights = _compute_cluster_weights(adata, idx, cluster_key)
+
+                # Compute epochs for this level
+                level_epochs = n_epochs
+                if hierarchical_scaling and not is_final_level:
+                    level_epochs = max(1, n_epochs // 2)
+                    print(f"  Using {level_epochs} epochs (half for pretraining)")
+
+                # Compute learning rate from parent's final LR
+                level_lr = learning_rate
+                if hierarchical_scaling and parent_cluster is not None:
+                    parent_final_lr_key = f'final_lr_{parent_cluster}'
+                    if parent_final_lr_key in adata.uns['scHopfield']:
+                        parent_final_lr = adata.uns['scHopfield'][parent_final_lr_key]
+                        level_lr = _compute_child_lr(parent_final_lr, learning_rate)
+                        print(f"  Starting LR: {level_lr:.2e} (from parent final {parent_final_lr:.2e})")
 
                 # Fit interactions for this cluster
                 _fit_interactions_for_cluster(
@@ -326,11 +437,11 @@ def fit_interactions(
                     infer_I=infer_I,
                     refit_gamma=refit_gamma,
                     pre_initialize_W=pre_initialize_W,
-                    n_epochs=n_epochs,
+                    n_epochs=level_epochs,
                     criterion=criterion,
                     batch_size=batch_size,
                     device=device,
-                    learning_rate=learning_rate,
+                    learning_rate=level_lr,
                     use_scheduler=use_scheduler,
                     scheduler_kws=scheduler_kws,
                     get_plots=get_plots,
@@ -344,6 +455,13 @@ def fit_interactions(
                     drop_last=drop_last,
                     normalize_regularization=normalize_regularization,
                 )
+
+                # Store final learning rate if using scaffold (for hierarchical_scaling)
+                if hierarchical_scaling and w_scaffold is not None:
+                    model = adata.uns['scHopfield']['models'].get(cluster)
+                    if model is not None and hasattr(model, 'lr_history') and model.lr_history:
+                        final_lr = model.lr_history[-1]
+                        adata.uns['scHopfield'][f'final_lr_{cluster}'] = final_lr
     else:
         # Original non-hierarchical behavior
         clusters = adata.obs[cluster_key].unique()
@@ -358,6 +476,9 @@ def fit_interactions(
                 idx = np.ones(adata.n_obs, dtype=bool)
             else:
                 idx = adata.obs[cluster_key].values == cluster
+                # Include neighbors if requested
+                if include_neighbors:
+                    idx = _get_cluster_with_neighbors(adata, idx, neighbors_key)
 
             # Fit interactions for this cluster
             _fit_interactions_for_cluster(
