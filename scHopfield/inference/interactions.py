@@ -90,8 +90,11 @@ def _get_cluster_with_neighbors(adata, cluster_idx, neighbors_key='connectivitie
 
     Returns
     -------
-    np.ndarray
-        Boolean array including cluster cells and their neighbors
+    tuple
+        (expanded_idx, is_neighbor) where:
+        - expanded_idx: Boolean array including cluster cells and neighbors
+        - is_neighbor: Boolean array (same size as expanded_idx.sum()) where
+          True indicates the cell is a neighbor, False indicates cluster member
     """
     import scanpy as sc
     from scipy import sparse
@@ -126,7 +129,16 @@ def _get_cluster_with_neighbors(adata, cluster_idx, neighbors_key='connectivitie
     n_neighbors = n_expanded - n_original
     print(f"  Including {n_neighbors} neighboring cells ({n_original} cluster + {n_neighbors} neighbors = {n_expanded} total)")
 
-    return expanded_idx
+    # Create is_neighbor mask for the expanded selection
+    # Mark which indices in the expanded set are neighbors
+    expanded_cell_indices = np.where(expanded_idx)[0]
+    original_cluster_indices = set(np.where(cluster_idx)[0])
+    is_neighbor = np.zeros(expanded_idx.sum(), dtype=bool)
+    for i, cell_idx in enumerate(expanded_cell_indices):
+        if cell_idx not in original_cluster_indices:
+            is_neighbor[i] = True
+
+    return expanded_idx, is_neighbor
 
 
 def _compute_child_lr(parent_final_lr, base_lr):
@@ -231,6 +243,7 @@ def fit_interactions(
     normalize_regularization: bool = False,
     include_neighbors: bool = False,
     neighbors_key: str = 'connectivities',
+    neighbor_fraction: float = 0.0,
     hierarchical_scaling: bool = False,
     copy: bool = False
 ) -> Optional[AnnData]:
@@ -329,6 +342,11 @@ def fit_interactions(
     neighbors_key : str, optional (default: 'connectivities')
         Key in adata.obsp containing the cell-cell connectivity matrix.
         If not found, neighbors will be computed using scanpy.
+    neighbor_fraction : float, optional (default: 0.0)
+        Fraction of each training batch that should come from neighboring cells
+        (cells not in the cluster but connected via the neighbor graph).
+        Only applies when include_neighbors=True. Value must be in [0.0, 1.0).
+        Example: 0.2 means 20% of each batch are neighbors, 80% cluster cells.
     hierarchical_scaling : bool, optional (default: False)
         If True and hierarchical_pretrain=True, use half epochs for pretraining
         levels (all levels except the finest) and adjust initial learning rate
@@ -398,11 +416,13 @@ def fit_interactions(
                 # Get cluster indices
                 if cluster == 'all':
                     idx = np.ones(adata.n_obs, dtype=bool)
+                    is_neighbor = None
                 else:
                     idx = adata.obs[level_key].values == cluster
+                    is_neighbor = None
                     # Include neighbors if requested
                     if include_neighbors:
-                        idx = _get_cluster_with_neighbors(adata, idx, neighbors_key)
+                        idx, is_neighbor = _get_cluster_with_neighbors(adata, idx, neighbors_key)
 
                 # Use parent gamma if available, otherwise use default
                 cluster_g = parent_gamma if parent_gamma is not None else g
@@ -462,6 +482,8 @@ def fit_interactions(
                     sample_weights=cluster_weights,
                     drop_last=drop_last,
                     normalize_regularization=normalize_regularization,
+                    is_neighbor=is_neighbor,
+                    neighbor_fraction=neighbor_fraction,
                 )
 
                 # Store final learning rate if using scaffold (for hierarchical_scaling)
@@ -482,11 +504,13 @@ def fit_interactions(
             # Get cluster indices
             if cluster == 'all':
                 idx = np.ones(adata.n_obs, dtype=bool)
+                is_neighbor = None
             else:
                 idx = adata.obs[cluster_key].values == cluster
+                is_neighbor = None
                 # Include neighbors if requested
                 if include_neighbors:
-                    idx = _get_cluster_with_neighbors(adata, idx, neighbors_key)
+                    idx, is_neighbor = _get_cluster_with_neighbors(adata, idx, neighbors_key)
 
             # Fit interactions for this cluster
             _fit_interactions_for_cluster(
@@ -523,6 +547,8 @@ def fit_interactions(
                 sample_weights=None,
                 drop_last=drop_last,
                 normalize_regularization=normalize_regularization,
+                is_neighbor=is_neighbor,
+                neighbor_fraction=neighbor_fraction,
             )
 
     return adata if copy else None
@@ -562,6 +588,8 @@ def _fit_interactions_for_cluster(
     sample_weights: Optional[np.ndarray] = None,
     drop_last: bool = True,
     normalize_regularization: bool = False,
+    is_neighbor: Optional[np.ndarray] = None,
+    neighbor_fraction: float = 0.0,
 ):
     """
     Fit interaction matrix W and bias I for a single cluster.
@@ -608,7 +636,9 @@ def _fit_interactions_for_cluster(
         train_loader = _create_train_loader(
             sig, v, x, device, batch_size,
             sample_weights=sample_weights,
-            drop_last=drop_last
+            drop_last=drop_last,
+            is_neighbor=is_neighbor,
+            neighbor_fraction=neighbor_fraction,
         )
 
         # Set up scheduler - plateau scheduler takes precedence
@@ -690,7 +720,74 @@ def _compute_cluster_weights(adata, indices, cluster_key):
     return torch.DoubleTensor(sample_weights)
 
 
-def _create_train_loader(sig, v, x, device, batch_size=64, sample_weights=None, drop_last=True):
+class ControlledNeighborBatchSampler:
+    """
+    Batch sampler that ensures each batch has a controlled composition
+    of cluster cells vs neighbor cells.
+
+    Parameters
+    ----------
+    n_samples : int
+        Total number of samples in dataset
+    batch_size : int
+        Size of each batch
+    is_neighbor : np.ndarray
+        Boolean array where True = neighbor, False = cluster cell
+    neighbor_fraction : float
+        Target fraction of neighbors in each batch (0.0 to 1.0)
+    drop_last : bool
+        Whether to drop the last incomplete batch
+    """
+
+    def __init__(self, n_samples, batch_size, is_neighbor, neighbor_fraction, drop_last=True):
+        self.batch_size = batch_size
+        self.neighbor_fraction = neighbor_fraction
+        self.drop_last = drop_last
+
+        self.cluster_indices = np.where(~is_neighbor)[0]
+        self.neighbor_indices = np.where(is_neighbor)[0]
+
+        # Compute number of batches
+        if drop_last:
+            self.n_batches = n_samples // batch_size
+        else:
+            self.n_batches = (n_samples + batch_size - 1) // batch_size
+
+    def __iter__(self):
+        n_neighbor_per_batch = int(self.batch_size * self.neighbor_fraction)
+        n_cluster_per_batch = self.batch_size - n_neighbor_per_batch
+
+        for _ in range(self.n_batches):
+            batch = []
+
+            # Sample cluster cells (with replacement if needed)
+            if len(self.cluster_indices) > 0:
+                cluster_samples = np.random.choice(
+                    self.cluster_indices,
+                    size=n_cluster_per_batch,
+                    replace=True
+                )
+                batch.extend(cluster_samples.tolist())
+
+            # Sample neighbor cells (with replacement if needed)
+            if len(self.neighbor_indices) > 0 and n_neighbor_per_batch > 0:
+                neighbor_samples = np.random.choice(
+                    self.neighbor_indices,
+                    size=n_neighbor_per_batch,
+                    replace=True
+                )
+                batch.extend(neighbor_samples.tolist())
+
+            # Shuffle the batch so neighbors aren't always at the end
+            np.random.shuffle(batch)
+            yield batch
+
+    def __len__(self):
+        return self.n_batches
+
+
+def _create_train_loader(sig, v, x, device, batch_size=64, sample_weights=None, drop_last=True,
+                         is_neighbor=None, neighbor_fraction=0.0):
     """
     Helper to create PyTorch DataLoader.
 
@@ -711,13 +808,31 @@ def _create_train_loader(sig, v, x, device, batch_size=64, sample_weights=None, 
         weighted sampling is used instead of uniform sampling.
     drop_last : bool, optional (default: True)
         Drop the last incomplete batch to ensure consistent batch sizes
+    is_neighbor : np.ndarray, optional
+        Boolean array indicating which samples are neighbors (vs cluster cells).
+        Required if neighbor_fraction > 0.
+    neighbor_fraction : float, optional (default: 0.0)
+        Target fraction of neighbors per batch. If > 0, uses ControlledNeighborBatchSampler.
     """
     dataset = CustomDataset(sig, v, x, device)
 
     # Clamp batch_size to dataset size
     effective_batch_size = min(batch_size, len(dataset))
 
-    if sample_weights is not None:
+    # Controlled neighbor sampling takes precedence
+    if neighbor_fraction > 0 and is_neighbor is not None:
+        batch_sampler = ControlledNeighborBatchSampler(
+            n_samples=len(dataset),
+            batch_size=effective_batch_size,
+            is_neighbor=is_neighbor,
+            neighbor_fraction=neighbor_fraction,
+            drop_last=drop_last
+        )
+        return torch.utils.data.DataLoader(
+            dataset,
+            batch_sampler=batch_sampler
+        )
+    elif sample_weights is not None:
         sampler = WeightedRandomSampler(
             weights=sample_weights,
             num_samples=len(dataset),

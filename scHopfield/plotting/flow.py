@@ -24,7 +24,7 @@ from typing import Optional, List, Dict, Tuple, Union
 from anndata import AnnData
 from scipy.sparse import issparse
 
-from .._utils.io import get_genes_used
+from .._utils.io import get_genes_used, get_matrix, to_numpy
 from .._utils.math import sigmoid
 
 
@@ -33,76 +33,74 @@ from .._utils.math import sigmoid
 # =============================================================================
 
 def compute_hopfield_velocity(
-    adata: AnnData,
-    cluster: str,
+    adata: Optional[AnnData] = None,
+    cluster: Optional[str] = None,
     X: Optional[np.ndarray] = None,
+    W: Optional[np.ndarray] = None,
+    gamma: Optional[np.ndarray] = None,
+    I: Optional[np.ndarray] = None,
+    exponent: Optional[np.ndarray] = None,
+    threshold: Optional[np.ndarray] = None,
     spliced_key: str = 'Ms',
     cluster_key: str = 'cell_type',
 ) -> np.ndarray:
     """
-    Compute velocity using the Hopfield model dynamics.
-
-    Calculates: velocity = W @ sigmoid(X) - gamma * X + I
-
-    This is the instantaneous rate of change predicted by the fitted
-    Hopfield network for each cell's expression state.
-
-    Parameters
-    ----------
-    adata : AnnData
-        Annotated data with fitted interactions (W, I, sigmoid params)
-    cluster : str
-        Cluster name to use for getting W and I matrices
-    X : np.ndarray, optional
-        Expression matrix (n_cells, n_genes). If None, uses adata.layers[spliced_key]
-    spliced_key : str, optional (default: 'Ms')
-        Key for expression data if X is not provided
-
-    Returns
-    -------
-    np.ndarray
-        Velocity matrix (n_cells, n_genes)
+    Compute velocity using: dX/dt = sigmoid(X) @ W.T - gamma * X + I
     """
-    genes = get_genes_used(adata)
-    gene_names = adata.var.index[genes]
-
-    # Get expression matrix
-    if X is None:
-        if spliced_key in adata.layers:
-            X = adata.layers[spliced_key][:, genes]
-        else:
-            X = adata.X[:, genes]
-        if issparse(X):
-            X = X.toarray()
-    
-    cell_indices = np.where(adata.obs[cluster_key] == cluster)[0]
-    X = X[cell_indices]
-
-    # Get model parameters for this cluster
-    W_key = f'W_{cluster}'
-    I_key = f'I_{cluster}'
-
-    if W_key not in adata.varp:
-        raise ValueError(f"Interaction matrix {W_key} not found. Run fit_interactions first.")
-
-    W = adata.varp[W_key][np.ix_(genes, genes)]
-    I = adata.var[I_key][genes].values if I_key in adata.var else np.zeros(genes.sum())
-
-    # Get sigmoid parameters
-    threshold = adata.var.loc[gene_names, 'sigmoid_threshold'].values
-    exponent = adata.var.loc[gene_names, 'sigmoid_exponent'].values
-
-    # Get gamma
-    if 'gamma' in adata.var.columns:
-        gamma = adata.var.loc[gene_names, 'gamma'].values
+    # 1. Handle Gene Selection and Sigmoid Params
+    if adata is not None:
+        # Use only genes used in scHopfield if available
+        genes_mask = get_genes_used(adata)
+        gene_names = adata.var.index[genes_mask]
+        
+        # Priority: Passed argument > adata column
+        threshold = threshold if threshold is not None else adata.var.loc[gene_names, 'sigmoid_threshold'].values
+        exponent = exponent if exponent is not None else adata.var.loc[gene_names, 'sigmoid_exponent'].values
+        
+        # Gamma handling
+        if gamma is None:
+            gamma_key = f'gamma_{cluster}' if cluster and f'gamma_{cluster}' in adata.var else 'gamma'
+            gamma = adata.var.loc[gene_names, gamma_key].values if gamma_key in adata.var else np.ones(len(gene_names))
     else:
-        gamma = np.ones(len(gene_names))
+        if any(p is None for p in [X, W, threshold, exponent, gamma]):
+            raise ValueError("If adata is None, you must provide X, W, threshold, exponent, and gamma.")
+        gene_names = None # Not needed if adata is None
 
-    # Compute sigmoid activation
+    # 2. Get Expression Data (X) and determine cluster indices
+    if X is None:
+        if cluster is None or cluster == 'all':
+            cell_indices = slice(None)
+            cluster = 'all'
+        else:
+            cell_indices = adata.obs[cluster_key] == cluster
+        
+        X = get_matrix(adata, spliced_key, genes=genes_mask)
+        X = to_numpy(X[cell_indices])
+
+    # 3. Handle W and I (Interaction and Bias)
+    if adata is not None:
+        W_key = f'W_{cluster}' if cluster else 'W_all'
+        I_key = f'I_{cluster}' if cluster else 'I_all'
+        
+        W = W if W is not None else adata.varp[W_key]
+        # If W is the full varp matrix, slice it to the genes used
+        if W.shape[0] == adata.n_vars:
+            W = W[np.ix_(genes_mask, genes_mask)]
+            
+        if I is None:
+            I = adata.var.loc[gene_names, I_key].values if I_key in adata.var else np.zeros(X.shape[1])
+    
+    # Final Sanity check for I
+    if I is None: I = np.zeros(X.shape[1])
+
+    # 4. Compute Dynamics
+    # sig_X shape: (n_cells, n_genes)
     sig_X = sigmoid(X, threshold, exponent)
 
-    # Compute velocity: dX/dt = W @ sigmoid(X) - gamma * X + I
-    velocity = sig_X @ W.T - gamma * X + I
+    # velocity = [n_cells, n_genes] @ [n_genes, n_genes] - [n_genes] * [n_cells, n_genes] + [n_genes]
+    # sig_X @ W.T handles the interaction term
+    # gamma * X and + I handle the degradation and bias terms via broadcasting
+    velocity = (sig_X @ W.T) - (gamma * X) + I
 
     return velocity
 
@@ -113,76 +111,44 @@ def compute_hopfield_velocity_delta(
     use_cluster_specific_GRN: bool = True,
     spliced_key: str = 'Ms'
 ) -> np.ndarray:
-    """
-    Compute delta velocity (perturbed - original) using Hopfield model.
-
-    This computes the difference between velocity at perturbed state
-    and velocity at original state, using the Hopfield dynamics directly.
-
-    Parameters
-    ----------
-    adata : AnnData
-        Annotated data with 'simulated_count' (perturbed expression) from simulate_shift
-    cluster_key : str, optional (default: 'cell_type')
-        Key for cluster labels
-    use_cluster_specific_GRN : bool, optional (default: True)
-        Whether to use cluster-specific interaction matrices
-    spliced_key : str, optional (default: 'Ms')
-        Key for original expression data
-
-    Returns
-    -------
-    np.ndarray
-        Delta velocity matrix (n_cells, n_genes)
-    """
-    # Check for perturbed expression layer (simulated_count from simulate_shift)
+    
     if 'simulated_count' not in adata.layers:
-        raise ValueError("simulated_count not found. Run simulate_shift first.")
+        raise ValueError("simulated_count not found in adata.layers. Run simulate_shift first.")
 
-    genes = get_genes_used(adata)
+    genes_mask = get_genes_used(adata)
+    
+    # 1. Get raw matrices once to avoid repeated sparse-to-dense conversion
+    X_orig = to_numpy(get_matrix(adata, spliced_key, genes=genes_mask))
+    X_pert = to_numpy(get_matrix(adata, 'simulated_count', genes=genes_mask))
+    
+    delta_velocity = np.zeros_like(X_orig)
 
-    # Get original and perturbed expression
-    if spliced_key in adata.layers:
-        X_original = adata.layers[spliced_key][:, genes]
-    else:
-        X_original = adata.X[:, genes]
-    if issparse(X_original):
-        X_original = X_original.toarray()
-
-    X_perturbed = adata.layers['simulated_count'][:, genes]
-    if issparse(X_perturbed):
-        X_perturbed = X_perturbed.toarray()
-
-    n_cells = adata.n_obs
-    n_genes = len(genes)
-    delta_velocity = np.zeros((n_cells, n_genes))
-
+    # 2. Determine clusters to iterate over
     if use_cluster_specific_GRN:
         clusters = adata.obs[cluster_key].unique()
-
-        for cluster in clusters:
-            mask = adata.obs[cluster_key] == cluster
-            cell_indices = np.where(mask)[0]
-
-            # Compute velocities for this cluster
-            v_original = compute_hopfield_velocity(
-                adata, cluster, X=X_original[mask], spliced_key=spliced_key
-            )
-            v_perturbed = compute_hopfield_velocity(
-                adata, cluster, X=X_perturbed[mask], spliced_key=spliced_key
-            )
-
-            delta_velocity[cell_indices] = v_perturbed - v_original
     else:
-        # Use global/all cluster
-        cluster = 'all'
-        if f'W_{cluster}' not in adata.varp:
-            # Fall back to first cluster
-            cluster = adata.obs[cluster_key].unique()[0]
+        # Check for 'all' or default to a global key if available
+        clusters = ['all'] if f'W_all' in adata.varp else []
+        if not clusters:
+            raise ValueError("Global GRN ('W_all') not found. Set use_cluster_specific_GRN=True.")
 
-        v_original = compute_hopfield_velocity(adata, cluster, X=X_original, spliced_key=spliced_key)
-        v_perturbed = compute_hopfield_velocity(adata, cluster, X=X_perturbed, spliced_key=spliced_key)
-        delta_velocity = v_perturbed - v_original
+    # 3. Compute deltas per cluster
+    for cluster in clusters:
+        mask = np.ones(adata.n_obs, dtype=bool) if cluster == 'all' else (adata.obs[cluster_key] == cluster)
+        
+        if not np.any(mask):
+            continue
+
+        # We pass the already-sliced X matrices and explicit cluster name
+        # We set adata=adata so the helper can still grab W, I, and Sigmoid params
+        v_orig = compute_hopfield_velocity(
+            adata=adata, cluster=cluster, X=X_orig[mask], genes=genes_mask
+        )
+        v_pert = compute_hopfield_velocity(
+            adata=adata, cluster=cluster, X=X_pert[mask], genes=genes_mask
+        )
+
+        delta_velocity[mask] = v_pert - v_orig
 
     return delta_velocity
 
