@@ -142,10 +142,10 @@ def compute_hopfield_velocity_delta(
         # We pass the already-sliced X matrices and explicit cluster name
         # We set adata=adata so the helper can still grab W, I, and Sigmoid params
         v_orig = compute_hopfield_velocity(
-            adata=adata, cluster=cluster, X=X_orig[mask], genes=genes_mask
+            adata=adata, cluster=cluster, X=X_orig[mask],
         )
         v_pert = compute_hopfield_velocity(
-            adata=adata, cluster=cluster, X=X_pert[mask], genes=genes_mask
+            adata=adata, cluster=cluster, X=X_pert[mask],
         )
 
         delta_velocity[mask] = v_pert - v_orig
