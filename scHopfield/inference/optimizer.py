@@ -51,7 +51,7 @@ class ScaffoldOptimizer(nn.Module):
         scaffold_regularization: float = 1.0,
         reconstruction_regularization: float = 1.0,
         bias_regularization: float = 1.0,
-        bias_basis: float = 0.0,
+        bias_bias: float = 0.0,
         use_masked_linear: bool = False,
         pre_initialized_W: torch.Tensor = None,
         pre_initialized_I: torch.Tensor = None,
@@ -74,6 +74,7 @@ class ScaffoldOptimizer(nn.Module):
         self.scaffold_lambda = scaffold_regularization
         self.reconstruction_lambda = reconstruction_regularization
         self.bias_lambda = bias_regularization
+        self.bias_bias = bias_bias
         self.normalize_regularization = normalize_regularization
 
         n = g.shape[0]
