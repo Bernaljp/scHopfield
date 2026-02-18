@@ -310,7 +310,7 @@ def simulate_shift_ode(
             
             # Store final state
             X_sim[idx] = trajectory[-1]
-            V_sim[idx] = solver.dynamics(trajectory[-1])  # Final velocity
+            V_sim[idx] = solver.dynamics(trajectory[-1], 0.0)  # Final velocity
 
 
     # Calculate shift (delta_X)
