@@ -3,8 +3,10 @@
 import numpy as np
 from typing import Optional, Union
 from anndata import AnnData
+from scipy.sparse import issparse
 
 from .._utils.io import get_matrix, to_numpy, get_genes_used
+from .._utils.math import sigmoid
 
 
 def compute_reconstructed_velocity(
@@ -189,3 +191,193 @@ def validate_velocity(
         return total_squared_error / total_elements
     else:
         return mse_dict
+
+
+def compute_velocity(
+    adata: AnnData,
+    X: Optional[np.ndarray] = None,
+    cluster: Optional[str] = None,
+    cluster_key: str = 'cell_type',
+    use_cluster_specific: bool = True,
+    spliced_key: str = 'Ms',
+) -> np.ndarray:
+    """
+    Compute Hopfield velocity at given expression state.
+
+    v = W @ sigmoid(X) - gamma * X + I
+
+    This is a unified function that replaces the various velocity computation
+    functions that were previously in plotting/flow.py.
+
+    Parameters
+    ----------
+    adata : AnnData
+        Annotated data object with fitted interactions
+    X : np.ndarray, optional
+        Expression matrix (n_cells, n_genes) to compute velocity at.
+        If None, uses expression from adata.layers[spliced_key].
+    cluster : str, optional
+        Specific cluster to use parameters from. If None and use_cluster_specific=True,
+        iterates over all clusters using their respective parameters.
+    cluster_key : str, optional (default: 'cell_type')
+        Key in adata.obs for cluster labels
+    use_cluster_specific : bool, optional (default: True)
+        If True, use cluster-specific W/I/gamma. If False, use 'all' parameters.
+    spliced_key : str, optional (default: 'Ms')
+        Key in adata.layers for spliced counts (used if X is None)
+
+    Returns
+    -------
+    np.ndarray
+        Velocity matrix (n_cells, n_genes)
+    """
+    genes_mask = get_genes_used(adata)
+    gene_names = adata.var.index[genes_mask]
+    n_genes = len(gene_names)
+
+    # Get sigmoid parameters
+    threshold = adata.var.loc[gene_names, 'sigmoid_threshold'].values
+    exponent = adata.var.loc[gene_names, 'sigmoid_exponent'].values
+
+    # Handle X input
+    if X is None:
+        X_full = get_matrix(adata, spliced_key, genes=genes_mask)
+        X = to_numpy(X_full)
+        n_cells = X.shape[0]
+        cell_mask = np.ones(n_cells, dtype=bool)
+    else:
+        n_cells = X.shape[0]
+        cell_mask = np.ones(n_cells, dtype=bool)
+
+    # Determine clusters to iterate over
+    if cluster is not None:
+        # Single cluster specified
+        clusters = [cluster]
+    elif use_cluster_specific:
+        # All clusters
+        clusters = adata.obs[cluster_key].unique().tolist()
+    else:
+        # Use 'all' parameters
+        clusters = ['all']
+
+    velocity = np.zeros((n_cells, n_genes))
+
+    for clust in clusters:
+        # Determine which cells to process
+        if clust == 'all':
+            clust_mask = np.ones(n_cells, dtype=bool)
+        elif cluster is not None:
+            # All cells use same parameters
+            clust_mask = np.ones(n_cells, dtype=bool)
+        else:
+            # Get mask for this cluster
+            if X is None or X.shape[0] == adata.n_obs:
+                clust_mask = (adata.obs[cluster_key] == clust).values
+            else:
+                # X is already subset, this shouldn't happen in normal usage
+                clust_mask = np.ones(n_cells, dtype=bool)
+
+        if not np.any(clust_mask):
+            continue
+
+        # Get parameters for this cluster
+        W_key = f'W_{clust}'
+        I_key = f'I_{clust}'
+        gamma_key = f'gamma_{clust}'
+
+        if W_key not in adata.varp:
+            raise ValueError(f"W matrix '{W_key}' not found in adata.varp")
+
+        W = adata.varp[W_key]
+        # Slice W if it's full size
+        if W.shape[0] == adata.n_vars:
+            W = W[np.ix_(genes_mask, genes_mask)]
+
+        # Get I vector
+        if I_key in adata.var.columns:
+            I_vec = adata.var.loc[gene_names, I_key].values
+        else:
+            I_vec = np.zeros(n_genes)
+
+        # Get gamma
+        if gamma_key in adata.var.columns:
+            gamma = adata.var.loc[gene_names, gamma_key].values
+        elif 'gamma' in adata.var.columns:
+            gamma = adata.var.loc[gene_names, 'gamma'].values
+        else:
+            gamma = np.ones(n_genes)
+
+        # Compute velocity: v = W @ sigmoid(X) - gamma * X + I
+        X_clust = X[clust_mask]
+        sig_X = sigmoid(X_clust, threshold, exponent)
+        v_clust = (sig_X @ W.T) - (gamma * X_clust) + I_vec
+
+        # Store results
+        velocity[clust_mask] = v_clust
+
+    return velocity
+
+
+def compute_velocity_delta(
+    adata: AnnData,
+    perturbed_key: str = 'simulated_count',
+    original_key: str = 'Ms',
+    cluster_key: str = 'cell_type',
+    use_cluster_specific: bool = True,
+) -> np.ndarray:
+    """
+    Compute velocity difference between perturbed and original states.
+
+    Returns v(X_perturbed) - v(X_original) for each cell.
+
+    Parameters
+    ----------
+    adata : AnnData
+        Annotated data object with perturbation results
+    perturbed_key : str, optional (default: 'simulated_count')
+        Key in adata.layers for perturbed expression
+    original_key : str, optional (default: 'Ms')
+        Key in adata.layers for original expression
+    cluster_key : str, optional (default: 'cell_type')
+        Key in adata.obs for cluster labels
+    use_cluster_specific : bool, optional (default: True)
+        If True, use cluster-specific W/I/gamma. If False, use 'all' parameters.
+
+    Returns
+    -------
+    np.ndarray
+        Velocity delta matrix (n_cells, n_genes)
+    """
+    if perturbed_key not in adata.layers:
+        raise ValueError(f"'{perturbed_key}' not found in adata.layers. Run simulation first.")
+
+    genes_mask = get_genes_used(adata)
+
+    # Get expression matrices
+    X_orig = to_numpy(get_matrix(adata, original_key, genes=genes_mask))
+    X_pert = to_numpy(get_matrix(adata, perturbed_key, genes=genes_mask))
+
+    # Determine clusters
+    if use_cluster_specific:
+        clusters = adata.obs[cluster_key].unique().tolist()
+    else:
+        clusters = ['all']
+
+    delta_velocity = np.zeros_like(X_orig)
+
+    for cluster in clusters:
+        if cluster == 'all':
+            mask = np.ones(adata.n_obs, dtype=bool)
+        else:
+            mask = (adata.obs[cluster_key] == cluster).values
+
+        if not np.any(mask):
+            continue
+
+        # Compute velocity at original and perturbed states
+        v_orig = compute_velocity(adata, X=X_orig[mask], cluster=cluster)
+        v_pert = compute_velocity(adata, X=X_pert[mask], cluster=cluster)
+
+        delta_velocity[mask] = v_pert - v_orig
+
+    return delta_velocity

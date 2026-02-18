@@ -4,7 +4,8 @@ from .solver import ODESolver, create_solver
 from .simulation import (
     simulate_trajectory,
     simulate_perturbation_ode,  # ODE-based single-cell perturbation
-    simulate_shift_ode
+    simulate_shift_ode,
+    calculate_trajectory_flow
 )
 
 # CellOracle-style GRN signal propagation simulation
@@ -26,6 +27,7 @@ __all__ = [
     'simulate_trajectory',
     'simulate_perturbation_ode',
     'simulate_shift_ode',
+    'calculate_trajectory_flow',
     # CellOracle-style GRN propagation (main functions)
     'simulate_perturbation',
     'simulate_shift',  # alias

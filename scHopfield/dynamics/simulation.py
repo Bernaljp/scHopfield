@@ -363,3 +363,136 @@ def simulate_perturbation(
         spliced_key=spliced_key, degradation_key=degradation_key,
         method='euler', x_max_percentile=99.0
     )
+
+
+def calculate_trajectory_flow(
+    adata: AnnData,
+    wt_trajectories: Dict[str, np.ndarray],
+    perturbed_trajectories: Dict[str, np.ndarray],
+    cluster_key: str = 'cell_type',
+    basis: str = 'umap',
+    time_point: int = -1,
+    method: str = 'hopfield',
+    n_neighbors: int = 30,
+    n_jobs: int = 4,
+    verbose: bool = True,
+) -> np.ndarray:
+    """
+    Calculate perturbation flow from ODE trajectory simulation results.
+
+    Takes the final (or specified) time point from ODE trajectories and
+    computes the flow in embedding space.
+
+    Parameters
+    ----------
+    adata : AnnData
+        Annotated data with cell information
+    wt_trajectories : dict
+        Dictionary mapping cluster -> WT trajectory (n_time, n_genes)
+    perturbed_trajectories : dict
+        Dictionary mapping cluster -> perturbed trajectory (n_time, n_genes)
+    cluster_key : str, optional (default: 'cell_type')
+        Key for cluster labels
+    basis : str, optional (default: 'umap')
+        Embedding basis
+    time_point : int, optional (default: -1)
+        Which time point to use (-1 for final)
+    method : str, optional (default: 'hopfield')
+        Flow calculation method:
+        - 'hopfield': Use Hopfield model velocity directly
+        - 'difference': Simple difference in gene space projected to embedding
+    n_neighbors : int, optional (default: 30)
+        Number of neighbors for projection
+    n_jobs : int, optional (default: 4)
+        Number of parallel jobs
+    verbose : bool, optional (default: True)
+        Print progress
+
+    Returns
+    -------
+    np.ndarray
+        Perturbation flow in embedding space (n_cells, 2)
+    """
+    # Import here to avoid circular imports
+    from ..tools.velocity import compute_velocity
+    from ..tools.embedding import project_to_embedding
+
+    genes = get_genes_used(adata)
+    n_cells = adata.n_obs
+    n_genes = len(genes)
+
+    # Initialize arrays
+    delta_X = np.zeros((n_cells, n_genes))
+    X_wt_final = np.zeros((n_cells, n_genes))
+    X_pert_final = np.zeros((n_cells, n_genes))
+
+    # Get final states from trajectories for each cluster
+    for cluster in wt_trajectories.keys():
+        if cluster not in perturbed_trajectories:
+            continue
+
+        mask = adata.obs[cluster_key] == cluster
+        if not mask.any():
+            continue
+
+        # Get final time point
+        wt_final = wt_trajectories[cluster][time_point]
+        pert_final = perturbed_trajectories[cluster][time_point]
+
+        # Assign to all cells in this cluster
+        cell_indices = np.where(mask)[0]
+        for idx in cell_indices:
+            X_wt_final[idx] = wt_final
+            X_pert_final[idx] = pert_final
+            delta_X[idx] = pert_final - wt_final
+
+    # Store delta_X
+    adata.layers['delta_X_ode'] = delta_X
+
+    if method == 'hopfield':
+        if verbose:
+            print("Computing Hopfield velocities...")
+
+        delta_velocity = np.zeros((n_cells, n_genes))
+
+        for cluster in wt_trajectories.keys():
+            mask = adata.obs[cluster_key] == cluster
+            if not mask.any():
+                continue
+
+            cell_indices = np.where(mask)[0]
+
+            # Compute velocity at WT and perturbed states
+            v_wt = compute_velocity(adata, X=X_wt_final[mask], cluster=cluster)
+            v_pert = compute_velocity(adata, X=X_pert_final[mask], cluster=cluster)
+
+            delta_velocity[cell_indices] = v_pert - v_wt
+
+        if verbose:
+            print("Projecting to embedding...")
+        embedding_flow = project_to_embedding(
+            adata, delta_velocity, basis=basis,
+            n_neighbors=n_neighbors, n_jobs=n_jobs
+        )
+
+    else:  # difference method
+        if verbose:
+            print("Projecting expression difference to embedding...")
+        embedding_flow = project_to_embedding(
+            adata, delta_X, basis=basis,
+            n_neighbors=n_neighbors, n_jobs=n_jobs
+        )
+
+    # Store results
+    adata.obsm[f'ode_perturbation_flow_{basis}'] = embedding_flow
+    adata.uns['ode_perturbation_flow_params'] = {
+        'basis': basis,
+        'method': method,
+        'time_point': time_point,
+        'clusters': list(wt_trajectories.keys())
+    }
+
+    if verbose:
+        print(f"ODE perturbation flow stored in adata.obsm['ode_perturbation_flow_{basis}']")
+
+    return embedding_flow

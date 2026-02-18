@@ -231,5 +231,99 @@ def load_embedding(
     X = to_numpy(get_matrix(adata, 'Ms', genes=genes))
     cells2d = emb_data['embedding'].transform(X)
     adata.obsm[f'X_{basis}'] = cells2d
-    
+
     return adata if copy else None
+
+
+def project_to_embedding(
+    adata: AnnData,
+    vectors: np.ndarray,
+    basis: str = 'umap',
+    n_neighbors: int = 30,
+    n_jobs: int = 4,
+    spliced_key: Optional[str] = None,
+) -> np.ndarray:
+    """
+    Project gene-space vectors to embedding space.
+
+    Uses neighbor-based averaging: for each cell, weight neighbors by
+    alignment of vector with direction to neighbor in gene space,
+    then average their directions in embedding space.
+
+    This is useful for projecting velocity vectors, perturbation effects,
+    gradients, or any gene-space direction to the 2D embedding.
+
+    Parameters
+    ----------
+    adata : AnnData
+        Annotated data with embedding
+    vectors : np.ndarray
+        Gene-space vectors (n_cells, n_genes) - can be velocities,
+        perturbation effects, gradients, etc.
+    basis : str, optional (default: 'umap')
+        Embedding to project onto (key in adata.obsm as X_{basis})
+    n_neighbors : int, optional (default: 30)
+        Number of neighbors for projection
+    n_jobs : int, optional (default: 4)
+        Number of parallel jobs
+    spliced_key : str, optional
+        Key for expression data. If None, uses adata.uns['scHopfield']['spliced_key']
+        or defaults to 'Ms'.
+
+    Returns
+    -------
+    np.ndarray
+        Vectors in embedding space (n_cells, 2)
+    """
+    from sklearn.neighbors import NearestNeighbors
+    from scipy.sparse import issparse
+
+    embedding_key = f'X_{basis}'
+    embedding = adata.obsm[embedding_key]
+    n_cells = embedding.shape[0]
+
+    genes = get_genes_used(adata)
+
+    # Get spliced key
+    if spliced_key is None:
+        spliced_key = adata.uns.get('scHopfield', {}).get('spliced_key', 'Ms')
+
+    # Get expression data
+    if spliced_key in adata.layers:
+        X = adata.layers[spliced_key][:, genes]
+    else:
+        X = adata.X[:, genes]
+    if issparse(X):
+        X = X.toarray()
+
+    # Build KNN in gene space
+    nn = NearestNeighbors(n_neighbors=n_neighbors + 1, n_jobs=n_jobs)
+    nn.fit(X)
+    distances, indices = nn.kneighbors(X)
+
+    # Project vectors to embedding
+    embedding_vectors = np.zeros((n_cells, 2))
+
+    for i in range(n_cells):
+        neighbors = indices[i, 1:]  # Exclude self
+
+        # Direction to neighbors in gene space
+        dX = X[neighbors] - X[i]
+
+        # Compute alignment of vector with direction to each neighbor
+        # (positive = moving towards neighbor)
+        alignment = (vectors[i] * dX).sum(axis=1)
+
+        # Normalize by distance (give more weight to closer neighbors)
+        dists = distances[i, 1:]
+        weights = np.exp(-dists / (np.median(dists) + 1e-10))
+        weights = weights * np.maximum(alignment, 0)  # Only positive alignment
+        weights = weights / (weights.sum() + 1e-10)
+
+        # Direction to neighbors in embedding space
+        dE = embedding[neighbors] - embedding[i]
+
+        # Weighted average direction
+        embedding_vectors[i] = (weights[:, None] * dE).sum(axis=0)
+
+    return embedding_vectors
