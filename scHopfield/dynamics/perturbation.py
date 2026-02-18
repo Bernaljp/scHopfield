@@ -240,7 +240,7 @@ def simulate_perturbation(
         # Use percentile to avoid outliers setting unreasonable bounds
         x_max = np.percentile(base_expression, x_max_percentile, axis=0)
         # Add margin to allow some growth beyond observed values
-        x_max = x_max * 2.0
+        x_max = x_max * 1.5
     else:
         x_max = None
 

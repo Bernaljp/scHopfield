@@ -1348,15 +1348,7 @@ def calculate_grid_flow_knn(
         w = w / (w.sum() + 1e-10)
         grid_flow[i] = np.average(flow[indices[i]], axis=0, weights=w)
 
-    # Store in adata.uns for convenience
-    adata.uns[f'grid_flow_{basis}'] = {
-        'grid_coords': grid_coords,
-        'grid_flow': grid_flow,
-        'mass_filter': mass_filter,
-        'mass': mass,
-        'n_grid': n_grid
-    }
-
+    # Return only; let the plotting function handle caching to adata.uns
     return {
         'grid_coords': grid_coords,
         'grid_flow': grid_flow,
@@ -1766,14 +1758,22 @@ def plot_perturbation_flow(
     return ax
 
 
+from typing import Dict, Optional, Tuple
+import numpy as np
+import matplotlib.pyplot as plt
+
 def plot_flow_on_grid(
-    adata: AnnData,
-    grid_data: Dict,
-    flow_type: str = 'perturbation',
+    adata: 'AnnData',
+    flow_key: Optional[str] = None,
     basis: str = 'umap',
+    n_grid: int = 40,
+    n_neighbors: int = 200,
+    min_mass: float = 1.0,
+    recalculate: bool = False,
+    n_jobs: int = 4,
     ax: Optional[plt.Axes] = None,
     scale: float = 1.0,
-    color: str = 'black',
+    arrow_color: str = 'black',
     alpha: float = 0.8,
     show_background: bool = True,
     cluster_key: Optional[str] = None,
@@ -1784,44 +1784,8 @@ def plot_flow_on_grid(
     **quiver_kwargs
 ) -> plt.Axes:
     """
-    Plot flow vectors on a grid.
-
-    Parameters
-    ----------
-    adata : AnnData
-        Annotated data
-    grid_data : dict
-        Output from calculate_grid_flow
-    flow_type : str, optional (default: 'perturbation')
-        Type of flow: 'perturbation' or 'reference'
-    basis : str, optional (default: 'umap')
-        Embedding basis
-    ax : plt.Axes, optional
-        Axes to plot on
-    scale : float, optional (default: 1.0)
-        Scale factor for arrows
-    color : str, optional (default: 'black')
-        Arrow color
-    alpha : float, optional (default: 0.8)
-        Arrow transparency
-    show_background : bool, optional (default: True)
-        Show background scatter
-    cluster_key : str, optional
-        Key for cluster labels
-    colors : dict, optional
-        Colors for clusters
-    s : float, optional (default: 10)
-        Scatter point size
-    figsize : tuple, optional
-        Figure size
-    title : str, optional
-        Plot title
-    **quiver_kwargs
-        Additional arguments for quiver
-
-    Returns
-    -------
-    plt.Axes
+    Plot flow vectors (e.g., perturbation or reference) on a grid.
+    Calculates grid flow automatically based on the provided flow_key.
     """
     if ax is None:
         fig, ax = plt.subplots(figsize=figsize)
@@ -1829,34 +1793,62 @@ def plot_flow_on_grid(
     embedding_key = f'X_{basis}'
     embedding = adata.obsm[embedding_key]
 
-    # Background scatter
+    # --- 1. Resolve Flow Key and Grid Data ---
+    if flow_key is None:
+        flow_key = f'perturbation_flow_{basis}'
+
+    # Use flow_key in the cache name to prevent overwriting different flow types!
+    grid_key = f'grid_flow_{flow_key}' 
+    
+    if grid_key in adata.uns and not recalculate:
+        grid_data = adata.uns[grid_key]
+    else:
+        grid_data = calculate_grid_flow_knn(
+            adata, basis=basis, n_grid=n_grid, n_neighbors=n_neighbors,
+            min_mass=min_mass, flow_key=flow_key, n_jobs=n_jobs
+        )
+        # Cache it safely
+        adata.uns[grid_key] = grid_data
+
+    # --- 2. Plot Background Scatter ---
     if show_background:
         if cluster_key is not None and colors is not None:
-            c = [colors.get(c, 'lightgray') for c in adata.obs[cluster_key]]
+            c = [colors.get(cl, 'lightgray') for cl in adata.obs[cluster_key]]
         else:
             c = 'lightgray'
         ax.scatter(embedding[:, 0], embedding[:, 1], c=c,
-                  s=s, alpha=0.3, rasterized=True)
+                  s=s, alpha=0.5, rasterized=True)
 
-    # Grid flow
+    # --- 3. Plot Grid Flow Arrows ---
     grid_coords = grid_data['grid_coords']
     grid_flow = grid_data['grid_flow']
     mass_filter = grid_data['mass_filter']
 
-    # Filter by mass
     valid = ~mass_filter
 
-    default_quiver = dict(headaxislength=4, headlength=5, headwidth=4,
-                         linewidths=0.5, width=0.004)
+    default_quiver = dict(
+        headaxislength=4, headlength=5, headwidth=4,
+        linewidths=0.5, width=0.004
+    )
     default_quiver.update(quiver_kwargs)
 
-    ax.quiver(grid_coords[valid, 0], grid_coords[valid, 1],
-             grid_flow[valid, 0], grid_flow[valid, 1],
-             color=color, alpha=alpha, scale=scale,
-             **default_quiver)
+    ax.quiver(
+        grid_coords[valid, 0], grid_coords[valid, 1],
+        grid_flow[valid, 0], grid_flow[valid, 1],
+        color=arrow_color, alpha=alpha, scale=scale,
+        **default_quiver
+    )
 
+    # --- 4. Title & Formatting ---
     if title is None:
-        title = f'{flow_type.capitalize()} Flow (Grid)'
+        if 'perturbation' in flow_key and 'scHopfield' in adata.uns and 'perturb_condition' in adata.uns['scHopfield']:
+            perturb = adata.uns['scHopfield']['perturb_condition']
+            perturb_str = ', '.join([f"{k}={'KO' if v==0 else v}" for k, v in perturb.items()])
+            title = f'Perturbation Flow: {perturb_str}'
+        else:
+            # Fallback based on the flow key name (e.g., 'velocity_umap' -> 'Velocity Umap Flow')
+            title = f"{flow_key.replace('_', ' ').title()} (Grid)"
+
     ax.set_title(title, fontsize=12, fontweight='bold')
     ax.axis('off')
     ax.set_aspect('equal')
