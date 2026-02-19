@@ -235,95 +235,261 @@ def load_embedding(
     return adata if copy else None
 
 
+from typing import Tuple, Optional
+import numpy as np
+
 def project_to_embedding(
-    adata: AnnData,
+    adata: 'AnnData',
     vectors: np.ndarray,
     basis: str = 'umap',
+    method: str = 'dot_product',
     n_neighbors: int = 30,
     n_jobs: int = 4,
     spliced_key: Optional[str] = None,
+    # CellOracle correlation specific parameters
+    sigma_corr: float = 0.05,
+    correlation_mode: str = 'sampled',
+    sampled_fraction: float = 0.3,
+    sampling_probs: Tuple[float, float] = (0.5, 0.1),
+    random_seed: int = 42,
+    verbose: bool = False
 ) -> np.ndarray:
     """
     Project gene-space vectors to embedding space.
-
-    Uses neighbor-based averaging: for each cell, weight neighbors by
-    alignment of vector with direction to neighbor in gene space,
-    then average their directions in embedding space.
-
-    This is useful for projecting velocity vectors, perturbation effects,
-    gradients, or any gene-space direction to the 2D embedding.
 
     Parameters
     ----------
     adata : AnnData
         Annotated data with embedding
     vectors : np.ndarray
-        Gene-space vectors (n_cells, n_genes) - can be velocities,
-        perturbation effects, gradients, etc.
+        Gene-space vectors (n_cells, n_genes) - can be velocities, delta_X, etc.
     basis : str, optional (default: 'umap')
         Embedding to project onto (key in adata.obsm as X_{basis})
+    method : str, optional (default: 'dot_product')
+        Projection method:
+        - 'dot_product': Gene-space KNN, weights neighbors by vector alignment.
+        - 'correlation': Embedding-space KNN, CellOracle-style correlation.
     n_neighbors : int, optional (default: 30)
-        Number of neighbors for projection
-    n_jobs : int, optional (default: 4)
-        Number of parallel jobs
+        Number of neighbors for projection (Note: correlation method often uses ~200)
     spliced_key : str, optional
-        Key for expression data. If None, uses adata.uns['scHopfield']['spliced_key']
-        or defaults to 'Ms'.
-
-    Returns
-    -------
-    np.ndarray
-        Vectors in embedding space (n_cells, 2)
+        Key for expression data. Defaults to scHopfield's spliced_key or 'Ms'.
     """
     from sklearn.neighbors import NearestNeighbors
+    from scipy import sparse
     from scipy.sparse import issparse
 
     embedding_key = f'X_{basis}'
+    if embedding_key not in adata.obsm:
+        raise ValueError(f"Embedding {embedding_key} not found in adata.obsm")
+
     embedding = adata.obsm[embedding_key]
     n_cells = embedding.shape[0]
 
     genes = get_genes_used(adata)
 
-    # Get spliced key
     if spliced_key is None:
         spliced_key = adata.uns.get('scHopfield', {}).get('spliced_key', 'Ms')
 
-    # Get expression data
     if spliced_key in adata.layers:
         X = adata.layers[spliced_key][:, genes]
     else:
         X = adata.X[:, genes]
-    if issparse(X):
-        X = X.toarray()
+        
+    if issparse(X): X = X.toarray()
+    if issparse(vectors): vectors = vectors.toarray()
 
-    # Build KNN in gene space
-    nn = NearestNeighbors(n_neighbors=n_neighbors + 1, n_jobs=n_jobs)
-    nn.fit(X)
-    distances, indices = nn.kneighbors(X)
+    # -------------------------------------------------------------------
+    # Method 1: Gene-Space Dot Product Alignment
+    # -------------------------------------------------------------------
+    if method == 'dot_product':
+        if verbose: print("Projecting using gene-space dot product alignment...")
+        nn = NearestNeighbors(n_neighbors=n_neighbors + 1, n_jobs=n_jobs)
+        nn.fit(X)
+        distances, indices = nn.kneighbors(X)
 
-    # Project vectors to embedding
-    embedding_vectors = np.zeros((n_cells, 2))
+        embedding_vectors = np.zeros((n_cells, 2))
 
-    for i in range(n_cells):
-        neighbors = indices[i, 1:]  # Exclude self
+        for i in range(n_cells):
+            neighbors = indices[i, 1:]  # Exclude self
+            dX = X[neighbors] - X[i]
+            alignment = (vectors[i] * dX).sum(axis=1)
 
-        # Direction to neighbors in gene space
-        dX = X[neighbors] - X[i]
+            dists = distances[i, 1:]
+            weights = np.exp(-dists / (np.median(dists) + 1e-10))
+            weights = weights * np.maximum(alignment, 0)
+            weights = weights / (weights.sum() + 1e-10)
 
-        # Compute alignment of vector with direction to each neighbor
-        # (positive = moving towards neighbor)
-        alignment = (vectors[i] * dX).sum(axis=1)
+            dE = embedding[neighbors] - embedding[i]
+            embedding_vectors[i] = (weights[:, None] * dE).sum(axis=0)
 
-        # Normalize by distance (give more weight to closer neighbors)
-        dists = distances[i, 1:]
-        weights = np.exp(-dists / (np.median(dists) + 1e-10))
-        weights = weights * np.maximum(alignment, 0)  # Only positive alignment
-        weights = weights / (weights.sum() + 1e-10)
+        return embedding_vectors
 
-        # Direction to neighbors in embedding space
-        dE = embedding[neighbors] - embedding[i]
+    # -------------------------------------------------------------------
+    # Method 2: Embedding-Space Correlation (CellOracle)
+    # -------------------------------------------------------------------
+    elif method == 'correlation':
+        if verbose: print("Projecting using embedding-space correlation (CellOracle style)...")
+        np.random.seed(random_seed)
+        
+        nn = NearestNeighbors(n_neighbors=n_neighbors + 1, n_jobs=n_jobs)
+        nn.fit(embedding)
+        embedding_knn = nn.kneighbors_graph(mode="connectivity")
 
-        # Weighted average direction
-        embedding_vectors[i] = (weights[:, None] * dE).sum(axis=0)
+        if correlation_mode == 'sampled':
+            neigh_ixs = embedding_knn.indices.reshape((-1, n_neighbors + 1))
+            p = np.linspace(sampling_probs[0], sampling_probs[1], neigh_ixs.shape[1])
+            p = p / p.sum()
 
-    return embedding_vectors
+            n_sampled = int(sampled_fraction * (n_neighbors + 1))
+            sampling_ixs = np.stack([
+                np.random.choice(neigh_ixs.shape[1], size=n_sampled, replace=False, p=p)
+                for _ in range(n_cells)
+            ], axis=0)
+
+            neigh_ixs = neigh_ixs[np.arange(n_cells)[:, None], sampling_ixs]
+
+            # Computes correlation for sampled neighbors
+            corrcoef = _calculate_correlation_sampled(X, vectors, neigh_ixs, verbose=verbose)
+
+            nonzero = n_cells * n_sampled
+            embedding_knn_used = sparse.csr_matrix(
+                (np.ones(nonzero), neigh_ixs.ravel(), np.arange(0, nonzero + 1, n_sampled)),
+                shape=(n_cells, n_cells)
+            )
+
+        elif correlation_mode == 'full':
+            corrcoef = _calculate_correlation_full(X, vectors, verbose=verbose)
+            np.fill_diagonal(corrcoef, 0)
+            embedding_knn_used = embedding_knn
+
+        else:
+            raise ValueError(f"Unknown correlation_mode: {correlation_mode}")
+
+        if np.any(np.isnan(corrcoef)):
+            corrcoef[np.isnan(corrcoef)] = 1
+            if verbose: print("Warning: NaNs in correlation matrix corrected to 1s.")
+
+        knn_array = embedding_knn_used.toarray()
+        transition_prob = np.exp(corrcoef / sigma_corr) * knn_array
+        transition_prob /= transition_prob.sum(axis=1, keepdims=True) + 1e-10
+
+        return _calculate_embedding_shift(embedding, transition_prob, knn_array)
+
+    else:
+        raise ValueError(f"Unknown method: '{method}'. Use 'dot_product' or 'correlation'.")
+
+# =============================================================================
+# Private helper functions
+# =============================================================================
+
+def _calculate_embedding_shift(
+    embedding: np.ndarray,
+    transition_prob: np.ndarray,
+    knn_array: np.ndarray
+) -> np.ndarray:
+    """
+    Calculate embedding shift from transition probabilities.
+
+    Follows CellOracle's calculate_embedding_shift logic.
+    """
+    # Unitary vectors from each cell to all other cells
+    unitary_vectors = embedding.T[:, None, :] - embedding.T[:, :, None]
+
+    # Normalize to unit vectors
+    with np.errstate(divide='ignore', invalid='ignore'):
+        norms = np.linalg.norm(unitary_vectors, ord=2, axis=0)
+        unitary_vectors = unitary_vectors / (norms + 1e-10)
+        np.fill_diagonal(unitary_vectors[0], 0)
+        np.fill_diagonal(unitary_vectors[1], 0)
+
+    # Weighted sum of directions
+    delta_embedding = (transition_prob * unitary_vectors).sum(axis=2)
+
+    # Subtract baseline
+    knn_sum = knn_array.sum(axis=1, keepdims=True)
+    baseline = (knn_array * unitary_vectors).sum(axis=2) / (knn_sum.T + 1e-10)
+    delta_embedding = delta_embedding - baseline
+
+    return delta_embedding.T
+
+
+def _calculate_correlation_sampled(
+    X: np.ndarray,
+    delta_X: np.ndarray,
+    neigh_ixs: np.ndarray,
+    verbose: bool = True
+) -> np.ndarray:
+    """
+    Calculate correlation between delta_X and neighbor expression differences.
+
+    For each cell i and its sampled neighbors j, computes:
+    corr(delta_X[i], X[j] - X[i])
+    """
+    from tqdm.auto import tqdm
+
+    n_cells, n_neighbors = neigh_ixs.shape
+    corrcoef = np.zeros((n_cells, n_cells))
+
+    iterator = range(n_cells)
+    if verbose:
+        iterator = tqdm(iterator, desc="Calculating correlations (sampled)")
+
+    for i in iterator:
+        neighbors = neigh_ixs[i]
+        diffs = X[neighbors] - X[i]
+        corrs = _pearson_correlation_rows(delta_X[i:i+1], diffs)
+
+        for j_idx, j in enumerate(neighbors):
+            if j != i:
+                corrcoef[i, j] = corrs[j_idx]
+
+    return corrcoef
+
+
+def _calculate_correlation_full(
+    X: np.ndarray,
+    delta_X: np.ndarray,
+    verbose: bool = True
+) -> np.ndarray:
+    """
+    Calculate full correlation matrix between delta_X and expression differences.
+    """
+    from tqdm.auto import tqdm
+
+    n_cells = X.shape[0]
+    corrcoef = np.zeros((n_cells, n_cells))
+
+    iterator = range(n_cells)
+    if verbose:
+        iterator = tqdm(iterator, desc="Calculating correlations (full)")
+
+    for i in iterator:
+        diffs = X - X[i]
+        corrs = _pearson_correlation_rows(delta_X[i:i+1], diffs)
+        corrcoef[i, :] = corrs
+
+    return corrcoef
+
+
+def _pearson_correlation_rows(a: np.ndarray, B: np.ndarray) -> np.ndarray:
+    """
+    Compute Pearson correlation between vector a and each row of matrix B.
+    """
+    a_centered = a - a.mean()
+    B_centered = B - B.mean(axis=1, keepdims=True)
+
+    ss_a = np.sum(a_centered ** 2)
+    ss_B = np.sum(B_centered ** 2, axis=1)
+
+    if ss_a < 1e-10:
+        return np.zeros(B.shape[0])
+
+    numerator = (a_centered @ B_centered.T).flatten()
+    denominator = np.sqrt(ss_a) * np.sqrt(ss_B)
+
+    with np.errstate(divide='ignore', invalid='ignore'):
+        corrs = numerator / (denominator + 1e-10)
+        corrs[ss_B < 1e-10] = 0
+
+    return corrs
+

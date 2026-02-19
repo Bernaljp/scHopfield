@@ -225,7 +225,7 @@ def _calculate_flow_hopfield(
 
 
 def _calculate_flow_celloracle(
-    adata: AnnData,
+    adata: 'AnnData',
     basis: str = 'umap',
     n_neighbors: int = 200,
     sigma_corr: float = 0.05,
@@ -239,96 +239,32 @@ def _calculate_flow_celloracle(
 ) -> np.ndarray:
     """
     Calculate flow using CellOracle-style correlation-based projection.
-
-    Internal function called by calculate_flow with method='celloracle'.
+    Wraps `project_to_embedding` with method='correlation'.
     """
-    from sklearn.neighbors import NearestNeighbors
-    from scipy import sparse
-
-    np.random.seed(random_seed)
-
     if 'delta_X' not in adata.layers:
         raise ValueError("No delta_X found. Run simulate_perturbation first.")
 
-    embedding_key = f'X_{basis}'
-    if embedding_key not in adata.obsm:
-        raise ValueError(f"Embedding {embedding_key} not found in adata.obsm")
-
-    embedding = adata.obsm[embedding_key]
-    n_cells = embedding.shape[0]
-
-    # Get delta_X for genes used in analysis
+    # Get delta_X vectors
     genes = get_genes_used(adata)
     delta_X = adata.layers['delta_X'][:, genes]
-    if issparse(delta_X):
-        delta_X = delta_X.toarray()
 
-    # Get base expression from spliced layer
-    spliced_key = adata.uns.get('scHopfield', {}).get('spliced_key', 'Ms')
-    if spliced_key in adata.layers:
-        X = adata.layers[spliced_key][:, genes]
-    else:
-        X = adata.X[:, genes]
-    if issparse(X):
-        X = X.toarray()
+    # Delegate to the universal projection engine
+    delta_embedding = project_to_embedding(
+        adata=adata,
+        vectors=delta_X,
+        basis=basis,
+        method='correlation',
+        n_neighbors=n_neighbors,
+        n_jobs=n_jobs,
+        sigma_corr=sigma_corr,
+        correlation_mode=correlation_mode,
+        sampled_fraction=sampled_fraction,
+        sampling_probs=sampling_probs,
+        random_seed=random_seed,
+        verbose=verbose
+    )
 
-    # Build KNN graph in embedding space
-    if verbose:
-        print("Building KNN graph in embedding space...")
-    nn = NearestNeighbors(n_neighbors=n_neighbors + 1, n_jobs=n_jobs)
-    nn.fit(embedding)
-    embedding_knn = nn.kneighbors_graph(mode="connectivity")
-
-    if correlation_mode == 'sampled':
-        # Sample neighbors for speedup
-        neigh_ixs = embedding_knn.indices.reshape((-1, n_neighbors + 1))
-
-        # Probability gradient for sampling (favor closer neighbors)
-        p = np.linspace(sampling_probs[0], sampling_probs[1], neigh_ixs.shape[1])
-        p = p / p.sum()
-
-        n_sampled = int(sampled_fraction * (n_neighbors + 1))
-        sampling_ixs = np.stack([
-            np.random.choice(neigh_ixs.shape[1], size=n_sampled, replace=False, p=p)
-            for _ in range(n_cells)
-        ], axis=0)
-
-        neigh_ixs = neigh_ixs[np.arange(n_cells)[:, None], sampling_ixs]
-
-        # Calculate correlation for sampled neighbors only
-        corrcoef = _calculate_correlation_sampled(X, delta_X, neigh_ixs, verbose=verbose)
-
-        # Build sparse KNN matrix for sampled neighbors
-        nonzero = n_cells * n_sampled
-        embedding_knn_used = sparse.csr_matrix(
-            (np.ones(nonzero), neigh_ixs.ravel(), np.arange(0, nonzero + 1, n_sampled)),
-            shape=(n_cells, n_cells)
-        )
-
-    elif correlation_mode == 'full':
-        # Compute full correlation matrix
-        corrcoef = _calculate_correlation_full(X, delta_X, verbose=verbose)
-        np.fill_diagonal(corrcoef, 0)
-        embedding_knn_used = embedding_knn
-
-    else:
-        raise ValueError(f"Unknown correlation_mode: {correlation_mode}")
-
-    # Handle NaNs
-    if np.any(np.isnan(corrcoef)):
-        corrcoef[np.isnan(corrcoef)] = 1
-        if verbose:
-            print("Warning: NaNs in correlation matrix corrected to 1s.")
-
-    # Calculate transition probabilities
-    knn_array = embedding_knn_used.toarray()
-    transition_prob = np.exp(corrcoef / sigma_corr) * knn_array
-    transition_prob /= transition_prob.sum(axis=1, keepdims=True) + 1e-10
-
-    # Calculate embedding shift
-    delta_embedding = _calculate_embedding_shift(embedding, transition_prob, knn_array)
-
-    # Store in adata
+    # Store results & metadata
     flow_key = store_key if store_key is not None else f'perturbation_flow_{basis}'
     adata.obsm[flow_key] = delta_embedding
     adata.uns['perturbation_flow_params'] = {
@@ -603,119 +539,3 @@ def calculate_inner_product(
             adata.obs[f'{store_key}_weighted'] = weighted
 
     return inner_product
-
-
-# =============================================================================
-# Private helper functions
-# =============================================================================
-
-def _calculate_embedding_shift(
-    embedding: np.ndarray,
-    transition_prob: np.ndarray,
-    knn_array: np.ndarray
-) -> np.ndarray:
-    """
-    Calculate embedding shift from transition probabilities.
-
-    Follows CellOracle's calculate_embedding_shift logic.
-    """
-    # Unitary vectors from each cell to all other cells
-    unitary_vectors = embedding.T[:, None, :] - embedding.T[:, :, None]
-
-    # Normalize to unit vectors
-    with np.errstate(divide='ignore', invalid='ignore'):
-        norms = np.linalg.norm(unitary_vectors, ord=2, axis=0)
-        unitary_vectors = unitary_vectors / (norms + 1e-10)
-        np.fill_diagonal(unitary_vectors[0], 0)
-        np.fill_diagonal(unitary_vectors[1], 0)
-
-    # Weighted sum of directions
-    delta_embedding = (transition_prob * unitary_vectors).sum(axis=2)
-
-    # Subtract baseline
-    knn_sum = knn_array.sum(axis=1, keepdims=True)
-    baseline = (knn_array * unitary_vectors).sum(axis=2) / (knn_sum.T + 1e-10)
-    delta_embedding = delta_embedding - baseline
-
-    return delta_embedding.T
-
-
-def _calculate_correlation_sampled(
-    X: np.ndarray,
-    delta_X: np.ndarray,
-    neigh_ixs: np.ndarray,
-    verbose: bool = True
-) -> np.ndarray:
-    """
-    Calculate correlation between delta_X and neighbor expression differences.
-
-    For each cell i and its sampled neighbors j, computes:
-    corr(delta_X[i], X[j] - X[i])
-    """
-    from tqdm.auto import tqdm
-
-    n_cells, n_neighbors = neigh_ixs.shape
-    corrcoef = np.zeros((n_cells, n_cells))
-
-    iterator = range(n_cells)
-    if verbose:
-        iterator = tqdm(iterator, desc="Calculating correlations (sampled)")
-
-    for i in iterator:
-        neighbors = neigh_ixs[i]
-        diffs = X[neighbors] - X[i]
-        corrs = _pearson_correlation_rows(delta_X[i:i+1], diffs)
-
-        for j_idx, j in enumerate(neighbors):
-            if j != i:
-                corrcoef[i, j] = corrs[j_idx]
-
-    return corrcoef
-
-
-def _calculate_correlation_full(
-    X: np.ndarray,
-    delta_X: np.ndarray,
-    verbose: bool = True
-) -> np.ndarray:
-    """
-    Calculate full correlation matrix between delta_X and expression differences.
-    """
-    from tqdm.auto import tqdm
-
-    n_cells = X.shape[0]
-    corrcoef = np.zeros((n_cells, n_cells))
-
-    iterator = range(n_cells)
-    if verbose:
-        iterator = tqdm(iterator, desc="Calculating correlations (full)")
-
-    for i in iterator:
-        diffs = X - X[i]
-        corrs = _pearson_correlation_rows(delta_X[i:i+1], diffs)
-        corrcoef[i, :] = corrs
-
-    return corrcoef
-
-
-def _pearson_correlation_rows(a: np.ndarray, B: np.ndarray) -> np.ndarray:
-    """
-    Compute Pearson correlation between vector a and each row of matrix B.
-    """
-    a_centered = a - a.mean()
-    B_centered = B - B.mean(axis=1, keepdims=True)
-
-    ss_a = np.sum(a_centered ** 2)
-    ss_B = np.sum(B_centered ** 2, axis=1)
-
-    if ss_a < 1e-10:
-        return np.zeros(B.shape[0])
-
-    numerator = (a_centered @ B_centered.T).flatten()
-    denominator = np.sqrt(ss_a) * np.sqrt(ss_B)
-
-    with np.errstate(divide='ignore', invalid='ignore'):
-        corrs = numerator / (denominator + 1e-10)
-        corrs[ss_B < 1e-10] = 0
-
-    return corrs
