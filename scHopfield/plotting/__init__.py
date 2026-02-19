@@ -38,7 +38,6 @@ from .perturbation import (
     plot_simulation_comparison
 )
 from .flow import (
-    # Main plotting functions (new unified API)
     plot_flow,
     plot_inner_product,
     visualize_flow_comparison,
@@ -46,26 +45,6 @@ from .flow import (
     plot_reference_flow,
     plot_ode_perturbation_flow,
     visualize_ode_perturbation,
-    # Deprecated aliases (for backward compatibility)
-    compute_hopfield_velocity,
-    compute_hopfield_velocity_delta,
-    compute_hopfield_velocity_at_state,
-    project_velocity_to_embedding,
-    calculate_perturbation_flow_hopfield,
-    calculate_perturbed_velocity_flow,
-    calculate_original_velocity_flow,
-    calculate_perturbation_flow,
-    calculate_grid_flow_knn,
-    calculate_ode_trajectory_flow,
-    calculate_ode_trajectory_inner_product,
-    # Plotting aliases (thin wrappers around plot_flow)
-    plot_perturbation_flow,
-    plot_perturbed_velocity_flow,
-    plot_flow_on_grid,
-    plot_simulation_flow_on_grid,
-    plot_inner_product_on_embedding,
-    plot_inner_product_by_cluster,
-    visualize_velocity_comparison,
 )
 
 __all__ = [
@@ -103,7 +82,7 @@ __all__ = [
     'plot_gene_response',
     'plot_top_affected_genes_bar',
     'plot_simulation_comparison',
-    # Flow visualization (new unified API)
+    # Flow visualization
     'plot_flow',
     'plot_inner_product',
     'visualize_flow_comparison',
@@ -111,23 +90,4 @@ __all__ = [
     'plot_reference_flow',
     'plot_ode_perturbation_flow',
     'visualize_ode_perturbation',
-    # Deprecated - kept for backward compatibility
-    'compute_hopfield_velocity',
-    'compute_hopfield_velocity_delta',
-    'compute_hopfield_velocity_at_state',
-    'project_velocity_to_embedding',
-    'calculate_perturbation_flow_hopfield',
-    'calculate_perturbed_velocity_flow',
-    'calculate_original_velocity_flow',
-    'calculate_perturbation_flow',
-    'calculate_grid_flow_knn',
-    'calculate_ode_trajectory_flow',
-    'calculate_ode_trajectory_inner_product',
-    'plot_perturbation_flow',
-    'plot_perturbed_velocity_flow',
-    'plot_flow_on_grid',
-    'plot_simulation_flow_on_grid',
-    'plot_inner_product_on_embedding',
-    'plot_inner_product_by_cluster',
-    'visualize_velocity_comparison',
 ]
