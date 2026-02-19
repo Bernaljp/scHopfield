@@ -240,42 +240,48 @@ def compute_velocity(
     exponent = adata.var.loc[gene_names, 'sigmoid_exponent'].values
 
     # Handle X input
-    if X is None:
+    # When X is provided, it's used directly (caller is responsible for matching cells)
+    # When X is None and cluster is specified, slice to only that cluster's cells
+    # When X is None and cluster is None, use all cells
+    if X is not None:
+        # X provided by caller - use as-is
+        n_cells = X.shape[0]
+    elif cluster is not None and cluster != 'all':
+        # Specific cluster requested, slice to only those cells
+        cluster_mask = (adata.obs[cluster_key] == cluster).values
+        X_full = get_matrix(adata, spliced_key, genes=genes_mask)
+        X = to_numpy(X_full[cluster_mask])
+        n_cells = X.shape[0]
+    else:
+        # All cells
         X_full = get_matrix(adata, spliced_key, genes=genes_mask)
         X = to_numpy(X_full)
         n_cells = X.shape[0]
-        cell_mask = np.ones(n_cells, dtype=bool)
-    else:
-        n_cells = X.shape[0]
-        cell_mask = np.ones(n_cells, dtype=bool)
 
     # Determine clusters to iterate over
     if cluster is not None:
-        # Single cluster specified
+        # Single cluster specified - use its parameters for all cells in X
         clusters = [cluster]
     elif use_cluster_specific:
-        # All clusters
+        # All clusters - iterate and apply each cluster's parameters to its cells
         clusters = adata.obs[cluster_key].unique().tolist()
     else:
-        # Use 'all' parameters
+        # Use 'all' parameters for everything
         clusters = ['all']
 
     velocity = np.zeros((n_cells, n_genes))
 
     for clust in clusters:
         # Determine which cells to process
-        if clust == 'all':
+        if cluster is not None:
+            # Specific cluster: X already contains only those cells, process all
             clust_mask = np.ones(n_cells, dtype=bool)
-        elif cluster is not None:
-            # All cells use same parameters
+        elif clust == 'all':
+            # 'all' parameters: process all cells
             clust_mask = np.ones(n_cells, dtype=bool)
         else:
-            # Get mask for this cluster
-            if X is None or X.shape[0] == adata.n_obs:
-                clust_mask = (adata.obs[cluster_key] == clust).values
-            else:
-                # X is already subset, this shouldn't happen in normal usage
-                clust_mask = np.ones(n_cells, dtype=bool)
+            # Iterating over clusters: get mask for this cluster
+            clust_mask = (adata.obs[cluster_key] == clust).values
 
         if not np.any(clust_mask):
             continue
