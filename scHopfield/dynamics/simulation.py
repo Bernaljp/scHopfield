@@ -7,6 +7,7 @@ from tqdm.auto import tqdm
 
 from .solver import create_solver
 from .._utils.io import get_matrix, to_numpy, get_genes_used
+from ._utils import _parse_perturb_genes, _update_scHopfield_uns
 
 
 def simulate_trajectory(
@@ -143,23 +144,15 @@ def simulate_perturbation_ode(
     x0 = np.maximum(x0, 0)  # Ensure non-negative
 
     # Collect perturbation indices and values
-    fixed_indices = []
-    fixed_values = []
-
-    for gene_name, value in gene_perturbations.items():
-        if gene_name in gene_names:
-            gene_idx = np.where(gene_names == gene_name)[0][0]
-            if value < 0:
-                raise ValueError(f"Perturbation value must be non-negative, got {value} for {gene_name}")
-            # Set initial condition
-            x0[gene_idx] = value
-            # Mark as fixed (only if not allowing residual dynamics)
-            if not residual_gene_dynamics:
-                fixed_indices.append(gene_idx)
-                fixed_values.append(value)
-
-    fixed_indices = np.array(fixed_indices) if fixed_indices else None
-    fixed_values = np.array(fixed_values) if fixed_values else None
+    all_indices, all_values = _parse_perturb_genes(
+        gene_names, gene_perturbations, validate_non_negative=True
+    )
+    if len(all_indices) > 0:
+        x0[all_indices] = all_values
+    if not residual_gene_dynamics and len(all_indices) > 0:
+        fixed_indices, fixed_values = all_indices, all_values
+    else:
+        fixed_indices, fixed_values = None, None
 
     solver = create_solver(
         adata, cluster, degradation_key,
@@ -273,23 +266,13 @@ def simulate_shift_ode(
         )
         
         # Configure fixed genes based on perturbations
-        fixed_indices = []
-        fixed_values = []
-        
-        for gene_name, value in perturb_condition.items():
-            if gene_name in gene_names:
-                gene_idx = np.where(gene_names == gene_name)[0][0]
-                if value < 0:
-                    raise ValueError(f"Perturbation value must be non-negative, got {value} for {gene_name}")
-                if not residual_gene_dynamics:
-                    fixed_indices.append(gene_idx)
-                    fixed_values.append(value)
-                    
-        fixed_indices = np.array(fixed_indices) if fixed_indices else None
-        fixed_values = np.array(fixed_values) if fixed_values else None
-
-        if not residual_gene_dynamics:
-            solver.set_fixed_genes(fixed_indices, fixed_values)
+        all_indices, all_values = _parse_perturb_genes(
+            gene_names, perturb_condition, validate_non_negative=True
+        )
+        if not residual_gene_dynamics and len(all_indices) > 0:
+            solver.set_fixed_genes(all_indices, all_values)
+        else:
+            solver.set_fixed_genes(None, None)
 
         # Optional progress bar
         iterator = tqdm(cell_indices, desc=f"Cells in {cluster}") if verbose else cell_indices
@@ -298,12 +281,10 @@ def simulate_shift_ode(
         for idx in iterator:
             x0 = X_orig[idx].copy()
             x0 = np.maximum(x0, 0)
-            
+
             # Apply initial perturbation state
-            for gene_name, value in perturb_condition.items():
-                if gene_name in gene_names:
-                    gene_idx = np.where(gene_names == gene_name)[0][0]
-                    x0[gene_idx] = value
+            if len(all_indices) > 0:
+                x0[all_indices] = all_values
                     
             # Integrate ODE
             trajectory = solver.solve(x0, t_span, method=method, clip_each_step=True)
@@ -333,36 +314,10 @@ def simulate_shift_ode(
     adata_out.layers['simulated_velocity'] = V_sim_full  # Store velocity in layers
     
     # Update scHopfield metadata dict
-    if 'scHopfield' not in adata_out.uns:
-        adata_out.uns['scHopfield'] = {}
-        
-    adata_out.uns['scHopfield']['perturb_condition'] = perturb_condition
-    adata_out.uns['scHopfield']['simulation_method'] = 'ODE'
-    adata_out.uns['scHopfield']['ode_dt'] = dt
+    _update_scHopfield_uns(adata_out, perturb_condition=perturb_condition,
+                           simulation_method='ODE', ode_dt=dt)
 
     return adata_out
-
-# Keep old name for backwards compatibility
-def simulate_perturbation(
-    adata: AnnData,
-    cluster: str,
-    cell_idx: int,
-    gene_perturbations: dict,
-    t_span: np.ndarray,
-    spliced_key: str = 'Ms',
-    degradation_key: str = 'gamma'
-) -> np.ndarray:
-    """
-    Simulate trajectory with gene perturbations (legacy function).
-
-    DEPRECATED: Use simulate_perturbation_ode for more control,
-    or sch.dyn.simulate_perturbation for CellOracle-style simulation.
-    """
-    return simulate_perturbation_ode(
-        adata, cluster, cell_idx, gene_perturbations, t_span,
-        spliced_key=spliced_key, degradation_key=degradation_key,
-        method='euler', x_max_percentile=99.0
-    )
 
 
 def calculate_trajectory_flow(

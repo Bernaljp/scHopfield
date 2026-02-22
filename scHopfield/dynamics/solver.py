@@ -84,12 +84,32 @@ class ODESolver:
         self.fixed_indices = fixed_indices
         self.fixed_values = fixed_values
 
+    def _clip(self, x: np.ndarray) -> np.ndarray:
+        x = np.maximum(x, self.x_min)
+        if self.x_max is not None:
+            x = np.minimum(x, self.x_max)
+        return x
+
+    def _clip_trajectory(self, traj: np.ndarray) -> np.ndarray:
+        traj = np.maximum(traj, self.x_min)
+        if self.x_max is not None:
+            traj = np.minimum(traj, self.x_max)
+        return traj
+
+    def _enforce_fixed(self, x: np.ndarray) -> None:
+        """Overwrite fixed-gene positions (in-place, 1-D)."""
+        if self.fixed_indices is not None and len(self.fixed_indices) > 0:
+            x[self.fixed_indices] = self.fixed_values
+
+    def _enforce_fixed_trajectory(self, traj: np.ndarray) -> None:
+        """Overwrite fixed-gene columns (in-place, 2-D n_times×n_genes)."""
+        if self.fixed_indices is not None and len(self.fixed_indices) > 0:
+            traj[:, self.fixed_indices] = self.fixed_values
+
     def dynamics(self, x: np.ndarray, t: float) -> np.ndarray:
         """Compute dx/dt with soft boundary enforcement."""
         # Clip x to valid range before computing dynamics
-        x_clipped = np.maximum(x, self.x_min)
-        if self.x_max is not None:
-            x_clipped = np.minimum(x_clipped, self.x_max)
+        x_clipped = self._clip(x.copy())
 
         sig = sigmoid(x_clipped, self.threshold, self.exponent)
         dxdt = self.W @ sig - self.gamma * x_clipped + self.I
@@ -143,25 +163,16 @@ class ODESolver:
             Solution trajectory (len(t_span) × n_genes)
         """
         # Ensure initial condition is valid
-        x0 = np.maximum(x0, self.x_min)
-        if self.x_max is not None:
-            x0 = np.minimum(x0, self.x_max)
-
-        # Set fixed genes to their fixed values in initial condition
-        if self.fixed_indices is not None and len(self.fixed_indices) > 0:
-            x0[self.fixed_indices] = self.fixed_values
+        x0 = self._clip(x0)
+        self._enforce_fixed(x0)
 
         if method == 'euler':
             return self._solve_euler(x0, t_span, clip_each_step)
         elif method == 'odeint':
             trajectory = odeint(self.dynamics, x0, t_span)
             if clip_each_step:
-                trajectory = np.maximum(trajectory, self.x_min)
-                if self.x_max is not None:
-                    trajectory = np.minimum(trajectory, self.x_max)
-            # Enforce fixed genes in trajectory
-            if self.fixed_indices is not None and len(self.fixed_indices) > 0:
-                trajectory[:, self.fixed_indices] = self.fixed_values
+                trajectory = self._clip_trajectory(trajectory)
+            self._enforce_fixed_trajectory(trajectory)
             return trajectory
         elif method in ['RK45', 'RK23', 'DOP853', 'Radau', 'BDF', 'LSODA']:
             return self._solve_ivp(x0, t_span, method, clip_each_step)
@@ -195,15 +206,10 @@ class ODESolver:
             # Euler step
             x = x + dt * dxdt
 
-            # Clip to valid range
+            # Clip to valid range and enforce fixed genes
             if clip_each_step:
-                x = np.maximum(x, self.x_min)
-                if self.x_max is not None:
-                    x = np.minimum(x, self.x_max)
-
-            # Enforce fixed genes (KO/OE genes stay at their perturbed values)
-            if self.fixed_indices is not None and len(self.fixed_indices) > 0:
-                x[self.fixed_indices] = self.fixed_values
+                x = self._clip(x)
+            self._enforce_fixed(x)
 
             trajectory[i] = x
 
@@ -229,13 +235,8 @@ class ODESolver:
         trajectory = sol.y.T  # Transpose to (n_times, n_genes)
 
         if clip_each_step:
-            trajectory = np.maximum(trajectory, self.x_min)
-            if self.x_max is not None:
-                trajectory = np.minimum(trajectory, self.x_max)
-
-        # Enforce fixed genes (KO/OE genes stay at their perturbed values)
-        if self.fixed_indices is not None and len(self.fixed_indices) > 0:
-            trajectory[:, self.fixed_indices] = self.fixed_values
+            trajectory = self._clip_trajectory(trajectory)
+        self._enforce_fixed_trajectory(trajectory)
 
         return trajectory
 
@@ -270,10 +271,11 @@ def create_solver(
         Configured ODE solver with bounds
     """
     from .._utils.io import get_matrix, to_numpy
+    from ._utils import _get_W_matrix, _compute_x_bounds
 
     genes = get_genes_used(adata)
 
-    W = adata.varp[f'W_{cluster}']
+    W = _get_W_matrix(adata, cluster, use_cluster_specific=True)
     I = adata.var[f'I_{cluster}'].values[genes]
 
     gamma_key = f'gamma_{cluster}'
@@ -283,14 +285,12 @@ def create_solver(
     exponent = adata.var['sigmoid_exponent'].values[genes]
 
     # Compute upper bounds from data
-    x_max = None
     if x_max_percentile is not None:
         if spliced_key is None:
             spliced_key = adata.uns.get('scHopfield', {}).get('spliced_key', 'Ms')
         X = to_numpy(get_matrix(adata, spliced_key, genes=genes))
-        # Use percentile to avoid outliers setting unreasonable bounds
-        x_max = np.percentile(X, x_max_percentile, axis=0)
-        # Add some margin (2x the max observed)
-        x_max = x_max * 2.0
+        _, x_max = _compute_x_bounds(X, x_max_percentile, multiplier=2.0)
+    else:
+        x_max = None
 
     return ODESolver(W, I, gamma, threshold, exponent, x_min=0.0, x_max=x_max)

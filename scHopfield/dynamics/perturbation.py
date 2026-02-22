@@ -20,6 +20,7 @@ from tqdm.auto import tqdm
 
 from .._utils.math import sigmoid
 from .._utils.io import get_matrix, to_numpy, get_genes_used
+from ._utils import _parse_perturb_genes, _get_W_matrix, _compute_x_bounds, _update_scHopfield_uns
 
 
 def _propagate_signal(
@@ -235,26 +236,10 @@ def simulate_perturbation(
     exponent = adata.var['sigmoid_exponent'].values[genes]
 
     # Compute expression bounds for stability
-    x_min = 0.0
-    if x_max_percentile is not None:
-        # Use percentile to avoid outliers setting unreasonable bounds
-        x_max = np.percentile(base_expression, x_max_percentile, axis=0)
-        # Add margin to allow some growth beyond observed values
-        x_max = x_max * 1.5
-    else:
-        x_max = None
+    x_min, x_max = _compute_x_bounds(base_expression, x_max_percentile, multiplier=2.0)
 
     # Get indices and values of perturbed genes
-    perturb_indices = []
-    perturb_values = []
-    for gene, value in perturb_condition.items():
-        if gene in gene_names:
-            idx = np.where(gene_names == gene)[0][0]
-            perturb_indices.append(idx)
-            perturb_values.append(value)
-
-    perturb_indices = np.array(perturb_indices)
-    perturb_values = np.array(perturb_values)
+    perturb_indices, perturb_values = _parse_perturb_genes(gene_names, perturb_condition)
 
     # Get clusters to simulate
     all_clusters = adata.obs[cluster_key].unique()
@@ -287,12 +272,7 @@ def simulate_perturbation(
             continue
 
         # Get cluster-specific or global W matrix
-        if use_cluster_specific_GRN and f'W_{cluster}' in adata.varp:
-            W = adata.varp[f'W_{cluster}']
-        elif 'W_all' in adata.varp:
-            W = adata.varp['W_all']
-        else:
-            raise ValueError(f"No W matrix found for cluster '{cluster}'. Run fit_interactions first.")
+        W = _get_W_matrix(adata, cluster, use_cluster_specific=use_cluster_specific_GRN)
 
         # Get TF indices for this cluster (genes with outgoing edges)
         tf_indices = _get_tf_indices(W)
@@ -347,11 +327,8 @@ def simulate_perturbation(
     _store_layer(adata, delta_X, 'delta_X', genes)
 
     # Store metadata
-    if 'scHopfield' not in adata.uns:
-        adata.uns['scHopfield'] = {}
-    adata.uns['scHopfield']['perturb_condition'] = perturb_condition
-    adata.uns['scHopfield']['n_propagation'] = n_propagation
-    adata.uns['scHopfield']['dt'] = dt
+    _update_scHopfield_uns(adata, perturb_condition=perturb_condition,
+                           n_propagation=n_propagation, dt=dt)
 
     if verbose:
         print(f"Perturbation simulation complete")
@@ -376,6 +353,7 @@ def _validate_perturb_condition(
 
     genes = get_genes_used(adata)
     gene_names = adata.var_names[genes].values
+    gene_to_idx = {name: i for i, name in enumerate(gene_names)}
 
     for gene, value in perturb_condition.items():
         # Check gene exists
@@ -392,7 +370,7 @@ def _validate_perturb_condition(
             raise ValueError(f"Perturbation value must be non-negative. Got {value} for '{gene}'")
 
         # Warn if value is far from observed range
-        gene_idx = np.where(gene_names == gene)[0][0]
+        gene_idx = gene_to_idx[gene]
         spliced_key = adata.uns.get('scHopfield', {}).get('spliced_key', 'Ms')
         expr = to_numpy(get_matrix(adata, spliced_key, genes=[genes[gene_idx]])).flatten()
 
