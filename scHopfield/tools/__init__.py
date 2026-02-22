@@ -47,6 +47,10 @@ from .flow import (
     calculate_grid_flow,
     calculate_inner_product
 )
+from .io import (
+    save_model,
+    load_model,
+)
 
 __all__ = [
     # Energy analysis
@@ -89,4 +93,7 @@ __all__ = [
     'calculate_flow',
     'calculate_grid_flow',
     'calculate_inner_product',
+    # Model I/O
+    'save_model',
+    'load_model',
 ]
