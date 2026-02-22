@@ -4,6 +4,7 @@ import numpy as np
 from typing import Optional, List, Dict
 from anndata import AnnData
 from tqdm.auto import tqdm
+from joblib import Parallel, delayed
 
 from .solver import create_solver
 from .._utils.io import get_matrix, to_numpy, get_genes_used
@@ -189,13 +190,14 @@ def simulate_shift_ode(
     use_cluster_specific_GRN: bool = True,
     x_max_percentile: float = 99.0,
     residual_gene_dynamics: bool = False,
+    n_jobs: int = -1,
     verbose: bool = False
 ) -> 'AnnData':
     """
     Simulate dataset-wide trajectory shifts with gene perturbations using ODE integration.
-    
-    This function mimics the propagation-based `simulate_shift` but uses continuous 
-    ODE integration. It calculates the final state for every cell after a time `dt` 
+
+    This function mimics the propagation-based `simulate_shift` but uses continuous
+    ODE integration. It calculates the final state for every cell after a time `dt`
     under the perturbed conditions, and stores the resulting shift (delta_X).
 
     Parameters
@@ -222,13 +224,16 @@ def simulate_shift_ode(
         Percentile for upper bound. Prevents divergence.
     residual_gene_dynamics : bool, optional (default: False)
         If False, perturbed genes are held fixed. If True, they evolve.
+    n_jobs : int, optional (default: -1)
+        Number of parallel jobs for cell simulation. -1 uses all available cores.
+        Uses threads (not processes) so there is no pickling overhead.
     verbose : bool, optional (default: False)
         Print simulation progress.
 
     Returns
     -------
     AnnData
-        A copy of the input AnnData with 'simulated_X' and 'delta_X' added to layers.
+        A copy of the input AnnData with 'simulated_count' and 'delta_X' added to layers.
     """
     adata_out = adata.copy()
     
@@ -274,24 +279,22 @@ def simulate_shift_ode(
         else:
             solver.set_fixed_genes(None, None)
 
-        # Optional progress bar
-        iterator = tqdm(cell_indices, desc=f"Cells in {cluster}") if verbose else cell_indices
-
-        # Simulate for each cell in the cluster
-        for idx in iterator:
-            x0 = X_orig[idx].copy()
-            x0 = np.maximum(x0, 0)
-
-            # Apply initial perturbation state
+        def _simulate_cell(x0_row):
+            x0 = np.maximum(x0_row, 0)
             if len(all_indices) > 0:
                 x0[all_indices] = all_values
-                    
-            # Integrate ODE
             trajectory = solver.solve(x0, t_span, method=method, clip_each_step=True)
-            
-            # Store final state
-            X_sim[idx] = trajectory[-1]
-            V_sim[idx] = solver.dynamics(trajectory[-1], 0.0)  # Final velocity
+            x_final = trajectory[-1]
+            return x_final, solver.dynamics(x_final, 0.0)
+
+        iterator = tqdm(cell_indices, desc=f"Cells in {cluster}") if verbose else cell_indices
+
+        results = Parallel(n_jobs=n_jobs, prefer='threads')(
+            delayed(_simulate_cell)(X_orig[idx].copy()) for idx in iterator
+        )
+
+        for i, idx in enumerate(cell_indices):
+            X_sim[idx], V_sim[idx] = results[i]
 
 
     # Calculate shift (delta_X)
