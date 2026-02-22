@@ -133,6 +133,31 @@ class ODESolver:
         """Compute dx/dt for solve_ivp (arguments reversed)."""
         return self.dynamics(x, t)
 
+    def dynamics_batch(self, X: np.ndarray, t: float) -> np.ndarray:
+        """Compute dx/dt for a batch of states (n_cells, n_genes).
+
+        Vectorized equivalent of dynamics(). Uses sig @ W.T instead of W @ sig
+        to handle the 2-D case correctly.
+        """
+        X_clipped = np.maximum(X, self.x_min)
+        if self.x_max is not None:
+            X_clipped = np.minimum(X_clipped, self.x_max)
+
+        sig = sigmoid(X_clipped, self.threshold, self.exponent)  # (n_cells, n_genes)
+        dxdt = sig @ self.W.T - self.gamma * X_clipped + self.I  # (n_cells, n_genes)
+
+        at_lower = X <= self.x_min
+        dxdt[at_lower] = np.maximum(dxdt[at_lower], 0)
+
+        if self.x_max is not None:
+            at_upper = X >= self.x_max
+            dxdt[at_upper] = np.minimum(dxdt[at_upper], 0)
+
+        if self.fixed_indices is not None and len(self.fixed_indices) > 0:
+            dxdt[:, self.fixed_indices] = 0.0
+
+        return dxdt
+
     def solve(
         self,
         x0: np.ndarray,

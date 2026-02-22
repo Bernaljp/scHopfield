@@ -1,7 +1,7 @@
 """Simulation utilities for gene regulatory network dynamics."""
 
 import numpy as np
-from typing import Optional, List, Dict
+from typing import Optional, List, Dict, Union
 from anndata import AnnData
 from tqdm.auto import tqdm
 from joblib import Parallel, delayed
@@ -11,19 +11,33 @@ from .._utils.io import get_matrix, to_numpy, get_genes_used
 from ._utils import _parse_perturb_genes, _update_scHopfield_uns
 
 
+def _run_jobs(func, items, n_jobs):
+    """Run func(item) for each item. Sequential when n_jobs=1, threaded otherwise.
+    Falls back to sequential if parallel execution raises any exception."""
+    if n_jobs == 1:
+        return [func(item) for item in items]
+    try:
+        return Parallel(n_jobs=n_jobs, prefer='threads')(
+            delayed(func)(item) for item in items
+        )
+    except Exception:
+        return [func(item) for item in items]
+
+
 def simulate_trajectory(
     adata: AnnData,
     cluster: str,
-    cell_idx: int,
+    cell_idx: Union[int, List[int]],
     t_span: np.ndarray,
     spliced_key: str = 'Ms',
     degradation_key: str = 'gamma',
     method: str = 'euler',
     x_max_percentile: float = 99.0,
+    n_jobs: int = 1,
     verbose: bool = False
-) -> np.ndarray:
+) -> Union[np.ndarray, List[np.ndarray]]:
     """
-    Simulate trajectory from a cell's initial state.
+    Simulate trajectory from one or more cells' initial states.
 
     Parameters
     ----------
@@ -31,8 +45,9 @@ def simulate_trajectory(
         Annotated data object with fitted interactions
     cluster : str
         Cluster name
-    cell_idx : int
-        Index of cell to use as initial condition
+    cell_idx : int or list of int
+        Index or list of indices of cells to use as initial conditions.
+        Returns a single trajectory array for a scalar, or a list for a list.
     t_span : np.ndarray
         Time points for simulation
     spliced_key : str, optional
@@ -47,19 +62,23 @@ def simulate_trajectory(
     x_max_percentile : float, optional (default: 99.0)
         Percentile of expression to use as upper bound. Prevents divergence.
         Set to None to disable upper bound.
+    n_jobs : int, optional (default: 1)
+        Number of parallel jobs when cell_idx is a list. 1 = sequential,
+        -1 = all cores. Uses threads; no effect for a single cell.
     verbose : bool, optional (default: False)
         Print simulation info
 
     Returns
     -------
-    np.ndarray
-        Simulated trajectory (len(t_span) × n_genes)
+    np.ndarray or list of np.ndarray
+        Trajectory (len(t_span) × n_genes) for a scalar cell_idx,
+        or a list of trajectories for a list input.
     """
-    genes = get_genes_used(adata)
-    x0 = to_numpy(get_matrix(adata, spliced_key, genes=genes)[cell_idx])
+    single = isinstance(cell_idx, (int, np.integer))
+    indices = [int(cell_idx)] if single else list(cell_idx)
 
-    # Ensure non-negative initial condition
-    x0 = np.maximum(x0, 0)
+    genes = get_genes_used(adata)
+    X_all = to_numpy(get_matrix(adata, spliced_key, genes=genes))
 
     solver = create_solver(
         adata, cluster, degradation_key,
@@ -68,24 +87,28 @@ def simulate_trajectory(
     )
 
     if verbose:
-        print(f"Simulating trajectory for cell {cell_idx} in cluster '{cluster}'")
+        print(f"Simulating {len(indices)} trajectory/ies in cluster '{cluster}'")
         print(f"  Method: {method}")
         print(f"  Time span: {t_span[0]:.2f} to {t_span[-1]:.2f} ({len(t_span)} points)")
         if solver.x_max is not None:
             print(f"  Upper bound: {x_max_percentile}th percentile × 2")
 
-    trajectory = solver.solve(x0, t_span, method=method, clip_each_step=True)
+    def _run_one(idx):
+        x0 = np.maximum(X_all[idx].copy(), 0)
+        return solver.solve(x0, t_span, method=method, clip_each_step=True)
+
+    results = _run_jobs(_run_one, indices, n_jobs)
 
     if verbose:
-        print(f"  Final values range: [{trajectory[-1].min():.3f}, {trajectory[-1].max():.3f}]")
+        print(f"  Final values range: [{results[-1][-1].min():.3f}, {results[-1][-1].max():.3f}]")
 
-    return trajectory
+    return results[0] if single else results
 
 
 def simulate_perturbation_ode(
     adata: AnnData,
     cluster: str,
-    cell_idx: int,
+    cell_idx: Union[int, List[int]],
     gene_perturbations: dict,
     t_span: np.ndarray,
     spliced_key: str = 'Ms',
@@ -93,8 +116,9 @@ def simulate_perturbation_ode(
     method: str = 'euler',
     x_max_percentile: float = 99.0,
     residual_gene_dynamics: bool = False,
+    n_jobs: int = 1,
     verbose: bool = False
-) -> np.ndarray:
+) -> Union[np.ndarray, List[np.ndarray]]:
     """
     Simulate trajectory with gene perturbations using ODE integration.
 
@@ -110,8 +134,9 @@ def simulate_perturbation_ode(
         Annotated data object
     cluster : str
         Cluster name
-    cell_idx : int
-        Cell index for initial condition
+    cell_idx : int or list of int
+        Cell index or list of indices for initial conditions.
+        Returns a single trajectory for a scalar, or a list for a list.
     gene_perturbations : dict
         Dictionary mapping gene names to perturbation values.
         - Knockout: {"Gata1": 0.0} sets Gata1 to 0
@@ -130,53 +155,53 @@ def simulate_perturbation_ode(
         If False, perturbed genes are held fixed at their perturbed values.
         If True, perturbed genes can evolve according to ODE dynamics after
         the initial perturbation is applied.
+    n_jobs : int, optional (default: 1)
+        Number of parallel jobs when cell_idx is a list. 1 = sequential,
+        -1 = all cores. Uses threads; no effect for a single cell.
     verbose : bool, optional (default: False)
         Print simulation info
 
     Returns
     -------
-    np.ndarray
-        Simulated trajectory with perturbations
+    np.ndarray or list of np.ndarray
+        Trajectory with perturbations for a scalar cell_idx,
+        or a list of trajectories for a list input.
     """
+    single = isinstance(cell_idx, (int, np.integer))
+    indices = [int(cell_idx)] if single else list(cell_idx)
+
     genes = get_genes_used(adata)
     gene_names = adata.var.index[genes]
+    X_all = to_numpy(get_matrix(adata, spliced_key, genes=genes))
 
-    x0 = to_numpy(get_matrix(adata, spliced_key, genes=genes)[cell_idx])
-    x0 = np.maximum(x0, 0)  # Ensure non-negative
-
-    # Collect perturbation indices and values
+    # Parse perturbations once for all cells
     all_indices, all_values = _parse_perturb_genes(
         gene_names, gene_perturbations, validate_non_negative=True
     )
-    if len(all_indices) > 0:
-        x0[all_indices] = all_values
-    if not residual_gene_dynamics and len(all_indices) > 0:
-        fixed_indices, fixed_values = all_indices, all_values
-    else:
-        fixed_indices, fixed_values = None, None
+    fixed_indices = all_indices if (not residual_gene_dynamics and len(all_indices) > 0) else None
+    fixed_values = all_values if fixed_indices is not None else None
 
     solver = create_solver(
         adata, cluster, degradation_key,
         spliced_key=spliced_key,
         x_max_percentile=x_max_percentile
     )
-
-    # Set fixed genes (they won't change during simulation) unless residual dynamics allowed
-    if not residual_gene_dynamics:
-        solver.set_fixed_genes(fixed_indices, fixed_values)
+    solver.set_fixed_genes(fixed_indices, fixed_values)
 
     if verbose:
-        print(f"Simulating perturbation for cell {cell_idx} in cluster '{cluster}'")
+        print(f"Simulating perturbation for {len(indices)} cell(s) in cluster '{cluster}'")
         print(f"  Perturbations: {gene_perturbations}")
-        if residual_gene_dynamics:
-            print(f"  Perturbed genes: can evolve (residual_gene_dynamics=True)")
-        else:
-            print(f"  Perturbed genes: held constant")
+        print(f"  Perturbed genes: {'can evolve' if residual_gene_dynamics else 'held constant'}")
         print(f"  Method: {method}")
 
-    trajectory = solver.solve(x0, t_span, method=method, clip_each_step=True)
+    def _run_one(idx):
+        x0 = np.maximum(X_all[idx].copy(), 0)
+        if len(all_indices) > 0:
+            x0[all_indices] = all_values
+        return solver.solve(x0, t_span, method=method, clip_each_step=True)
 
-    return trajectory
+    results = _run_jobs(_run_one, indices, n_jobs)
+    return results[0] if single else results
 
 def simulate_shift_ode(
     adata: 'AnnData',
@@ -283,18 +308,16 @@ def simulate_shift_ode(
             x0 = np.maximum(x0_row, 0)
             if len(all_indices) > 0:
                 x0[all_indices] = all_values
-            trajectory = solver.solve(x0, t_span, method=method, clip_each_step=True)
-            x_final = trajectory[-1]
-            return x_final, solver.dynamics(x_final, 0.0)
+            return solver.solve(x0, t_span, method=method, clip_each_step=True)[-1]
 
-        iterator = tqdm(cell_indices, desc=f"Cells in {cluster}") if verbose else cell_indices
+        desc = f"Cells in {cluster if cluster else 'global'}"
+        x0_list = [X_orig[idx].copy() for idx in (tqdm(cell_indices, desc=desc) if verbose else cell_indices)]
 
-        results = Parallel(n_jobs=n_jobs, prefer='threads')(
-            delayed(_simulate_cell)(X_orig[idx].copy()) for idx in iterator
-        )
+        results = _run_jobs(_simulate_cell, x0_list, n_jobs)
 
-        for i, idx in enumerate(cell_indices):
-            X_sim[idx], V_sim[idx] = results[i]
+        # Block assignment then vectorized velocity for the whole cluster at once
+        X_sim[cell_indices] = np.array(results)
+        V_sim[cell_indices] = solver.dynamics_batch(X_sim[cell_indices], 0.0)
 
 
     # Calculate shift (delta_X)
