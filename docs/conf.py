@@ -65,7 +65,10 @@ templates_path = ['_templates']
 exclude_patterns = ['_build', 'Thumbs.db', '.DS_Store', 'README.md']
 
 # The suffix(es) of source filenames.
-source_suffix = '.rst'
+source_suffix = {
+    '.rst': None,
+    '.ipynb': 'nbsphinx',
+}
 
 # The master toctree document.
 master_doc = 'index'

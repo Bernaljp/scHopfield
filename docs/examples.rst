@@ -1,48 +1,17 @@
 Examples
 ========
 
-.. note::
-   Jupyter notebook examples coming soon!
+The following notebooks demonstrate scHopfield's capabilities on a hematopoiesis
+dataset (Paul et al. 2015).  To run them locally, convert the ``.py`` files in
+``notebooks/`` to Jupyter notebooks using Jupytext or ``jupyter nbconvert``,
+then place the ``.ipynb`` files in ``docs/notebooks/``.
 
-Overview
---------
+.. toctree::
+   :maxdepth: 1
+   :caption: Example Notebooks
 
-This section will contain Jupyter notebook examples demonstrating:
-
-1. **Basic Analysis Workflow**
-
-   - Loading data with RNA velocity
-   - Preprocessing and network inference
-   - Energy and stability analysis
-   - Visualization
-
-2. **Hematopoiesis Analysis**
-
-   - Full analysis of hematopoietic differentiation
-   - Cell type comparison
-   - Driver gene identification
-   - Trajectory simulation
-
-3. **Perturbation Experiments**
-
-   - Gene knockout simulations
-   - Overexpression effects
-   - Network rewiring analysis
-
-4. **Advanced Topics**
-
-   - Custom loss functions
-   - GPU acceleration
-   - Large-scale analysis
-   - Integration with other tools
-
-Placeholder
------------
-
-Check back soon for complete example notebooks!
-
-In the meantime, see:
-
-- :doc:`quickstart` - Quick start guide
-- :doc:`tutorial` - Detailed tutorial
-- :doc:`api/tools` - API reference
+   notebooks/01_getting_started
+   notebooks/02_energy_analysis
+   notebooks/03_network_analysis
+   notebooks/04_stability_analysis
+   notebooks/05_perturbation_analysis
