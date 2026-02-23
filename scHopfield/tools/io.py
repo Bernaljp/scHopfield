@@ -207,7 +207,7 @@ def load_model(
                 stacklevel=2,
             )
             print(f"Subsetting adata to {len(saved_genes)} genes from the model file...")
-            adata = adata[:, gene_indices]
+            adata = adata[:, gene_indices].to_memory()  # subset in-place, preserving order
 
         print(adata)
         clusters = json.loads(f.attrs['clusters'])
