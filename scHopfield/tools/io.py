@@ -140,11 +140,18 @@ def load_model(
     Restores W matrices, bias vectors, sigmoid parameters, degradation rates,
     and scalar metadata from a file created by save_model().
 
+    The adata gene set may be a *superset* of the genes the model was trained
+    on.  In that case the model parameters are loaded only for the matching
+    genes; all other genes receive zeros and ``scHopfield_used`` is set to
+    ``False`` for them.  This allows loading a model that was trained on a
+    subsetted adata (e.g. dynamic genes only) into the full adata without
+    re-subsetting.
+
     Parameters
     ----------
     adata : AnnData
-        Annotated data object to load parameters into. Must have the same
-        gene ordering as the adata used when the model was saved.
+        Annotated data object to load parameters into.  Must contain at least
+        all genes present in the saved model (adata may have additional genes).
     filename : str
         Path to the HDF5 model file created by save_model().
     overwrite : bool, optional (default: False)
@@ -156,7 +163,8 @@ def load_model(
     FileNotFoundError
         If the file does not exist.
     ValueError
-        If the gene names in the file do not match adata.var_names.
+        If the gene names stored in the file are not a subset of
+        adata.var_names (i.e. the adata is missing genes the model needs).
 
     Examples
     --------
@@ -177,14 +185,35 @@ def load_model(
         return
 
     with h5py.File(filename, 'r') as f:
-        # Verify gene compatibility before touching adata
         saved_genes = np.array(f['gene_names']).astype(str)
         current_genes = np.array(adata.var_names, dtype=str)
-        if not np.array_equal(saved_genes, current_genes):
-            raise ValueError(
-                f"Gene names in '{filename}' do not match adata.var_names. "
-                "The model was fitted on a different gene set or gene ordering."
+
+        if np.array_equal(saved_genes, current_genes):
+            # Exact match: indices are the identity mapping
+            gene_idx = np.arange(len(saved_genes))
+        else:
+            # Allow the saved gene set to be a strict subset of current genes
+            missing = saved_genes[~np.isin(saved_genes, current_genes)]
+            if missing.size > 0:
+                preview = ', '.join(missing[:5].tolist())
+                suffix = ', ...' if missing.size > 5 else ''
+                raise ValueError(
+                    f"Gene names in '{filename}' are not a subset of adata.var_names. "
+                    f"{missing.size} missing gene(s): {preview}{suffix}. "
+                    "The model was fitted on a different gene set."
+                )
+            # Map each saved gene to its position in the current adata
+            lookup = {g: i for i, g in enumerate(current_genes)}
+            gene_idx = np.array([lookup[g] for g in saved_genes])
+            warnings.warn(
+                f"Model gene set ({len(saved_genes)} genes) is a subset of adata "
+                f"({len(current_genes)} genes).  Parameters are loaded for the "
+                f"{len(saved_genes)} model genes; remaining genes receive zeros.",
+                stacklevel=2,
             )
+
+        n_current = adata.n_vars
+        full_shape = len(gene_idx) == n_current   # True when sets are identical
 
         clusters = json.loads(f.attrs['clusters'])
 
@@ -197,12 +226,25 @@ def load_model(
         # Restore var columns
         var_grp = f['var']
         for key in var_grp:
-            adata.var[key] = var_grp[key][:]
+            saved_data = var_grp[key][:]
+            if full_shape:
+                adata.var[key] = saved_data
+            else:
+                is_bool = np.issubdtype(saved_data.dtype, np.bool_)
+                col = np.zeros(n_current, dtype=bool if is_bool else saved_data.dtype)
+                col[gene_idx] = saved_data
+                adata.var[key] = col
 
-        # Restore W matrices
+        # Restore W matrices — expand to (n_current × n_current) when needed
         varp_grp = f['varp']
         for key in varp_grp:
-            adata.varp[key] = varp_grp[key][:]
+            saved_W = varp_grp[key][:]
+            if full_shape:
+                adata.varp[key] = saved_W
+            else:
+                W = np.zeros((n_current, n_current), dtype=saved_W.dtype)
+                W[np.ix_(gene_idx, gene_idx)] = saved_W
+                adata.varp[key] = W
 
     n_genes = int(adata.var['scHopfield_used'].sum()) if 'scHopfield_used' in adata.var else '?'
     print(f"Model loaded from '{filename}'  |  clusters={clusters}  |  genes={n_genes}")
