@@ -133,42 +133,53 @@ def load_model(
     adata: AnnData,
     filename: str,
     overwrite: bool = False,
-) -> None:
+) -> Optional[AnnData]:
     """
-    Load fitted model parameters from an HDF5 file into adata (in-place).
+    Load fitted model parameters from an HDF5 file into adata.
 
     Restores W matrices, bias vectors, sigmoid parameters, degradation rates,
     and scalar metadata from a file created by save_model().
 
-    The adata gene set may be a *superset* of the genes the model was trained
-    on.  In that case the model parameters are loaded only for the matching
-    genes; all other genes receive zeros and ``scHopfield_used`` is set to
-    ``False`` for them.  This allows loading a model that was trained on a
-    subsetted adata (e.g. dynamic genes only) into the full adata without
-    re-subsetting.
+    **Two behaviours depending on gene compatibility:**
+
+    * **Exact gene match** — model parameters are written directly into the
+      ``adata`` object that was passed (in-place).  Returns ``None``.
+    * **adata is a superset** — a subsetted copy of adata is created that
+      contains only the model genes, parameters are loaded into that copy, and
+      the copy is returned.  The original ``adata`` is *not* modified.
+      Reassign the return value: ``adata = sch.tl.load_model(adata, file)``.
 
     Parameters
     ----------
     adata : AnnData
         Annotated data object to load parameters into.  Must contain at least
-        all genes present in the saved model (adata may have additional genes).
+        all genes present in the saved model.
     filename : str
         Path to the HDF5 model file created by save_model().
     overwrite : bool, optional (default: False)
         If False, skip loading when fitted parameters are already present in
         adata (W matrices found in adata.varp). Pass True to always reload.
 
+    Returns
+    -------
+    AnnData or None
+        Returns a subsetted copy of adata when the gene sets differ, otherwise
+        returns ``None`` (parameters written in-place).
+
     Raises
     ------
     FileNotFoundError
         If the file does not exist.
     ValueError
-        If the gene names stored in the file are not a subset of
-        adata.var_names (i.e. the adata is missing genes the model needs).
+        If the model needs genes that are absent from adata.var_names.
 
     Examples
     --------
+    >>> # Gene sets match exactly — in-place, no return value needed:
     >>> sch.tl.load_model(adata, 'model.h5sch')
+    >>>
+    >>> # adata has more genes than the model — reassign the return value:
+    >>> adata = sch.tl.load_model(adata, 'model.h5sch')
     """
     import h5py
 
@@ -182,14 +193,16 @@ def load_model(
             "Pass overwrite=True to reload from file.",
             stacklevel=2,
         )
-        return
+        return None
 
     with h5py.File(filename, 'r') as f:
         saved_genes = np.array(f['gene_names']).astype(str)
         current_genes = np.array(adata.var_names, dtype=str)
 
+        # target is what we write into; replaced by a copy when subsetting
+        target = adata
+
         if not np.array_equal(saved_genes, current_genes):
-            # Check that every model gene is present in the current adata
             missing = saved_genes[~np.isin(saved_genes, current_genes)]
             if missing.size > 0:
                 preview = ', '.join(missing[:5].tolist())
@@ -199,34 +212,39 @@ def load_model(
                     f"{missing.size} missing gene(s): {preview}{suffix}. "
                     "The model was fitted on a different gene set."
                 )
-            # Subset adata in-place to the model's gene set (preserving order)
-            gene_indices = adata.var.index.get_indexer_for(saved_genes)
+            # Build ordered index: saved gene i → position in current adata
+            lookup = {g: i for i, g in enumerate(current_genes)}
+            ordered_idx = np.array([lookup[g] for g in saved_genes])
             warnings.warn(
                 f"adata has {len(current_genes)} genes but the model was trained on "
-                f"{len(saved_genes)}.  Subsetting adata in-place to the model gene set.",
+                f"{len(saved_genes)}.  A subsetted copy is being returned; "
+                "the original adata is NOT modified.  Reassign the return value:\n"
+                "    adata = sch.tl.load_model(adata, filename)",
                 stacklevel=2,
             )
-            print(f"Subsetting adata to {len(saved_genes)} genes from the model file...")
-            adata = adata[:, gene_indices].to_memory()  # subset in-place, preserving order
+            target = adata[:, ordered_idx].copy()
 
-        print(adata)
         clusters = json.loads(f.attrs['clusters'])
 
         # Restore uns['scHopfield'] primitive metadata
         meta = json.loads(f.attrs.get('uns_scHopfield', '{}'))
-        if 'scHopfield' not in adata.uns:
-            adata.uns['scHopfield'] = {}
-        adata.uns['scHopfield'].update(meta)
+        if 'scHopfield' not in target.uns:
+            target.uns['scHopfield'] = {}
+        target.uns['scHopfield'].update(meta)
 
         # Restore var columns
         var_grp = f['var']
         for key in var_grp:
-            adata.var[key] = var_grp[key][:]
+            target.var[key] = var_grp[key][:]
 
         # Restore W matrices
         varp_grp = f['varp']
         for key in varp_grp:
-            adata.varp[key] = varp_grp[key][:]
+            target.varp[key] = varp_grp[key][:]
 
-    n_genes = int(adata.var['scHopfield_used'].sum()) if 'scHopfield_used' in adata.var else '?'
+    n_genes = int(target.var['scHopfield_used'].sum()) if 'scHopfield_used' in target.var else '?'
     print(f"Model loaded from '{filename}'  |  clusters={clusters}  |  genes={n_genes}")
+
+    if target is not adata:
+        return target
+    return None
