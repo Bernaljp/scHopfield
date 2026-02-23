@@ -200,16 +200,16 @@ def load_model(
                     "The model was fitted on a different gene set."
                 )
             # Subset adata in-place to the model's gene set (preserving order)
-            lookup = {g: i for i, g in enumerate(current_genes)}
-            ordered_idx = np.array([lookup[g] for g in saved_genes])
+            gene_indices = adata.var.index.get_indexer_for(saved_genes)
             warnings.warn(
                 f"adata has {len(current_genes)} genes but the model was trained on "
                 f"{len(saved_genes)}.  Subsetting adata in-place to the model gene set.",
                 stacklevel=2,
             )
             print(f"Subsetting adata to {len(saved_genes)} genes from the model file...")
-            adata = adata[:,ordered_idx].copy()
+            adata = adata[:, gene_indices]
 
+        print(adata)
         clusters = json.loads(f.attrs['clusters'])
 
         # Restore uns['scHopfield'] primitive metadata
