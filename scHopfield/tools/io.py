@@ -188,11 +188,8 @@ def load_model(
         saved_genes = np.array(f['gene_names']).astype(str)
         current_genes = np.array(adata.var_names, dtype=str)
 
-        if np.array_equal(saved_genes, current_genes):
-            # Exact match: indices are the identity mapping
-            gene_idx = np.arange(len(saved_genes))
-        else:
-            # Allow the saved gene set to be a strict subset of current genes
+        if not np.array_equal(saved_genes, current_genes):
+            # Check that every model gene is present in the current adata
             missing = saved_genes[~np.isin(saved_genes, current_genes)]
             if missing.size > 0:
                 preview = ', '.join(missing[:5].tolist())
@@ -202,18 +199,15 @@ def load_model(
                     f"{missing.size} missing gene(s): {preview}{suffix}. "
                     "The model was fitted on a different gene set."
                 )
-            # Map each saved gene to its position in the current adata
+            # Subset adata in-place to the model's gene set (preserving order)
             lookup = {g: i for i, g in enumerate(current_genes)}
-            gene_idx = np.array([lookup[g] for g in saved_genes])
+            ordered_idx = np.array([lookup[g] for g in saved_genes])
             warnings.warn(
-                f"Model gene set ({len(saved_genes)} genes) is a subset of adata "
-                f"({len(current_genes)} genes).  Parameters are loaded for the "
-                f"{len(saved_genes)} model genes; remaining genes receive zeros.",
+                f"adata has {len(current_genes)} genes but the model was trained on "
+                f"{len(saved_genes)}.  Subsetting adata in-place to the model gene set.",
                 stacklevel=2,
             )
-
-        n_current = adata.n_vars
-        full_shape = len(gene_idx) == n_current   # True when sets are identical
+            adata = adata[:,ordered_idx]
 
         clusters = json.loads(f.attrs['clusters'])
 
@@ -226,25 +220,12 @@ def load_model(
         # Restore var columns
         var_grp = f['var']
         for key in var_grp:
-            saved_data = var_grp[key][:]
-            if full_shape:
-                adata.var[key] = saved_data
-            else:
-                is_bool = np.issubdtype(saved_data.dtype, np.bool_)
-                col = np.zeros(n_current, dtype=bool if is_bool else saved_data.dtype)
-                col[gene_idx] = saved_data
-                adata.var[key] = col
+            adata.var[key] = var_grp[key][:]
 
-        # Restore W matrices — expand to (n_current × n_current) when needed
+        # Restore W matrices
         varp_grp = f['varp']
         for key in varp_grp:
-            saved_W = varp_grp[key][:]
-            if full_shape:
-                adata.varp[key] = saved_W
-            else:
-                W = np.zeros((n_current, n_current), dtype=saved_W.dtype)
-                W[np.ix_(gene_idx, gene_idx)] = saved_W
-                adata.varp[key] = W
+            adata.varp[key] = varp_grp[key][:]
 
     n_genes = int(adata.var['scHopfield_used'].sum()) if 'scHopfield_used' in adata.var else '?'
     print(f"Model loaded from '{filename}'  |  clusters={clusters}  |  genes={n_genes}")
