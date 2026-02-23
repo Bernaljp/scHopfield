@@ -5,7 +5,7 @@ from typing import Optional, Union, Tuple, Dict
 from anndata import AnnData
 
 from .._utils.math import sigmoid, int_sig_act_inv
-from .._utils.io import get_matrix, to_numpy, get_genes_used
+from .._utils.io import get_matrix, to_numpy, get_genes_used, ensure_sigmoid_layer
 
 
 def compute_energies(
@@ -50,6 +50,8 @@ def compute_energies(
     E = -0.5 * s^T W s + gamma * integral(sigmoid^-1) - I^T s
     """
     adata = adata.copy() if copy else adata
+
+    ensure_sigmoid_layer(adata, spliced_key)
 
     genes = get_genes_used(adata)
 
@@ -277,6 +279,9 @@ def decompose_degradation_energy(
     np.ndarray
         Array of shape (n_cells, n_genes) with degradation energy per gene
     """
+    if x is None:
+        ensure_sigmoid_layer(adata, spliced_key)
+
     genes = get_genes_used(adata)
 
     # Get degradation rates
@@ -336,6 +341,9 @@ def decompose_bias_energy(
     np.ndarray
         Array of shape (n_cells, n_genes) with bias energy per gene
     """
+    if x is None:
+        ensure_sigmoid_layer(adata, spliced_key)
+
     genes = get_genes_used(adata)
 
     # Get sigmoid
@@ -377,6 +385,9 @@ def decompose_interaction_energy(
     np.ndarray
         Array of shape (n_cells, n_genes) with interaction energy per gene
     """
+    if x is None:
+        ensure_sigmoid_layer(adata, spliced_key)
+
     genes = get_genes_used(adata)
 
     # Get sigmoid

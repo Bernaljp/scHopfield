@@ -5,7 +5,7 @@ from typing import Optional, Union
 from anndata import AnnData
 from scipy.sparse import issparse
 
-from .._utils.io import get_matrix, to_numpy, get_genes_used
+from .._utils.io import get_matrix, to_numpy, get_genes_used, ensure_sigmoid_layer
 from .._utils.math import sigmoid
 
 
@@ -51,6 +51,8 @@ def compute_reconstructed_velocity(
     """
     if layer_key is not None and copy:
         adata = adata.copy()
+
+    ensure_sigmoid_layer(adata, spliced_key)
 
     genes = get_genes_used(adata)
     n_genes = len(genes)

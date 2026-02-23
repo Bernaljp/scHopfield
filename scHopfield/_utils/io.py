@@ -143,3 +143,46 @@ def get_genes_used(adata):
     return np.where(adata.var['scHopfield_used'].values)[0]
 
 
+def ensure_sigmoid_layer(adata, spliced_key=None):
+    """
+    Ensure ``adata.layers['sigmoid']`` exists, computing it on-the-fly if absent.
+
+    If the layer is already present this is a no-op.  Otherwise
+    ``pp.compute_sigmoid`` is called using *spliced_key* (or the value stored
+    in ``adata.uns['scHopfield']['spliced_key']`` as a fallback).
+
+    Parameters
+    ----------
+    adata : AnnData
+        Annotated data object with fitted sigmoid parameters.
+    spliced_key : str, optional
+        Key in ``adata.layers`` for raw spliced counts.  Falls back to the
+        value stored by ``fit_all_sigmoids`` in
+        ``adata.uns['scHopfield']['spliced_key']``, then to ``'Ms'``.
+
+    Raises
+    ------
+    ValueError
+        If sigmoid parameters (``sigmoid_threshold``) are not present in
+        ``adata.var``, meaning ``fit_all_sigmoids`` has not been run yet.
+    """
+    if 'sigmoid' in adata.layers:
+        return
+
+    if 'sigmoid_threshold' not in adata.var.columns:
+        raise ValueError(
+            "Sigmoid parameters not found in adata.var. "
+            "Run sch.pp.fit_all_sigmoids() before calling this function."
+        )
+
+    resolved_key = (
+        spliced_key
+        or adata.uns.get('scHopfield', {}).get('spliced_key')
+        or 'Ms'
+    )
+
+    # Lazy import avoids circular dependency (preprocessing imports from _utils.io)
+    from ..preprocessing import compute_sigmoid
+    compute_sigmoid(adata, spliced_key=resolved_key)
+
+
