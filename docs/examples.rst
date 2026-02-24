@@ -2,9 +2,9 @@ Examples
 ========
 
 The following notebooks demonstrate scHopfield's capabilities on a hematopoiesis
-dataset (Paul et al. 2015).  To run them locally, convert the ``.py`` files in
-``notebooks/`` to Jupyter notebooks using Jupytext or ``jupyter nbconvert``,
-then place the ``.ipynb`` files in ``docs/notebooks/``.
+dataset (Paul et al. 2015).  Each notebook can be downloaded and run locally;
+the ``.py`` source files are available in the ``notebooks/`` directory of the
+repository.
 
 .. toctree::
    :maxdepth: 1

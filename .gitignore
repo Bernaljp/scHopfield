@@ -81,6 +81,7 @@ Thumbs.db
 
 # Project specific
 Base/
+Methods/
 IMPLEMENTATION_PLAN.md
 *.h5
 *.h5ad
