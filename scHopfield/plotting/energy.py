@@ -177,7 +177,8 @@ def plot_energy_boxplots(
 
         # Create boxplot with better styling
         bp = sns.boxplot(
-            data=df, x='Cluster', y='Energy', order=order,
+            data=df, hue='Cluster', y='Energy', order=order,
+            legend=False,
             ax=ax, palette=plot_palette,
             linewidth=1.5,
             fliersize=3,
@@ -187,9 +188,9 @@ def plot_energy_boxplots(
         # Optionally add strip plot for individual points
         if show_points:
             sns.stripplot(
-                data=df, x='Cluster', y='Energy', order=order,
+                data=df, hue='Cluster', y='Energy', order=order,
                 ax=ax, color='black', alpha=0.3, size=2,
-                jitter=True
+                jitter=True, legend=False,
             )
 
         # Styling
