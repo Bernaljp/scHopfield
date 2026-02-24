@@ -2,6 +2,7 @@
 
 import numpy as np
 import matplotlib.pyplot as plt
+from matplotlib.colors import to_rgba
 from typing import Optional, Union, List, Dict
 from anndata import AnnData
 
@@ -217,12 +218,16 @@ def plot_correlations_grid(
 
                 # Set background color
                 if colors is not None:
-                    c = list(colors[cell_types[i]])
-                    if len(c) == 4:  # RGBA
-                        c[-1] = 0.2  # Set alpha
-                    elif len(c) == 3:  # RGB, add alpha
-                        c = list(c) + [0.2]
-                    axs[i, j].set_facecolor(c)
+                    # Get the color (could be hex '#ff0000', name 'red', or list [1, 0, 0])
+                    raw_color = colors[cell_types[i]]
+                    
+                    # Normalize everything to an RGBA tuple (values 0.0 to 1.0)
+                    rgba = list(to_rgba(raw_color))
+                    
+                    # Set the alpha channel to 0.2
+                    rgba[3] = 0.2
+                    
+                    axs[i, j].set_facecolor(rgba)
             else:
                 # Upper triangle: turn off
                 axs[i, j].axis('off')
