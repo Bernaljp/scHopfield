@@ -77,10 +77,8 @@ Contents
    quickstart
    tutorial
 
-.. _example-notebooks:
-
 .. toctree::
-   :maxdepth: 1
+   :maxdepth: 2
    :caption: Example Notebooks
 
    Getting Started <notebooks/01_getting_started>
