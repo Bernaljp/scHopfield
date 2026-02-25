@@ -65,10 +65,8 @@ templates_path = ['_templates']
 exclude_patterns = ['_build', 'Thumbs.db', '.DS_Store', 'README.md']
 
 # The suffix(es) of source filenames.
-source_suffix = {
-    '.rst': None,
-    '.ipynb': 'nbsphinx',
-}
+# nbsphinx registers .ipynb automatically via its extension — do not specify it here.
+source_suffix = '.rst'
 
 # The master toctree document.
 master_doc = 'index'
