@@ -77,15 +77,17 @@ Contents
    quickstart
    tutorial
 
+.. _example-notebooks:
+
 .. toctree::
    :maxdepth: 1
    :caption: Example Notebooks
 
-   notebooks/01_getting_started
-   notebooks/02_energy_analysis
-   notebooks/03_network_analysis
-   notebooks/04_stability_analysis
-   notebooks/05_perturbation_analysis
+   Getting Started <notebooks/01_getting_started>
+   Energy Analysis <notebooks/02_energy_analysis>
+   Network Analysis <notebooks/03_network_analysis>
+   Stability Analysis <notebooks/04_stability_analysis>
+   Perturbation Analysis <notebooks/05_perturbation_analysis>
 
 .. toctree::
    :maxdepth: 2
@@ -117,6 +119,7 @@ Contents
    faq
    changelog
    contributing
+   examples
 
 Indices and tables
 ==================

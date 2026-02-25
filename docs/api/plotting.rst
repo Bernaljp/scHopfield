@@ -65,22 +65,13 @@ Perturbation Plots
    plot_top_affected_genes_bar
    plot_simulation_comparison
 
-Flow Plots (CellOracle-style)
------------------------------
+Flow Plots
+----------
 
 .. autosummary::
    :toctree: generated/
 
-   calculate_perturbation_flow
-   calculate_grid_flow
-   calculate_grid_flow_knn
-   calculate_inner_product
    plot_reference_flow
-   plot_perturbation_flow
-   plot_flow_on_grid
-   plot_simulation_flow_on_grid
-   plot_inner_product_on_embedding
-   plot_inner_product_by_cluster
    visualize_perturbation_flow
 
 Other Plots
@@ -248,58 +239,13 @@ plot_simulation_comparison
 
 .. autofunction:: plot_simulation_comparison
 
-Flow Plots (CellOracle-style)
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-calculate_perturbation_flow
-^^^^^^^^^^^^^^^^^^^^^^^^^^^
-
-.. autofunction:: calculate_perturbation_flow
-
-calculate_grid_flow
-^^^^^^^^^^^^^^^^^^^
-
-.. autofunction:: calculate_grid_flow
-
-calculate_grid_flow_knn
-^^^^^^^^^^^^^^^^^^^^^^^
-
-.. autofunction:: calculate_grid_flow_knn
-
-calculate_inner_product
-^^^^^^^^^^^^^^^^^^^^^^^
-
-.. autofunction:: calculate_inner_product
+Flow Plots
+~~~~~~~~~~
 
 plot_reference_flow
 ^^^^^^^^^^^^^^^^^^^
 
 .. autofunction:: plot_reference_flow
-
-plot_perturbation_flow
-^^^^^^^^^^^^^^^^^^^^^^
-
-.. autofunction:: plot_perturbation_flow
-
-plot_flow_on_grid
-^^^^^^^^^^^^^^^^^
-
-.. autofunction:: plot_flow_on_grid
-
-plot_simulation_flow_on_grid
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-
-.. autofunction:: plot_simulation_flow_on_grid
-
-plot_inner_product_on_embedding
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-
-.. autofunction:: plot_inner_product_on_embedding
-
-plot_inner_product_by_cluster
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-
-.. autofunction:: plot_inner_product_by_cluster
 
 visualize_perturbation_flow
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^
