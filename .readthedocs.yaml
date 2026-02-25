@@ -10,6 +10,9 @@ build:
   tools:
     python: "3.10"
   jobs:
+    pre_build:
+      # Copy notebooks into docs/notebooks so Sphinx can find them
+      - cp notebooks/*.ipynb docs/notebooks/
     post_install:
       # Install the package itself
       - pip install -e .
