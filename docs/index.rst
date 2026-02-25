@@ -117,7 +117,6 @@ Contents
    faq
    changelog
    contributing
-   examples
 
 Indices and tables
 ==================
