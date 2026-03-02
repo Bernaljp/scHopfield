@@ -667,7 +667,7 @@ def _fit_interactions_for_cluster(
         W = model.W.weight.detach().cpu().numpy()
         I = model.I.detach().cpu().numpy()
         g = np.exp(model.gamma.detach().cpu().numpy())
-        adata.uns['scHopfield']['models'][cluster] = model
+        adata.uns['scHopfield']['models'][cluster] = model.cpu()
 
     # Threshold and store
     W[np.abs(W) < w_threshold] = 0
