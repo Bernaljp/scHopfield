@@ -6,9 +6,15 @@ from anndata import AnnData
 from tqdm.auto import tqdm
 from joblib import Parallel, delayed
 
-from .solver import create_solver
+from .solver import create_solver, ODESolver
 from .._utils.io import get_matrix, to_numpy, get_genes_used
 from ._utils import _parse_perturb_genes, _update_scHopfield_uns
+
+# torchdiffeq method names that can be used on the GPU path
+_TORCHDIFFEQ_METHODS = frozenset([
+    'euler', 'rk4', 'midpoint', 'dopri5', 'dopri8',
+    'bosh3', 'adaptive_heun', 'fehlberg2',
+])
 
 
 def _run_jobs(func, items, n_jobs):
@@ -203,6 +209,140 @@ def simulate_perturbation_ode(
     results = _run_jobs(_run_one, indices, n_jobs)
     return results[0] if single else results
 
+def _simulate_cluster_gpu(
+    X_cluster: np.ndarray,
+    solver: 'ODESolver',
+    t_span: np.ndarray,
+    method: str,
+    device: 'torch.device',
+) -> np.ndarray:
+    """
+    Integrate all cells in a cluster simultaneously on the GPU.
+
+    Implements the same Hopfield ODE as ODESolver but processes the entire
+    cluster as a single batched tensor operation instead of a cell-by-cell
+    Python loop. Uses torchdiffeq.odeint when available; falls back to a
+    native torch Euler loop otherwise (still GPU-batched).
+
+    Parameters
+    ----------
+    X_cluster : np.ndarray
+        Initial expression states, shape (n_cells, n_genes).
+    solver : ODESolver
+        Configured solver carrying W, I, gamma, threshold, exponent,
+        x_min, x_max, and fixed-gene info.
+    t_span : np.ndarray
+        Time points, shape (n_steps,).
+    method : str
+        Integration method name recognised by torchdiffeq
+        ('euler', 'rk4', 'dopri5', …). If torchdiffeq is unavailable,
+        'euler' is handled by a native torch loop; other methods raise a
+        warning and also fall back to the torch Euler loop.
+    device : torch.device
+        GPU (or CPU) device to run the computation on.
+
+    Returns
+    -------
+    np.ndarray
+        Final expression states, shape (n_cells, n_genes), on CPU.
+    """
+    import torch
+
+    dtype   = torch.float64
+    x_min_v = float(solver.x_min)
+
+    # ── Parameters → tensors ─────────────────────────────────────────────────
+    W_t         = torch.tensor(solver.W,         dtype=dtype, device=device)
+    I_t         = torch.tensor(solver.I,         dtype=dtype, device=device)
+    gamma_t     = torch.tensor(solver.gamma,     dtype=dtype, device=device)
+    threshold_t = torch.tensor(solver.threshold, dtype=dtype, device=device)
+    exponent_t  = torch.tensor(solver.exponent,  dtype=dtype, device=device)
+
+    x_max_t = (
+        torch.tensor(solver.x_max, dtype=dtype, device=device)
+        if solver.x_max is not None else None
+    )
+
+    # ── Initial states ────────────────────────────────────────────────────────
+    X0 = torch.tensor(np.maximum(X_cluster, x_min_v), dtype=dtype, device=device)
+
+    fixed_indices   = solver.fixed_indices
+    fixed_values    = solver.fixed_values
+    fixed_values_t  = None
+    fixed_mask_t    = None
+
+    if fixed_indices is not None and len(fixed_indices) > 0:
+        fixed_values_t = torch.tensor(fixed_values, dtype=dtype, device=device)
+        X0[:, fixed_indices] = fixed_values_t
+        fixed_mask_t = torch.zeros(solver.W.shape[0], dtype=torch.bool, device=device)
+        fixed_mask_t[fixed_indices] = True
+
+    # ── Batched Hill-sigmoid ODE ──────────────────────────────────────────────
+    # Hill sigmoid: x^n / (x^n + s^n)  — matches sigmoid() in _utils/math.py
+    def dynamics(t, x):
+        # x: (n_cells, n_genes)
+        x_c = x.clamp(min=x_min_v)
+        if x_max_t is not None:
+            x_c = x_c.clamp(max=x_max_t)
+
+        x_pos = x_c.clamp(min=1e-12)          # avoid 0^n for fractional n
+        xn    = x_pos ** exponent_t            # (n_cells, n_genes)
+        sn    = threshold_t ** exponent_t      # (n_genes,) — broadcast
+        sig   = xn / (xn + sn)                # Hill sigmoid
+
+        dxdt = sig @ W_t.T - gamma_t * x_c + I_t  # (n_cells, n_genes)
+
+        # Soft lower boundary: don't push below x_min
+        dxdt = torch.where(x <= x_min_v, dxdt.clamp(min=0.0), dxdt)
+
+        # Soft upper boundary
+        if x_max_t is not None:
+            dxdt = torch.where(x >= x_max_t, dxdt.clamp(max=0.0), dxdt)
+
+        # Fixed genes: zero derivative so they stay constant
+        if fixed_mask_t is not None:
+            dxdt = dxdt.clone()
+            dxdt[:, fixed_mask_t] = 0.0
+
+        return dxdt
+
+    # ── Integration ───────────────────────────────────────────────────────────
+    with torch.no_grad():
+        try:
+            import torchdiffeq
+            _have_tde = True
+        except ImportError:
+            _have_tde = False
+
+        if _have_tde and method in _TORCHDIFFEQ_METHODS:
+            t_tensor   = torch.tensor(t_span, dtype=dtype, device=device)
+            trajectory = torchdiffeq.odeint(dynamics, X0, t_tensor, method=method)
+            # trajectory: (n_steps, n_cells, n_genes) → take last time point
+            X_final = trajectory[-1]
+
+        else:
+            # Native torch Euler loop — no torchdiffeq dependency required.
+            if method != 'euler':
+                import warnings
+                warnings.warn(
+                    f"torchdiffeq not available or method '{method}' is not in "
+                    f"_TORCHDIFFEQ_METHODS; falling back to torch Euler on {device}.",
+                    UserWarning,
+                )
+            x = X0.clone()
+            for i in range(1, len(t_span)):
+                dt_step = float(t_span[i] - t_span[i - 1])
+                x = x + dt_step * dynamics(None, x)
+                x = x.clamp(min=x_min_v)
+                if x_max_t is not None:
+                    x = x.clamp(max=x_max_t)
+                if fixed_indices is not None and len(fixed_indices) > 0:
+                    x[:, fixed_indices] = fixed_values_t
+            X_final = x
+
+    return X_final.cpu().numpy()
+
+
 def simulate_shift_ode(
     adata: 'AnnData',
     perturb_condition: Dict[str, float],
@@ -216,6 +356,7 @@ def simulate_shift_ode(
     x_max_percentile: float = 99.0,
     residual_gene_dynamics: bool = False,
     n_jobs: int = -1,
+    device: Optional[str] = None,
     verbose: bool = False
 ) -> 'AnnData':
     """
@@ -224,6 +365,12 @@ def simulate_shift_ode(
     This function mimics the propagation-based `simulate_shift` but uses continuous
     ODE integration. It calculates the final state for every cell after a time `dt`
     under the perturbed conditions, and stores the resulting shift (delta_X).
+
+    When a CUDA GPU is available (and `method` is GPU-compatible), all cells in
+    each cluster are integrated simultaneously as a single batched tensor operation
+    via `_simulate_cluster_gpu`, which uses `torchdiffeq.odeint` when installed and
+    falls back to a native torch Euler loop otherwise.  The result is always moved
+    back to CPU before being stored in the returned AnnData.
 
     Parameters
     ----------
@@ -242,7 +389,12 @@ def simulate_shift_ode(
     degradation_key : str, optional (default: 'gamma')
         Key for degradation rates.
     method : str, optional (default: 'euler')
-        Integration method ('euler', 'odeint', 'RK45', etc.)
+        Integration method.
+        GPU-compatible (via torchdiffeq or native torch):
+          'euler', 'rk4', 'midpoint', 'dopri5', 'dopri8', 'bosh3',
+          'adaptive_heun', 'fehlberg2'
+        CPU-only (scipy):
+          'odeint', 'RK45', 'RK23', 'DOP853', 'Radau', 'BDF', 'LSODA'
     use_cluster_specific_GRN : bool, optional (default: True)
         If True, uses cluster-specific solvers. If False, uses a global solver.
     x_max_percentile : float, optional (default: 99.0)
@@ -250,8 +402,14 @@ def simulate_shift_ode(
     residual_gene_dynamics : bool, optional (default: False)
         If False, perturbed genes are held fixed. If True, they evolve.
     n_jobs : int, optional (default: -1)
-        Number of parallel jobs for cell simulation. -1 uses all available cores.
-        Uses threads (not processes) so there is no pickling overhead.
+        Number of parallel jobs for the CPU fallback cell loop.
+        Ignored when the GPU path is active.
+    device : str or None, optional (default: None)
+        Target device for GPU-batched integration.
+        None  → auto-detect: use 'cuda' if available and method is GPU-compatible,
+                otherwise 'cpu'.
+        'cuda' → force GPU (raises if CUDA unavailable).
+        'cpu'  → always use the CPU path (scipy/joblib, as before).
     verbose : bool, optional (default: False)
         Print simulation progress.
 
@@ -259,42 +417,62 @@ def simulate_shift_ode(
     -------
     AnnData
         A copy of the input AnnData with 'simulated_count' and 'delta_X' added to layers.
+        All arrays are numpy (CPU) regardless of where the integration ran.
     """
+    import torch
+
+    # ── Resolve target device ─────────────────────────────────────────────────
+    if device == 'cpu':
+        use_gpu = False
+        torch_device = torch.device('cpu')
+    elif device == 'cuda':
+        if not torch.cuda.is_available():
+            raise RuntimeError("device='cuda' requested but CUDA is not available.")
+        use_gpu = True
+        torch_device = torch.device('cuda')
+    else:  # None → auto-detect
+        use_gpu = torch.cuda.is_available() and (method in _TORCHDIFFEQ_METHODS)
+        torch_device = torch.device('cuda' if use_gpu else 'cpu')
+
+    if verbose:
+        backend = f"GPU ({torch_device})" if use_gpu else "CPU"
+        print(f"simulate_shift_ode: backend={backend}, method={method}")
+
     adata_out = adata.copy()
-    
+
     # Identify used genes
     genes_mask = get_genes_used(adata_out)
     gene_names = adata_out.var_names[genes_mask]
-    
+
     # Get initial states
     X_orig = to_numpy(get_matrix(adata_out, spliced_key, genes=genes_mask))
     X_sim = np.zeros_like(X_orig)
-    V_sim = np.zeros_like(X_orig)  # Placeholder for velocity
-    
+    V_sim = np.zeros_like(X_orig)
+
     # Time span for the ODE simulation
     t_span = np.linspace(0, dt, n_steps)
-    
+
     clusters = adata_out.obs[cluster_key].unique() if use_cluster_specific_GRN else [None]
-    
+
     for cluster in clusters:
         if verbose:
             print(f"Processing cluster: {cluster if cluster else 'Global'}")
-            
+
         if cluster is not None:
             cell_indices = np.where(adata_out.obs[cluster_key] == cluster)[0]
         else:
             cell_indices = np.arange(adata_out.n_obs)
-            
+
         if len(cell_indices) == 0:
             continue
-            
+
         # Create solver for this cluster
         solver = create_solver(
             adata_out, cluster, degradation_key,
             spliced_key=spliced_key,
             x_max_percentile=x_max_percentile
         )
-        
+
         # Configure fixed genes based on perturbations
         all_indices, all_values = _parse_perturb_genes(
             gene_names, perturb_condition, validate_non_negative=True
@@ -304,19 +482,37 @@ def simulate_shift_ode(
         else:
             solver.set_fixed_genes(None, None)
 
-        def _simulate_cell(x0_row):
-            x0 = np.maximum(x0_row, 0)
-            if len(all_indices) > 0:
-                x0[all_indices] = all_values
-            return solver.solve(x0, t_span, method=method, clip_each_step=True)[-1]
+        if use_gpu:
+            # ── GPU path: integrate all cells in the cluster as one batch ────
+            X_cluster = X_orig[cell_indices]
+            try:
+                X_sim[cell_indices] = _simulate_cluster_gpu(
+                    X_cluster, solver, t_span, method, torch_device
+                )
+            except torch.cuda.OutOfMemoryError:
+                import warnings
+                warnings.warn(
+                    f"GPU OOM on cluster '{cluster}'; falling back to CPU for this cluster.",
+                    RuntimeWarning,
+                )
+                use_gpu = False  # disable GPU for remaining clusters too
+                # fall through to CPU path below
 
-        desc = f"Cells in {cluster if cluster else 'global'}"
-        x0_list = [X_orig[idx].copy() for idx in (tqdm(cell_indices, desc=desc) if verbose else cell_indices)]
+        if not use_gpu:
+            # ── CPU path: cell-by-cell with joblib threads ───────────────────
+            def _simulate_cell(x0_row):
+                x0 = np.maximum(x0_row, 0)
+                if len(all_indices) > 0:
+                    x0[all_indices] = all_values
+                return solver.solve(x0, t_span, method=method, clip_each_step=True)[-1]
 
-        results = _run_jobs(_simulate_cell, x0_list, n_jobs)
+            desc   = f"Cells in {cluster if cluster else 'global'}"
+            x0_list = [X_orig[idx].copy()
+                       for idx in (tqdm(cell_indices, desc=desc) if verbose else cell_indices)]
+            results = _run_jobs(_simulate_cell, x0_list, n_jobs)
+            X_sim[cell_indices] = np.array(results)
 
-        # Block assignment then vectorized velocity for the whole cluster at once
-        X_sim[cell_indices] = np.array(results)
+        # Velocity at final state (CPU numpy, vectorised over cells)
         V_sim[cell_indices] = solver.dynamics_batch(X_sim[cell_indices], 0.0)
 
 
