@@ -489,7 +489,9 @@ def simulate_shift_ode(
                 X_sim[cell_indices] = _simulate_cluster_gpu(
                     X_cluster, solver, t_span, method, torch_device
                 )
+                torch.cuda.empty_cache()  # release allocator cache after each cluster
             except torch.cuda.OutOfMemoryError:
+                torch.cuda.empty_cache()  # flush before falling back to CPU
                 import warnings
                 warnings.warn(
                     f"GPU OOM on cluster '{cluster}'; falling back to CPU for this cluster.",
