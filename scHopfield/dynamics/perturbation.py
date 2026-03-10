@@ -21,6 +21,7 @@ from tqdm.auto import tqdm
 from .._utils.math import sigmoid
 from .._utils.io import get_matrix, to_numpy, get_genes_used
 from ._utils import _parse_perturb_genes, _get_W_matrix, _compute_x_bounds, _update_scHopfield_uns
+from ..tools.perturbation_analysis import compute_lineage_bias, compute_cluster_effects
 
 
 def _propagate_signal(
@@ -660,3 +661,273 @@ def compare_perturbations(
     result = result.drop('_total', axis=1)
 
     return result
+
+
+# ---------------------------------------------------------------------------
+# High-level KO screen helpers
+# ---------------------------------------------------------------------------
+
+
+def run_ko_screen(
+    adata: AnnData,
+    genes: List[str],
+    lineage_A_clusters: List[str],
+    lineage_B_clusters: List[str],
+    basis: str,
+    wt_flow_key: str,
+    cluster_key: str = 'cell_type',
+    cluster_order: Optional[List[str]] = None,
+    simulate_kwargs: Optional[Dict] = None,
+    verbose: bool = True,
+) -> Tuple[Dict[str, Dict[str, float]], Dict[str, pd.Series]]:
+    """
+    Run a single-gene KO screen and compute lineage bias + cluster effects.
+
+    For each gene in ``genes``, performs an ODE-based KO simulation
+    (``simulate_shift_ode``), then computes:
+
+    - **lineage bias** via :func:`~scHopfield.tools.compute_lineage_bias`
+    - **cluster effects** via :func:`~scHopfield.tools.compute_cluster_effects`
+
+    Parameters
+    ----------
+    adata : AnnData
+        Base (WT) AnnData with fitted model. Each gene is simulated on a
+        copy so the original object is not modified.
+    genes : list of str
+        Gene names to screen. Genes absent from ``adata.var_names`` are skipped.
+    lineage_A_clusters : list of str
+        Cluster names for lineage A (e.g. erythroid).
+    lineage_B_clusters : list of str
+        Cluster names for lineage B (e.g. myeloid).
+    basis : str
+        Embedding basis for flow projection (e.g. ``'draw_graph_fa'``).
+    wt_flow_key : str
+        Key in ``adata.obsm`` for the pre-computed WT Hopfield velocity.
+    cluster_key : str, optional (default: 'cell_type')
+        Key in adata.obs for cluster labels.
+    cluster_order : list of str, optional
+        Ordered cluster names for ``compute_cluster_effects``.
+        If None, uses ``adata.obs[cluster_key].unique()``.
+    simulate_kwargs : dict, optional
+        Extra keyword arguments forwarded to ``simulate_shift_ode``.
+        Defaults: ``dt=5.0, n_steps=100, use_cluster_specific_GRN=True, n_jobs=-1``.
+    verbose : bool, optional (default: True)
+        Print progress for each gene.
+
+    Returns
+    -------
+    bias_dict : dict[str, dict]
+        ``{gene: {'score_A', 'score_B', 'lineage_bias'}}``
+    effects_dict : dict[str, pd.Series]
+        ``{gene: pd.Series(mean |delta_X| per cluster)}``
+
+    Examples
+    --------
+    >>> bias, effects = sch.dyn.run_ko_screen(
+    ...     adata, CANDIDATES, ERYTHROID, MYELOID,
+    ...     basis='draw_graph_fa', wt_flow_key='original_velocity_flow_draw_graph_fa',
+    ...     cluster_key='paul15_clusters', cluster_order=CLUSTER_ORDER,
+    ... )
+    >>> bias_df = pd.DataFrame(bias).T.sort_values('lineage_bias', ascending=False)
+    """
+    from .simulation import simulate_shift_ode
+
+    if simulate_kwargs is None:
+        simulate_kwargs = {}
+    sim_kw = dict(
+        cluster_key=cluster_key,
+        dt=5.0,
+        n_steps=100,
+        use_cluster_specific_GRN=True,
+        n_jobs=-1,
+        verbose=False,
+    )
+    sim_kw.update(simulate_kwargs)
+
+    if cluster_order is None:
+        cluster_order = list(adata.obs[cluster_key].unique())
+
+    bias_dict    = {}
+    effects_dict = {}
+
+    for gene in genes:
+        if gene not in adata.var_names:
+            if verbose:
+                print(f"  Skip {gene}: not in adata")
+            continue
+        if verbose:
+            print(f"  KO: {gene}...")
+        adata_ko = simulate_shift_ode(
+            adata.copy(),
+            perturb_condition={gene: 0.0},
+            **sim_kw,
+        )
+        bias_dict[gene]    = compute_lineage_bias(
+            adata_ko, adata,
+            lineage_A_clusters, lineage_B_clusters,
+            basis, wt_flow_key,
+            cluster_key=cluster_key,
+        )
+        effects_dict[gene] = compute_cluster_effects(
+            adata_ko, cluster_order, cluster_key=cluster_key
+        )
+
+    if verbose:
+        print(f"\nCompleted {len(bias_dict)} single KOs.")
+
+    return bias_dict, effects_dict
+
+
+def run_pairwise_ko_screen(
+    adata: AnnData,
+    pairs: List[Tuple[str, str]],
+    lineage_A_clusters: List[str],
+    lineage_B_clusters: List[str],
+    basis: str,
+    wt_flow_key: str,
+    cluster_key: str = 'cell_type',
+    cluster_order: Optional[List[str]] = None,
+    simulate_kwargs: Optional[Dict] = None,
+    verbose: bool = True,
+) -> Tuple[Dict[Tuple[str, str], Dict[str, float]], Dict[Tuple[str, str], pd.Series]]:
+    """
+    Run a pairwise KO screen and compute lineage bias + cluster effects.
+
+    Parameters
+    ----------
+    adata : AnnData
+        Base (WT) AnnData with fitted model.
+    pairs : list of (str, str)
+        Gene-name tuples to screen. Pairs where either gene is absent are skipped.
+    lineage_A_clusters : list of str
+        Cluster names for lineage A.
+    lineage_B_clusters : list of str
+        Cluster names for lineage B.
+    basis : str
+        Embedding basis for flow projection.
+    wt_flow_key : str
+        Key in ``adata.obsm`` for the pre-computed WT Hopfield velocity.
+    cluster_key : str, optional (default: 'cell_type')
+        Key in adata.obs for cluster labels.
+    cluster_order : list of str, optional
+        Ordered cluster names for ``compute_cluster_effects``.
+        If None, uses ``adata.obs[cluster_key].unique()``.
+    simulate_kwargs : dict, optional
+        Extra keyword arguments forwarded to ``simulate_shift_ode``.
+        Defaults: ``dt=5.0, n_steps=100, use_cluster_specific_GRN=True, n_jobs=-1``.
+    verbose : bool, optional (default: True)
+        Print progress for each pair.
+
+    Returns
+    -------
+    bias_dict : dict[(str, str), dict]
+        ``{(geneA, geneB): {'score_A', 'score_B', 'lineage_bias'}}``
+    effects_dict : dict[(str, str), pd.Series]
+        ``{(geneA, geneB): pd.Series(mean |delta_X| per cluster)}``
+
+    Examples
+    --------
+    >>> import itertools
+    >>> cross_pairs = list(itertools.product(top5_ery, top5_mye))
+    >>> bias, effects = sch.dyn.run_pairwise_ko_screen(
+    ...     adata, cross_pairs, ERYTHROID, MYELOID,
+    ...     basis='draw_graph_fa', wt_flow_key='original_velocity_flow_draw_graph_fa',
+    ...     cluster_key='paul15_clusters', cluster_order=CLUSTER_ORDER,
+    ... )
+    """
+    from .simulation import simulate_shift_ode
+
+    if simulate_kwargs is None:
+        simulate_kwargs = {}
+    sim_kw = dict(
+        cluster_key=cluster_key,
+        dt=5.0,
+        n_steps=100,
+        use_cluster_specific_GRN=True,
+        n_jobs=-1,
+        verbose=False,
+    )
+    sim_kw.update(simulate_kwargs)
+
+    if cluster_order is None:
+        cluster_order = list(adata.obs[cluster_key].unique())
+
+    bias_dict    = {}
+    effects_dict = {}
+
+    for geneA, geneB in pairs:
+        if geneA == geneB:
+            continue
+        if geneA not in adata.var_names or geneB not in adata.var_names:
+            if verbose:
+                print(f"  Skip ({geneA}, {geneB}): gene not in adata")
+            continue
+        if verbose:
+            print(f"  KO pair: ({geneA}, {geneB})...")
+        adata_pair = simulate_shift_ode(
+            adata.copy(),
+            perturb_condition={geneA: 0.0, geneB: 0.0},
+            **sim_kw,
+        )
+        bias_dict[(geneA, geneB)]    = compute_lineage_bias(
+            adata_pair, adata,
+            lineage_A_clusters, lineage_B_clusters,
+            basis, wt_flow_key,
+            cluster_key=cluster_key,
+        )
+        effects_dict[(geneA, geneB)] = compute_cluster_effects(
+            adata_pair, cluster_order, cluster_key=cluster_key
+        )
+
+    if verbose:
+        print(f"\nCompleted {len(bias_dict)} pairwise KOs.")
+
+    return bias_dict, effects_dict
+
+
+def compute_synergy(
+    pair_bias: Dict[str, float],
+    single_bias_A: Dict[str, float],
+    single_bias_B: Dict[str, float],
+) -> float:
+    """
+    Compute synergy between a gene pair KO and individual KOs.
+
+    Synergy measures whether the pair produces a stronger directional
+    lineage bias than either gene alone:
+
+    ``synergy = |pair_lineage_bias| - max(|single_A_lineage_bias|, |single_B_lineage_bias|)``
+
+    Positive synergy → pair amplifies directional bias beyond either single KO.
+    Negative synergy → pair is redundant with one of the single KOs.
+
+    Parameters
+    ----------
+    pair_bias : dict
+        Bias dict for the double KO, e.g. from ``run_pairwise_ko_screen``.
+        Must contain key ``'lineage_bias'``.
+    single_bias_A : dict
+        Bias dict for the single KO of gene A.
+        Must contain key ``'lineage_bias'``.
+    single_bias_B : dict
+        Bias dict for the single KO of gene B.
+        Must contain key ``'lineage_bias'``.
+
+    Returns
+    -------
+    float
+        Synergy score. Positive = synergistic, negative = redundant.
+
+    Examples
+    --------
+    >>> syn = sch.dyn.compute_synergy(
+    ...     pair_bias=pair_ko_bias[('Gata1', 'Spi1')],
+    ...     single_bias_A=single_ko_bias['Gata1'],
+    ...     single_bias_B=single_ko_bias['Spi1'],
+    ... )
+    """
+    bias_pair    = abs(pair_bias.get('lineage_bias', np.nan))
+    bias_singleA = abs(single_bias_A.get('lineage_bias', np.nan))
+    bias_singleB = abs(single_bias_B.get('lineage_bias', np.nan))
+    return float(bias_pair - max(bias_singleA, bias_singleB))

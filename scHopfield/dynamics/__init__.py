@@ -14,7 +14,10 @@ from .perturbation import (
     calculate_perturbation_effect_scores,
     calculate_cell_transition_scores,
     get_top_affected_genes,
-    compare_perturbations
+    compare_perturbations,
+    run_ko_screen,
+    run_pairwise_ko_screen,
+    compute_synergy,
 )
 
 # Alias for backward compatibility
@@ -34,5 +37,9 @@ __all__ = [
     'calculate_perturbation_effect_scores',
     'calculate_cell_transition_scores',
     'get_top_affected_genes',
-    'compare_perturbations'
+    'compare_perturbations',
+    # KO screen helpers
+    'run_ko_screen',
+    'run_pairwise_ko_screen',
+    'compute_synergy',
 ]

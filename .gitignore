@@ -82,9 +82,11 @@ Thumbs.db
 # Project specific
 Base/
 Methods/
+CellOracle/
 IMPLEMENTATION_PLAN.md
 *.h5
 *.h5ad
+cellOracle.pdf
 data/
 results/
 figures/
@@ -92,4 +94,5 @@ scTour_inference_basic.ipynb
 sctorubasic.py
 hematopoiesis_analysis_sch.py
 /notebooks/*.py
+/notebooks/07_*.ipynb
 /docs/notebooks/*.ipynb

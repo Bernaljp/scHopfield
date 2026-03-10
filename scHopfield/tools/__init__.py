@@ -51,6 +51,12 @@ from .io import (
     save_model,
     load_model,
 )
+from .perturbation_analysis import (
+    score_driver_tfs,
+    compute_lineage_bias,
+    compute_cluster_effects,
+    compute_perturbation_score,
+)
 
 __all__ = [
     # Energy analysis
@@ -96,4 +102,9 @@ __all__ = [
     # Model I/O
     'save_model',
     'load_model',
+    # Perturbation analysis
+    'score_driver_tfs',
+    'compute_lineage_bias',
+    'compute_cluster_effects',
+    'compute_perturbation_score',
 ]
