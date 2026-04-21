@@ -600,7 +600,12 @@ def _fit_interactions_for_cluster(
     if scheduler_kws is None:
         scheduler_kws = {}
 
-    device = torch.device("cuda" if (torch.cuda.is_available() and device == "cuda") else "cpu")
+    if device == "cuda" and torch.cuda.is_available():
+        device = torch.device("cuda")
+    elif device == "mps" and torch.backends.mps.is_available():
+        device = torch.device("mps")
+    else:
+        device = torch.device("cpu")
 
     W = None
     I = None
