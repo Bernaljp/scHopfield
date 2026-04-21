@@ -65,7 +65,7 @@ def compute_reconstructed_velocity(
 
         # Get cluster-specific parameters
         W = adata.varp[f'W_{cluster}']
-        I_vec = adata.var[f'I_{cluster}'].values[genes] if f'I_{cluster}' in adata.var.columns else np.zeros(n_genes)
+        I_vec = adata.var[f'I_{cluster}'].values[genes] if f'I_{cluster}' in adata.var.columns else np.zeros(n_genes, dtype=np.float32)
 
         gamma_col = f'gamma_{cluster}'
         gamma_vec = adata.var[gamma_col].values[genes] if gamma_col in adata.var.columns else adata.var[degradation_key].values[genes]
@@ -81,7 +81,7 @@ def compute_reconstructed_velocity(
             # Store in layer
             key = f'{layer_key}_{cluster}'
             if key not in adata.layers:
-                adata.layers[key] = np.zeros((adata.n_obs, adata.n_vars))
+                adata.layers[key] = np.zeros((adata.n_obs, adata.n_vars), dtype=np.float32)
             adata.layers[key][cluster_indices[:, None], genes[None, :]] = reconstructed_v
             return adata if copy else None
         else:
@@ -90,7 +90,7 @@ def compute_reconstructed_velocity(
     else:
         # Compute for all cells using their respective cluster parameters
         clusters = adata.obs[cluster_key].unique()
-        reconstructed_v = np.zeros((adata.n_obs, n_genes))
+        reconstructed_v = np.zeros((adata.n_obs, n_genes), dtype=np.float32)
 
         for clust in clusters:
             cluster_mask = (adata.obs[cluster_key] == clust).values
@@ -98,7 +98,7 @@ def compute_reconstructed_velocity(
 
             # Get cluster-specific parameters
             W = adata.varp[f'W_{clust}']
-            I_vec = adata.var[f'I_{clust}'].values[genes] if f'I_{clust}' in adata.var.columns else np.zeros(n_genes)
+            I_vec = adata.var[f'I_{clust}'].values[genes] if f'I_{clust}' in adata.var.columns else np.zeros(n_genes, dtype=np.float32)
 
             gamma_col = f'gamma_{clust}'
             gamma_vec = adata.var[gamma_col].values[genes] if gamma_col in adata.var.columns else adata.var[degradation_key].values[genes]
@@ -113,7 +113,7 @@ def compute_reconstructed_velocity(
         if layer_key is not None:
             # Store in layer
             if layer_key not in adata.layers:
-                adata.layers[layer_key] = np.zeros((adata.n_obs, adata.n_vars))
+                adata.layers[layer_key] = np.zeros((adata.n_obs, adata.n_vars), dtype=np.float32)
             adata.layers[layer_key][:, genes] = reconstructed_v
             return adata if copy else None
         else:
@@ -271,7 +271,7 @@ def compute_velocity(
         # Use 'all' parameters for everything
         clusters = ['all']
 
-    velocity = np.zeros((n_cells, n_genes))
+    velocity = np.zeros((n_cells, n_genes), dtype=np.float32)
 
     for clust in clusters:
         # Determine which cells to process
@@ -305,7 +305,7 @@ def compute_velocity(
         if I_key in adata.var.columns:
             I_vec = adata.var.loc[gene_names, I_key].values
         else:
-            I_vec = np.zeros(n_genes)
+            I_vec = np.zeros(n_genes, dtype=np.float32)
 
         # Get gamma
         if gamma_key in adata.var.columns:
@@ -313,7 +313,7 @@ def compute_velocity(
         elif 'gamma' in adata.var.columns:
             gamma = adata.var.loc[gene_names, 'gamma'].values
         else:
-            gamma = np.ones(n_genes)
+            gamma = np.ones(n_genes, dtype=np.float32)
 
         # Compute velocity: v = W @ sigmoid(X) - gamma * X + I
         X_clust = X[clust_mask]

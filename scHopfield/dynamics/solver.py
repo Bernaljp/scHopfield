@@ -218,7 +218,7 @@ class ODESolver:
         """
         n_steps = len(t_span)
         n_genes = len(x0)
-        trajectory = np.zeros((n_steps, n_genes))
+        trajectory = np.zeros((n_steps, n_genes), dtype=np.float32)
         trajectory[0] = x0.copy()
 
         x = x0.copy()

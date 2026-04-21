@@ -69,10 +69,10 @@ def compute_jacobians(
     else:
         device = torch.device("cpu")
 
-    jacobian_eigenvalues = np.zeros((n_cells, n_genes), dtype=np.complex128)
+    jacobian_eigenvalues = np.zeros((n_cells, n_genes), dtype=np.complex64)
     jacobian_eigenvectors = None
     if compute_eigenvectors:
-        jacobian_eigenvectors = np.zeros((n_cells, n_genes, n_genes), dtype=np.complex128)
+        jacobian_eigenvectors = np.zeros((n_cells, n_genes, n_genes), dtype=np.complex64)
     
     threshold = adata.var['sigmoid_threshold'].values[genes]
     exponent = adata.var['sigmoid_exponent'].values[genes]
@@ -373,7 +373,7 @@ def compute_jacobian_elements(
         device_obj = torch.device("cpu")
 
     # Initialize result storage
-    results = {f"df_{gi}_dx_{gj}": np.zeros(n_cells) for gi, gj in gene_pairs}
+    results = {f"df_{gi}_dx_{gj}": np.zeros(n_cells, dtype=np.float32) for gi, gj in gene_pairs}
 
     clusters = adata.obs[cluster_key].unique()
 
@@ -477,7 +477,7 @@ def compute_rotational_part(
     else:
         device_obj = torch.device("cpu")
 
-    rotational_norms = np.zeros(n_cells)
+    rotational_norms = np.zeros(n_cells, dtype=np.float32)
     clusters = adata.obs[cluster_key].unique()
 
     for cluster in clusters:

@@ -17,7 +17,7 @@ def _parse_perturb_genes(gene_names, perturb_condition, validate_non_negative=Fa
             raise ValueError(f"Perturbation value must be non-negative, got {value} for {gene}")
         indices.append(gene_to_idx[gene])
         values.append(value)
-    return np.array(indices, dtype=np.int64), np.array(values, dtype=np.float64)
+    return np.array(indices, dtype=np.int64), np.array(values, dtype=np.float32)
 
 
 def _get_W_matrix(adata, cluster, use_cluster_specific=True):
