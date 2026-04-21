@@ -397,7 +397,7 @@ def _calculate_grid_flow_knn(
     mass_filter = mass < (min_mass / 100)
 
     # Interpolate flow
-    grid_flow = np.zeros((n_grid_points, 2))
+    grid_flow = np.zeros((n_grid_points, 2), dtype=np.float32)
     for i in range(n_grid_points):
         w = weights[i]
         w = w / (w.sum() + 1e-10)
@@ -462,7 +462,7 @@ def _calculate_grid_flow_gaussian(
     mass_filter = mass < (min_mass / 100)
 
     # Interpolate flow
-    grid_flow = np.zeros((len(grid_coords), 2))
+    grid_flow = np.zeros((len(grid_coords), 2), dtype=np.float32)
     for i, gc in enumerate(grid_coords):
         dists = np.sqrt(((embedding - gc) ** 2).sum(axis=1))
         weights = np.exp(-dists ** 2 / (2 * bandwidth ** 2))

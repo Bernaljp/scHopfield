@@ -69,9 +69,9 @@ def estimate_velocity_from_pseudotime(
     X = adata.layers[spliced_key]
     if sp.issparse(X):
         X = X.toarray()
-    X = np.asarray(X, dtype=float)
+    X = np.asarray(X, dtype=np.float32)
 
-    t = np.asarray(adata.obs[pseudotime_key].values, dtype=float) * scale
+    t = np.asarray(adata.obs[pseudotime_key].values, dtype=np.float32) * scale
     A = adata.obsp[connectivity_key]
 
     rows, cols = A.nonzero()

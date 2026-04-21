@@ -245,7 +245,7 @@ def compute_cluster_effects(
     >>> effects.plot.bar()
     """
     if 'delta_X' not in adata_ko.layers:
-        return pd.Series(dtype=float)
+        return pd.Series(dtype=np.float32)
 
     delta_X = np.asarray(adata_ko.layers['delta_X'])
     obs_cl  = adata_ko.obs[cluster_key]
@@ -354,7 +354,7 @@ def compute_perturbation_score(
 
     embedding  = adata_ko.obsm[embedding_key]
     ko_flow    = adata_ko.obsm[flow_key]
-    pseudotime = adata_wt.obs[pseudotime_key].values.astype(float)
+    pseudotime = adata_wt.obs[pseudotime_key].values.astype(np.float32)
 
     # --- Build pseudotime surface on regular grid via polynomial regression ---
     x_min, x_max = embedding[:, 0].min(), embedding[:, 0].max()
@@ -411,7 +411,7 @@ def compute_perturbation_score(
     grad_norm = np.linalg.norm(grad_vectors, axis=1, keepdims=True) + 1e-10
     ps_grid_raw = np.sum((grid_flow / flow_norm) * (grad_vectors / grad_norm), axis=1)
 
-    ps_per_grid = ps_grid_raw.astype(float)
+    ps_per_grid = ps_grid_raw.astype(np.float32)
     ps_per_grid[mass_filter] = np.nan
 
     # Summary stats over non-masked grid points

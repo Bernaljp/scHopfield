@@ -248,7 +248,7 @@ def _simulate_cluster_gpu(
     """
     import torch
 
-    dtype   = torch.float64
+    dtype   = torch.float32
     x_min_v = float(solver.x_min)
 
     # ── Parameters → tensors ─────────────────────────────────────────────────
@@ -425,14 +425,21 @@ def simulate_shift_ode(
     if device == 'cpu':
         use_gpu = False
         torch_device = torch.device('cpu')
-    elif device == 'cuda':
-        if not torch.cuda.is_available():
+    elif device == 'cuda' or device == 'mps':
+        if device == 'cuda' and not torch.cuda.is_available():
             raise RuntimeError("device='cuda' requested but CUDA is not available.")
+        elif device == 'mps' and not torch.backends.mps.is_available():
+            raise RuntimeError("device='mps' requested but MPS is not available.")
         use_gpu = True
-        torch_device = torch.device('cuda')
+        torch_device = torch.device(device)
     else:  # None → auto-detect
-        use_gpu = torch.cuda.is_available() and (method in _TORCHDIFFEQ_METHODS)
-        torch_device = torch.device('cuda' if use_gpu else 'cpu')
+        if torch.cuda.is_available():
+            torch_device = torch.device('cuda')
+        elif torch.backends.mps.is_available():
+            torch_device = torch.device('mps')
+        else:
+            torch_device = torch.device('cpu')
+        use_gpu = torch_device.type != 'cpu' and (method in _TORCHDIFFEQ_METHODS)
 
     if verbose:
         backend = f"GPU ({torch_device})" if use_gpu else "CPU"
@@ -523,9 +530,9 @@ def simulate_shift_ode(
     
     # Map back to full gene array shape
     n_cells, n_all_genes = adata_out.shape
-    delta_X_full = np.zeros((n_cells, n_all_genes))
-    X_sim_full = np.zeros((n_cells, n_all_genes))
-    V_sim_full = np.zeros((n_cells, n_all_genes))  # Placeholder for velocity
+    delta_X_full = np.zeros((n_cells, n_all_genes), dtype=np.float32)
+    X_sim_full = np.zeros((n_cells, n_all_genes), dtype=np.float32)
+    V_sim_full = np.zeros((n_cells, n_all_genes), dtype=np.float32)  # Placeholder for velocity
     
     # Assuming genes_mask is a boolean mask or index array
     delta_X_full[:, genes_mask] = delta_X
@@ -601,9 +608,9 @@ def calculate_trajectory_flow(
     n_genes = len(genes)
 
     # Initialize arrays
-    delta_X = np.zeros((n_cells, n_genes))
-    X_wt_final = np.zeros((n_cells, n_genes))
-    X_pert_final = np.zeros((n_cells, n_genes))
+    delta_X = np.zeros((n_cells, n_genes), dtype=np.float32)
+    X_wt_final = np.zeros((n_cells, n_genes), dtype=np.float32)
+    X_pert_final = np.zeros((n_cells, n_genes), dtype=np.float32)
 
     # Get final states from trajectories for each cluster
     for cluster in wt_trajectories.keys():
@@ -632,7 +639,7 @@ def calculate_trajectory_flow(
         if verbose:
             print("Computing Hopfield velocities...")
 
-        delta_velocity = np.zeros((n_cells, n_genes))
+        delta_velocity = np.zeros((n_cells, n_genes), dtype=np.float32)
 
         for cluster in wt_trajectories.keys():
             mask = adata.obs[cluster_key] == cluster

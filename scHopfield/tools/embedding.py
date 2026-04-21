@@ -307,7 +307,7 @@ def project_to_embedding(
         nn.fit(X)
         distances, indices = nn.kneighbors(X)
 
-        embedding_vectors = np.zeros((n_cells, 2))
+        embedding_vectors = np.zeros((n_cells, 2), dtype=np.float32)
 
         for i in range(n_cells):
             neighbors = indices[i, 1:]  # Exclude self
@@ -428,7 +428,7 @@ def _calculate_correlation_sampled(
     from tqdm.auto import tqdm
 
     n_cells, n_neighbors = neigh_ixs.shape
-    corrcoef = np.zeros((n_cells, n_cells))
+    corrcoef = np.zeros((n_cells, n_cells), dtype=np.float32)
 
     iterator = range(n_cells)
     if verbose:
@@ -457,7 +457,7 @@ def _calculate_correlation_full(
     from tqdm.auto import tqdm
 
     n_cells = X.shape[0]
-    corrcoef = np.zeros((n_cells, n_cells))
+    corrcoef = np.zeros((n_cells, n_cells), dtype=np.float32)
 
     iterator = range(n_cells)
     if verbose:
@@ -482,7 +482,7 @@ def _pearson_correlation_rows(a: np.ndarray, B: np.ndarray) -> np.ndarray:
     ss_B = np.sum(B_centered ** 2, axis=1)
 
     if ss_a < 1e-10:
-        return np.zeros(B.shape[0])
+        return np.zeros(B.shape[0], dtype=np.float32)
 
     numerator = (a_centered @ B_centered.T).flatten()
     denominator = np.sqrt(ss_a) * np.sqrt(ss_B)

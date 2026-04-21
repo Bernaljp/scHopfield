@@ -52,7 +52,7 @@ def energy_gene_correlation(
     clusters = adata.obs[cluster_key].unique()
 
     # Get energies from shared columns (already computed with cluster-specific parameters)
-    energies = np.zeros((4, adata.n_obs))
+    energies = np.zeros((4, adata.n_obs), dtype=np.float32)
     energies[0, :] = adata.obs['energy_total'].values
     energies[1, :] = adata.obs['energy_interaction'].values
     energies[2, :] = adata.obs['energy_degradation'].values
