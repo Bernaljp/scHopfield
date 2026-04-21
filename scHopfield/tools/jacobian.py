@@ -62,8 +62,13 @@ def compute_jacobians(
     n_genes = len(genes)
     n_cells = adata.n_obs
     
-    device = torch.device("cuda" if (torch.cuda.is_available() and device == "cuda") else "cpu")
-    
+    if device == "cuda" and torch.cuda.is_available():
+        device = torch.device("cuda")
+    elif device == "mps" and torch.backends.mps.is_available():
+        device = torch.device("mps")
+    else:
+        device = torch.device("cpu")
+
     jacobian_eigenvalues = np.zeros((n_cells, n_genes), dtype=np.complex128)
     jacobian_eigenvectors = None
     if compute_eigenvectors:
@@ -360,7 +365,12 @@ def compute_jacobian_elements(
     exponent = adata.var['sigmoid_exponent'].values[genes]
     n_cells = adata.n_obs
 
-    device_obj = torch.device("cuda" if (torch.cuda.is_available() and device == "cuda") else "cpu")
+    if device == "cuda" and torch.cuda.is_available():
+        device_obj = torch.device("cuda")
+    elif device == "mps" and torch.backends.mps.is_available():
+        device_obj = torch.device("mps")
+    else:
+        device_obj = torch.device("cpu")
 
     # Initialize result storage
     results = {f"df_{gi}_dx_{gj}": np.zeros(n_cells) for gi, gj in gene_pairs}
@@ -460,7 +470,12 @@ def compute_rotational_part(
     threshold = adata.var['sigmoid_threshold'].values[genes]
     exponent = adata.var['sigmoid_exponent'].values[genes]
 
-    device_obj = torch.device("cuda" if (torch.cuda.is_available() and device == "cuda") else "cpu")
+    if device == "cuda" and torch.cuda.is_available():
+        device_obj = torch.device("cuda")
+    elif device == "mps" and torch.backends.mps.is_available():
+        device_obj = torch.device("mps")
+    else:
+        device_obj = torch.device("cpu")
 
     rotational_norms = np.zeros(n_cells)
     clusters = adata.obs[cluster_key].unique()
