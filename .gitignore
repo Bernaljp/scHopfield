@@ -94,5 +94,6 @@ scTour_inference_basic.ipynb
 sctorubasic.py
 hematopoiesis_analysis_sch.py
 /notebooks/*.py
-/notebooks/07_*.ipynb
+/notebooks/08_*.ipynb
 /docs/notebooks/*.ipynb
+perturbation_extended_analyses.ipynb
