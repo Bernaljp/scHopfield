@@ -18,6 +18,8 @@ from .perturbation import (
     run_ko_screen,
     run_pairwise_ko_screen,
     compute_synergy,
+    compute_epistasis,
+    run_dose_response,
 )
 
 # Alias for backward compatibility
@@ -42,4 +44,6 @@ __all__ = [
     'run_ko_screen',
     'run_pairwise_ko_screen',
     'compute_synergy',
+    'compute_epistasis',
+    'run_dose_response',
 ]

@@ -438,3 +438,248 @@ def compute_perturbation_score(
         'ps_negative_sum': ps_negative_sum,
         'ps_per_cell':     ps_per_cell,
     }
+
+
+def lineage_de(
+    adata: AnnData,
+    lineage_A_clusters: List[str],
+    lineage_B_clusters: List[str],
+    cluster_key: str = 'cell_type',
+    spliced_key: str = 'spliced',
+    gene_names: Optional[List[str]] = None,
+) -> 'pd.DataFrame':
+    """
+    Differential expression between two lineages via Mann-Whitney U test.
+
+    Ranks every gene by the absolute log2 fold change between the mean
+    expression in lineage B and lineage A.  Positive log2FC = lineage-B-high.
+
+    Parameters
+    ----------
+    adata : AnnData
+        Annotated data with expression in ``adata.layers[spliced_key]``.
+    lineage_A_clusters : list of str
+        Cluster names for lineage A (reference; e.g. erythroid).
+    lineage_B_clusters : list of str
+        Cluster names for lineage B (query; e.g. myeloid).
+    cluster_key : str, optional (default: 'cell_type')
+        Key in ``adata.obs`` for cluster labels.
+    spliced_key : str, optional (default: 'spliced')
+        Key in ``adata.layers`` for the expression matrix.
+    gene_names : list of str, optional
+        Restrict analysis to these gene names.  If None, uses all genes.
+
+    Returns
+    -------
+    pd.DataFrame
+        Indexed by gene name, sorted by ``abs_log2fc`` descending, with
+        columns:
+        - ``log2fc``: log2(mean_B / mean_A)
+        - ``pval``: two-sided Mann-Whitney U p-value
+        - ``abs_log2fc``: |log2fc|
+        - ``rank``: 1 = most differentially expressed
+
+    Examples
+    --------
+    >>> de = sch.tl.lineage_de(adata, ERYTHROID, MYELOID, cluster_key='paul15_clusters')
+    >>> stat3_rank = de.loc['Stat3', 'rank']
+    """
+    from scipy import stats as sp_stats
+    from tqdm.auto import tqdm
+
+    mask_A = adata.obs[cluster_key].isin(lineage_A_clusters).values
+    mask_B = adata.obs[cluster_key].isin(lineage_B_clusters).values
+
+    expr      = adata.layers[spliced_key]
+    all_genes = list(adata.var_names)
+
+    if gene_names is None:
+        gene_names = all_genes
+
+    gene_indices    = [all_genes.index(g) for g in gene_names if g in all_genes]
+    gene_names_used = [all_genes[i] for i in gene_indices]
+
+    records = []
+    for gi, gene in tqdm(
+        zip(gene_indices, gene_names_used),
+        total=len(gene_indices),
+        desc='DE analysis',
+    ):
+        col    = np.asarray(expr[:, gi]).flatten()
+        A_vals = col[mask_A]
+        B_vals = col[mask_B]
+
+        A_mean = A_vals.mean() + 1e-6
+        B_mean = B_vals.mean() + 1e-6
+        log2fc = np.log2(B_mean / A_mean)
+
+        _, pval = sp_stats.mannwhitneyu(B_vals, A_vals, alternative='two-sided')
+        records.append({'gene': gene, 'log2fc': log2fc, 'pval': pval})
+
+    df = pd.DataFrame(records).set_index('gene')
+    df['abs_log2fc'] = df['log2fc'].abs()
+    df = df.sort_values('abs_log2fc', ascending=False)
+    df['rank'] = range(1, len(df) + 1)
+    return df
+
+
+def grn_partner_weights(
+    adata: AnnData,
+    anchor: str,
+    cluster_keys: Optional[List[str]] = None,
+) -> 'pd.DataFrame':
+    """
+    Extract bidirectional W^c regulatory weights for an anchor gene.
+
+    For each cluster matrix ``W^c`` in ``adata.varp``, computes:
+
+    ``w_combined_i = W^c[anchor_idx, i] + W^c[i, anchor_idx]``
+
+    capturing the total bidirectional regulatory weight between the anchor
+    and every other gene.  The resulting DataFrame is the input for
+    partner-selection strategies such as the 4+4+4+4 diversified scheme.
+
+    Parameters
+    ----------
+    adata : AnnData
+        Annotated data with cluster-specific GRN matrices in ``adata.varp``
+        under keys ``'W_{cluster_name}'``.
+    anchor : str
+        Gene name to use as the regulatory anchor.
+    cluster_keys : list of str, optional
+        Which ``W^c`` keys to include.  If None, all keys matching ``'W_*'``
+        in ``adata.varp`` are used.
+
+    Returns
+    -------
+    pd.DataFrame
+        Indexed by gene name (anchor excluded) with columns:
+        - ``w_{cluster}``: per-cluster w_combined value
+        - ``w_abs_all``: mean |w_combined| across all specified clusters
+
+    Examples
+    --------
+    >>> wdf = sch.tl.grn_partner_weights(adata, anchor='Gata1')
+    >>> top10 = wdf.nlargest(10, 'w_abs_all')
+    """
+    gene_names = list(adata.var_names)
+    n_genes    = len(gene_names)
+
+    if anchor not in gene_names:
+        raise ValueError(f"Anchor gene '{anchor}' not found in adata.var_names")
+
+    a_idx = gene_names.index(anchor)
+
+    if cluster_keys is None:
+        cluster_keys = sorted([k for k in adata.varp.keys() if k.startswith('W_')])
+
+    short_names = [k.replace('W_', '') for k in cluster_keys]
+    W_mat = np.zeros((len(cluster_keys), n_genes))
+
+    for ci, key in enumerate(cluster_keys):
+        W_c = np.asarray(adata.varp[key])
+        W_mat[ci, :] = W_c[a_idx, :] + W_c[:, a_idx]
+
+    df = pd.DataFrame(
+        W_mat.T,
+        index=gene_names,
+        columns=[f'w_{s}' for s in short_names],
+    )
+    df.index.name = 'gene'
+    df['w_abs_all'] = np.abs(W_mat).mean(axis=0)
+    df = df.drop(index=anchor, errors='ignore')
+    return df
+
+
+def compute_perturbation_alignment(
+    adata_ko: AnnData,
+    basis: str,
+    flow_key: Optional[str] = None,
+    ip_key: str = 'ko_vs_wt_inner_product',
+    n_grid: int = 30,
+    min_density_pct: float = 30.0,
+) -> Dict:
+    """
+    Interpolate perturbation flow onto a regular grid for arrow visualization.
+
+    Takes per-cell perturbation flow vectors and a per-cell flow-alignment
+    inner product (computed via ``calculate_flow`` + ``calculate_inner_product``)
+    and projects them onto a regular 2D grid using linear interpolation and
+    KDE-based density masking.  Returns all arrays needed for a quiver plot.
+
+    Parameters
+    ----------
+    adata_ko : AnnData
+        AnnData after KO simulation with:
+        - ``adata_ko.obs[ip_key]``: per-cell inner product (float series)
+        - ``adata_ko.obsm[flow_key]``: per-cell 2D perturbation flow
+        - ``adata_ko.obsm['X_{basis}']``: 2D embedding coordinates
+    basis : str
+        Embedding basis key (e.g. ``'draw_graph_fa'``).
+    flow_key : str, optional
+        Key in ``adata_ko.obsm`` for perturbation flow.
+        Defaults to ``f'perturbation_flow_{basis}'``.
+    ip_key : str, optional (default: 'ko_vs_wt_inner_product')
+        Key in ``adata_ko.obs`` for per-cell inner product values.
+    n_grid : int, optional (default: 30)
+        Number of grid points per embedding dimension.
+    min_density_pct : float, optional (default: 30.0)
+        KDE density percentile below which grid arrows are masked out.
+
+    Returns
+    -------
+    dict
+        Keys: ``'coords'`` (n_cells, 2), ``'ip'`` (n_cells,),
+        ``'GX'``, ``'GY'``, ``'GU'``, ``'GV'`` (n_grid, n_grid each).
+        ``GU``/``GV`` are NaN at low-density grid points.
+
+    Examples
+    --------
+    >>> aln = sch.tl.compute_perturbation_alignment(adata_ko, basis='draw_graph_fa')
+    >>> ax.scatter(aln['coords'][:,0], aln['coords'][:,1], c=aln['ip'])
+    >>> ax.quiver(aln['GX'], aln['GY'], aln['GU'], aln['GV'])
+    """
+    from scipy.interpolate import griddata
+    from scipy.stats import gaussian_kde
+
+    if flow_key is None:
+        flow_key = f'perturbation_flow_{basis}'
+
+    embedding_key = f'X_{basis}'
+    if embedding_key not in adata_ko.obsm:
+        raise ValueError(f"Embedding '{embedding_key}' not found in adata_ko.obsm")
+    if flow_key not in adata_ko.obsm:
+        raise ValueError(
+            f"Flow key '{flow_key}' not found in adata_ko.obsm. "
+            f"Run sch.tl.calculate_flow(adata_ko, source='delta', basis='{basis}') first."
+        )
+    if ip_key not in adata_ko.obs.columns:
+        raise ValueError(
+            f"Inner product key '{ip_key}' not found in adata_ko.obs. "
+            "Run sch.tl.calculate_inner_product(adata_ko, ...) first."
+        )
+
+    coords  = adata_ko.obsm[embedding_key]
+    flow_ko = adata_ko.obsm[flow_key]
+    ip_ko   = adata_ko.obs[ip_key].values
+
+    x_min, x_max = coords[:, 0].min(), coords[:, 0].max()
+    y_min, y_max = coords[:, 1].min(), coords[:, 1].max()
+    gx = np.linspace(x_min, x_max, n_grid)
+    gy = np.linspace(y_min, y_max, n_grid)
+    GX, GY    = np.meshgrid(gx, gy)
+    grid_pts  = np.column_stack([GX.ravel(), GY.ravel()])
+
+    GU = griddata(coords, flow_ko[:, 0], grid_pts, method='linear').reshape(n_grid, n_grid)
+    GV = griddata(coords, flow_ko[:, 1], grid_pts, method='linear').reshape(n_grid, n_grid)
+
+    kde     = gaussian_kde(coords.T, bw_method=0.15)
+    density = kde(grid_pts.T).reshape(n_grid, n_grid)
+    valid   = ~np.isnan(GU)
+    if valid.any():
+        min_density = np.percentile(density[valid], min_density_pct)
+        low_density = density < min_density
+        GU[low_density] = np.nan
+        GV[low_density] = np.nan
+
+    return {'coords': coords, 'ip': ip_ko, 'GX': GX, 'GY': GY, 'GU': GU, 'GV': GV}

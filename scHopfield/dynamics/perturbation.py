@@ -931,3 +931,237 @@ def compute_synergy(
     bias_singleA = abs(single_bias_A.get('lineage_bias', np.nan))
     bias_singleB = abs(single_bias_B.get('lineage_bias', np.nan))
     return float(bias_pair - max(bias_singleA, bias_singleB))
+
+
+def compute_epistasis(
+    pair_ko_bias: Dict,
+    single_ko_bias,
+    lineage_A_genes: Optional[List[str]] = None,
+    lineage_B_genes: Optional[List[str]] = None,
+) -> pd.DataFrame:
+    """
+    Compute epistasis metrics for all pairwise KO results.
+
+    For each gene pair (A, B) computes:
+
+    - **cancellation_error**: ``actual_bias - (bias_A + bias_B)`` — deviation
+      from the additive expectation (Bliss independence on lineage bias).
+    - **synergy_ery** / **synergy_mye**: per-lineage score above the best
+      single agent (HSA-style).
+    - **dominant_epistasis**: the synergy value with the larger absolute
+      magnitude, preserving sign.
+
+    Parameters
+    ----------
+    pair_ko_bias : dict
+        ``{(geneA, geneB): {'score_A', 'score_B', 'lineage_bias'}}``
+        from ``run_pairwise_ko_screen``.
+    single_ko_bias : dict or pd.DataFrame
+        ``{gene: {'score_A', 'score_B', 'lineage_bias'}}`` for all single KOs.
+        A DataFrame indexed by gene name with these columns is also accepted.
+    lineage_A_genes : list of str, optional
+        Genes in lineage A; used only to classify pair type (``'ery-ery'``,
+        ``'cross'``, etc.). If None, all pairs are labelled ``'unknown'``.
+    lineage_B_genes : list of str, optional
+        Genes in lineage B; used only for pair type classification.
+
+    Returns
+    -------
+    pd.DataFrame
+        Indexed by ``'geneA+geneB'`` pair string, sorted by ``lineage_bias``
+        descending.  Columns: ``geneA``, ``geneB``, ``score_A``, ``score_B``,
+        ``lineage_bias``, ``expected_bias``, ``cancellation_error``,
+        ``synergy_ery``, ``synergy_mye``, ``dominant_epistasis``,
+        ``pair_type``.
+
+    Examples
+    --------
+    >>> pair_df = sch.dyn.compute_epistasis(
+    ...     pair_ko_bias, single_ko_bias,
+    ...     lineage_A_genes=top5_ery, lineage_B_genes=top5_mye,
+    ... )
+    """
+    def _max_magnitude(a, b):
+        return a if abs(a) >= abs(b) else b
+
+    def _get(sko, gene, key):
+        if isinstance(sko, pd.DataFrame):
+            return float(sko.loc[gene, key]) if gene in sko.index else 0.0
+        return float(sko.get(gene, {}).get(key, 0.0))
+
+    ery_genes = list(lineage_A_genes) if lineage_A_genes is not None else []
+    mye_genes = list(lineage_B_genes) if lineage_B_genes is not None else []
+
+    records = []
+    for (gA, gB), bias in pair_ko_bias.items():
+        score_A_A = _get(single_ko_bias, gA, 'score_A')
+        score_B_A = _get(single_ko_bias, gA, 'score_B')
+        bias_A    = _get(single_ko_bias, gA, 'lineage_bias')
+
+        score_A_B = _get(single_ko_bias, gB, 'score_A')
+        score_B_B = _get(single_ko_bias, gB, 'score_B')
+        bias_B    = _get(single_ko_bias, gB, 'lineage_bias')
+
+        score_A_pair = bias.get('score_A', 0.0)
+        score_B_pair = bias.get('score_B', 0.0)
+        actual_bias  = bias.get('lineage_bias', np.nan)
+
+        synergy_ery  = score_A_pair - max(score_A_A, score_A_B)
+        synergy_mye  = score_B_pair - max(score_B_A, score_B_B)
+        dominant_epi = _max_magnitude(synergy_ery, synergy_mye)
+        expected_bias       = bias_A + bias_B
+        cancellation_error  = actual_bias - expected_bias
+
+        if ery_genes and mye_genes:
+            in_ery_A = gA in ery_genes
+            in_ery_B = gB in ery_genes
+            in_mye_A = gA in mye_genes
+            in_mye_B = gB in mye_genes
+            if (in_ery_A and in_mye_B) or (in_mye_A and in_ery_B):
+                pair_type = 'cross'
+            elif in_ery_A and in_ery_B:
+                pair_type = 'ery-ery'
+            elif in_mye_A and in_mye_B:
+                pair_type = 'mye-mye'
+            else:
+                pair_type = 'other'
+        else:
+            pair_type = 'unknown'
+
+        records.append({
+            'geneA':              gA,
+            'geneB':              gB,
+            'pair':               f'{gA}+{gB}',
+            'score_A':            score_A_pair,
+            'score_B':            score_B_pair,
+            'lineage_bias':       actual_bias,
+            'expected_bias':      expected_bias,
+            'cancellation_error': cancellation_error,
+            'synergy_ery':        synergy_ery,
+            'synergy_mye':        synergy_mye,
+            'dominant_epistasis': dominant_epi,
+            'pair_type':          pair_type,
+        })
+
+    return (
+        pd.DataFrame(records)
+        .set_index('pair')
+        .sort_values('lineage_bias', ascending=False)
+    )
+
+
+def run_dose_response(
+    adata: AnnData,
+    gene: str,
+    levels,
+    lineage_A_clusters: List[str],
+    lineage_B_clusters: List[str],
+    basis: str,
+    wt_flow_key: str,
+    natural_max: Optional[float] = None,
+    cluster_key: str = 'cell_type',
+    simulate_kwargs: Optional[Dict] = None,
+    verbose: bool = True,
+) -> pd.DataFrame:
+    """
+    Run ODE perturbation at multiple expression levels for dose-response analysis.
+
+    Sweeps from 0 (complete KO) through natural expression to 2x natural max
+    (strong OE).  Returns lineage bias at each level, revealing whether the
+    erythroid/myeloid switch is graded or threshold-like.
+
+    Parameters
+    ----------
+    adata : AnnData
+        Base (WT) AnnData with fitted model.
+    gene : str
+        Gene name to perturb.
+    levels : array-like
+        Absolute expression levels to test (e.g. ``np.linspace(0, max*2, 10)``).
+    lineage_A_clusters : list of str
+        Cluster names for lineage A (e.g. erythroid).
+    lineage_B_clusters : list of str
+        Cluster names for lineage B (e.g. myeloid).
+    basis : str
+        Embedding basis for flow projection.
+    wt_flow_key : str
+        Key in ``adata.obsm`` for the pre-computed WT Hopfield velocity.
+    natural_max : float, optional
+        Natural expression maximum for the gene (e.g. 99th percentile).
+        When provided, adds a ``level_frac`` column (``level / natural_max``).
+    cluster_key : str, optional (default: 'cell_type')
+        Key in adata.obs for cluster labels.
+    simulate_kwargs : dict, optional
+        Extra keyword arguments forwarded to ``simulate_shift_ode``.
+    verbose : bool, optional (default: True)
+        Show tqdm progress bar.
+
+    Returns
+    -------
+    pd.DataFrame
+        Columns: ``['gene', 'level', 'level_frac', 'score_A', 'score_B', 'lineage_bias']``.
+        One row per level.
+
+    Examples
+    --------
+    >>> gata1_max = float(np.percentile(adata.layers['spliced'][:, idx], 99))
+    >>> levels = np.linspace(0, gata1_max * 2, 10)
+    >>> dr = sch.dyn.run_dose_response(
+    ...     adata, 'Gata1', levels, ERYTHROID, MYELOID,
+    ...     basis='draw_graph_fa', wt_flow_key='original_velocity_flow_draw_graph_fa',
+    ...     natural_max=gata1_max, cluster_key='paul15_clusters',
+    ... )
+    """
+    from .simulation import simulate_shift_ode
+    from ..tools.flow import calculate_flow
+
+    if gene not in adata.var_names:
+        raise ValueError(f"Gene '{gene}' not found in adata.var_names")
+
+    if simulate_kwargs is None:
+        simulate_kwargs = {}
+    sim_kw = dict(
+        cluster_key=cluster_key,
+        dt=5.0,
+        n_steps=100,
+        use_cluster_specific_GRN=True,
+        n_jobs=-1,
+        verbose=False,
+    )
+    sim_kw.update(simulate_kwargs)
+
+    levels = np.asarray(levels, dtype=float)
+    records = []
+
+    iter_levels = (
+        tqdm(levels, desc=f'{gene} dose-response') if verbose else levels
+    )
+    for level in iter_levels:
+        adata_t = simulate_shift_ode(
+            adata.copy(),
+            perturb_condition={gene: float(level)},
+            **sim_kw,
+        )
+        calculate_flow(
+            adata_t, source='delta', basis=basis, method='celloracle',
+            cluster_key=cluster_key,
+            store_key=f'perturbation_flow_{basis}',
+            verbose=False,
+        )
+        bias = compute_lineage_bias(
+            adata_t, adata,
+            lineage_A_clusters, lineage_B_clusters,
+            basis, wt_flow_key,
+            cluster_key=cluster_key,
+        )
+        level_frac = float(level) / natural_max if natural_max is not None else np.nan
+        records.append({
+            'gene':         gene,
+            'level':        float(level),
+            'level_frac':   level_frac,
+            'score_A':      bias.get('score_A', np.nan),
+            'score_B':      bias.get('score_B', np.nan),
+            'lineage_bias': bias.get('lineage_bias', np.nan),
+        })
+
+    return pd.DataFrame(records)

@@ -50,12 +50,17 @@ from .flow import (
 from .io import (
     save_model,
     load_model,
+    save_checkpoint,
+    load_checkpoint,
 )
 from .perturbation_analysis import (
     score_driver_tfs,
     compute_lineage_bias,
     compute_cluster_effects,
     compute_perturbation_score,
+    lineage_de,
+    grn_partner_weights,
+    compute_perturbation_alignment,
 )
 
 __all__ = [
@@ -102,9 +107,14 @@ __all__ = [
     # Model I/O
     'save_model',
     'load_model',
+    'save_checkpoint',
+    'load_checkpoint',
     # Perturbation analysis
     'score_driver_tfs',
     'compute_lineage_bias',
     'compute_cluster_effects',
     'compute_perturbation_score',
+    'lineage_de',
+    'grn_partner_weights',
+    'compute_perturbation_alignment',
 ]
