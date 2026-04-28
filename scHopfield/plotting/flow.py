@@ -205,6 +205,9 @@ def plot_inner_product(
     show_colorbar: bool = True,
     order: Optional[List[str]] = None,
     colors: Optional[Dict[str, str]] = None,
+    on_grid: bool = False,
+    n_grid: int = 40,
+    min_mass: float = 1.0,
 ) -> plt.Axes:
     """
     Plot inner product values on embedding or by cluster.
@@ -258,7 +261,8 @@ def plot_inner_product(
         return _plot_inner_product_on_embedding(
             adata, basis=basis, ax=ax, inner_product_key=inner_product_key,
             vmin=vmin, vmax=vmax, cmap=cmap, s=s, figsize=figsize,
-            title=title, show_colorbar=show_colorbar
+            title=title, show_colorbar=show_colorbar,
+            on_grid=on_grid, n_grid=n_grid, min_mass=min_mass
         )
 
 
@@ -274,6 +278,9 @@ def _plot_inner_product_on_embedding(
     figsize: Tuple[float, float] = (8, 8),
     title: Optional[str] = None,
     show_colorbar: bool = True,
+    on_grid: bool = False,
+    n_grid: int = 40,
+    min_mass: float = 1.0,
 ) -> plt.Axes:
     """Plot inner product on embedding."""
     if ax is None:
@@ -287,8 +294,25 @@ def _plot_inner_product_on_embedding(
     except:
         norm = mpl_colors.Normalize(vmin=vmin, vmax=vmax)
 
-    sc = ax.scatter(embedding[:, 0], embedding[:, 1], c=inner_product,
-                   cmap=cmap, norm=norm, s=s, rasterized=True)
+    if on_grid:
+        from ..tools.flow import calculate_grid_scalar
+        grid_data = calculate_grid_scalar(
+            adata, scalar_key=inner_product_key, basis=basis, n_grid=n_grid,
+            min_mass=min_mass
+        )
+        grid_coords = grid_data['grid_coords']
+        grid_scalar = grid_data['grid_scalar']
+        mass_filter = grid_data['mass_filter']
+        valid = ~mass_filter
+        
+        # Use a slightly larger point size for grid, or fallback to s
+        grid_s = s * 4 if on_grid else s
+        
+        sc = ax.scatter(grid_coords[valid, 0], grid_coords[valid, 1], c=grid_scalar[valid],
+                       cmap=cmap, norm=norm, s=grid_s, rasterized=True)
+    else:
+        sc = ax.scatter(embedding[:, 0], embedding[:, 1], c=inner_product,
+                       cmap=cmap, norm=norm, s=s, rasterized=True)
 
     if show_colorbar:
         cbar = plt.colorbar(sc, ax=ax, shrink=0.6)

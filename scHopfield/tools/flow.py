@@ -539,3 +539,67 @@ def calculate_inner_product(
             adata.obs[f'{store_key}_weighted'] = weighted
 
     return inner_product
+
+def calculate_grid_scalar(
+    adata: AnnData,
+    scalar_key: str,
+    basis: str = 'umap',
+    n_grid: int = 40,
+    method: str = 'knn',
+    n_neighbors: int = 200,
+    min_mass: float = 1.0,
+    smooth: float = 0.5,
+    n_jobs: int = 4,
+) -> Dict:
+    """
+    Interpolate scalar values onto a regular grid.
+    """
+    if method == 'knn':
+        from sklearn.neighbors import NearestNeighbors
+
+        embedding_key = f'X_{basis}'
+        embedding = adata.obsm[embedding_key]
+        n_cells = embedding.shape[0]
+
+        if scalar_key not in adata.obs:
+            raise ValueError(f"Scalar '{scalar_key}' not found in adata.obs")
+
+        scalar = adata.obs[scalar_key].values
+
+        x_min, x_max = embedding[:, 0].min(), embedding[:, 0].max()
+        y_min, y_max = embedding[:, 1].min(), embedding[:, 1].max()
+
+        gx = np.linspace(x_min, x_max, n_grid)
+        gy = np.linspace(y_min, y_max, n_grid)
+
+        grid_x, grid_y = np.meshgrid(gx, gy)
+        grid_coords = np.column_stack([grid_x.ravel(), grid_y.ravel()])
+        n_grid_points = len(grid_coords)
+
+        nn = NearestNeighbors(n_neighbors=min(n_neighbors, n_cells), n_jobs=n_jobs)
+        nn.fit(embedding)
+        distances, indices = nn.kneighbors(grid_coords)
+
+        median_dist = np.median(distances)
+        sigma = median_dist * 0.5
+        weights = np.exp(-distances ** 2 / (2 * sigma ** 2))
+        mass = weights.sum(axis=1)
+
+        mass = mass / mass.max()
+        mass_filter = mass < (min_mass / 100)
+
+        grid_scalar = np.zeros(n_grid_points, dtype=np.float32)
+        for i in range(n_grid_points):
+            w = weights[i]
+            w = w / (w.sum() + 1e-10)
+            grid_scalar[i] = np.average(scalar[indices[i]], weights=w)
+
+        return {
+            'grid_coords': grid_coords,
+            'grid_scalar': grid_scalar,
+            'mass_filter': mass_filter,
+            'mass': mass,
+            'n_grid': n_grid
+        }
+    else:
+        raise ValueError("Only 'knn' method is currently supported for grid scalar interpolation.")
