@@ -97,3 +97,7 @@ hematopoiesis_analysis_sch.py
 /notebooks/08_*.ipynb
 /docs/notebooks/*.ipynb
 perturbation_extended_analyses.ipynb
+enhanced_recipe_analysis.ipynb
+robustness_analyses.ipynb
+_fit_one_reg.py
+scHopfield/validation/run_*.py

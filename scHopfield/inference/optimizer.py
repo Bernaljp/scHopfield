@@ -263,3 +263,145 @@ class ScaffoldOptimizer(nn.Module):
         self.lr_history = lr_history
 
         return loss_history, reconstruction_loss_history
+
+
+import math
+
+
+class HillScaffoldOptimizer(ScaffoldOptimizer):
+    """ScaffoldOptimizer with per-gene trainable Hill parameters (k, n).
+
+    Adds two new parameter vectors of shape (n_genes,):
+      log_k -- per-gene Hill threshold (parameterized in log space)
+      log_n -- per-gene Hill exponent  (parameterized in log space)
+
+    The forward pass computes sigma_{k,n}(x) internally from raw x. The
+    precomputed sigma input from train_loader is ignored. Convergence
+    is the known-hard part of this model (variable exponent, variable in
+    denominator, ratio); the defaults here are conservative:
+      - hard clamp n in [n_min, n_max]
+      - lower learning rate for log_k, log_n (hill_lr_factor * lr)
+      - warmup_epochs where the Hill params are frozen
+      - anchoring L2 regularization toward the initializers
+    """
+
+    def __init__(
+        self,
+        *args,
+        k_init,
+        n_init: float = 2.0,
+        n_min: float = 1.0,
+        n_max: float = 8.0,
+        hill_anchor_lambda: float = 1e-2,
+        **kwargs,
+    ):
+        super().__init__(*args, **kwargs)
+        device = self.device
+        n_genes = self.W.weight.shape[0]
+        k_init_t = torch.as_tensor(k_init, dtype=torch.float32, device=device)
+        if k_init_t.ndim == 0:
+            k_init_t = k_init_t.expand(n_genes).clone()
+        self.log_k = nn.Parameter(torch.log(k_init_t.clamp(min=1e-6)))
+        self.log_n = nn.Parameter(torch.full((n_genes,), math.log(n_init),
+                                              dtype=torch.float32, device=device))
+        self.register_buffer("log_k_init", self.log_k.detach().clone())
+        self.register_buffer("log_n_init", self.log_n.detach().clone())
+        self.n_min = n_min
+        self.n_max = n_max
+        self.hill_anchor_lambda = hill_anchor_lambda
+        self._hill_frozen = False
+
+    def freeze_hill(self, frozen: bool = True):
+        self._hill_frozen = frozen
+        self.log_k.requires_grad_(not frozen)
+        self.log_n.requires_grad_(not frozen)
+
+    def hill(self, x):
+        k = torch.exp(self.log_k)
+        n = torch.exp(self.log_n).clamp(self.n_min, self.n_max)
+        x_safe = x.clamp(min=1e-6)
+        xn = x_safe.pow(n)
+        kn = k.pow(n)
+        return xn / (kn + xn)
+
+    def forward(self, inputs):
+        _, x = inputs  # precomputed sigma is ignored
+        sig = self.hill(x)
+        gamma_clamped = torch.exp(torch.clamp(self.gamma, max=10.0))
+        return self.W(sig) + self.I - gamma_clamped * x
+
+    def hill_anchor_loss(self):
+        return self.hill_anchor_lambda * (
+            ((self.log_k - self.log_k_init) ** 2).mean()
+            + ((self.log_n - self.log_n_init) ** 2).mean()
+        )
+
+    def train_model(
+        self,
+        train_loader: DataLoader,
+        epochs: int = 1000,
+        learning_rate: float = 1e-2,
+        hill_lr_factor: float = 0.1,
+        warmup_epochs: int = 200,
+        criterion: str = "MSE",
+        verbose: bool = True,
+        display_epoch: int = 200,
+        get_plots: bool = False,
+    ):
+        """Two-stage training: warmup with frozen Hill, then unlock.
+
+        Uses separate Adam param-groups so log_k/log_n get a smaller LR.
+        Adds an anchoring L2 toward the initial (k, n) values.
+        """
+        loss_mapping = {"L1": nn.L1Loss, "MSE": nn.MSELoss, "L2": nn.MSELoss}
+        loss_fn = loss_mapping[criterion]()
+
+        hill_params = [self.log_k, self.log_n]
+        other_params = [p for n_, p in self.named_parameters()
+                        if n_ not in ("log_k", "log_n") and p.requires_grad]
+        optimizer = optim.Adam([
+            {"params": other_params, "lr": learning_rate},
+            {"params": hill_params,  "lr": learning_rate * hill_lr_factor},
+        ])
+
+        self.freeze_hill(True)
+        loss_history, recon_history = [], []
+        mask_m = 1.0 - self.scaffold_raw
+
+        for epoch in tqdm(range(epochs), desc="Training Epochs", disable=not verbose):
+            if epoch == warmup_epochs:
+                self.freeze_hill(False)
+
+            epoch_loss = 0.0
+            epoch_recon = 0.0
+            for (s_batch, x_batch), target in train_loader:
+                s_batch, x_batch, target = (t.to(self.device) for t in (s_batch, x_batch, target))
+                optimizer.zero_grad()
+                output = self((s_batch, x_batch))
+                reconstruction_loss = self.reconstruction_lambda * loss_fn(output, target)
+                if self.normalize_regularization:
+                    bs = s_batch.shape[0]
+                    graph_constr_loss = self.scaffold_lambda * ((self.W.weight * mask_m).norm(2) + (self.W.weight * mask_m).norm(1)) / bs
+                    bias_loss = self.bias_lambda * torch.abs(self.I + self.bias_bias).norm(2) / bs
+                else:
+                    graph_constr_loss = self.scaffold_lambda * ((self.W.weight * mask_m).norm(2) + (self.W.weight * mask_m).norm(1))
+                    bias_loss = self.bias_lambda * torch.abs(self.I + self.bias_bias).norm(2)
+                total_loss = reconstruction_loss + graph_constr_loss + bias_loss + self.hill_anchor_loss()
+                total_loss.backward()
+                optimizer.step()
+                epoch_loss += total_loss.item()
+                epoch_recon += reconstruction_loss.item()
+
+            loss_history.append(epoch_loss / len(train_loader))
+            recon_history.append(epoch_recon / len(train_loader))
+
+            if verbose and ((epoch % display_epoch == 0) or (epoch == epochs - 1)):
+                k_now = torch.exp(self.log_k).detach().cpu().numpy()
+                n_now = torch.exp(self.log_n).clamp(self.n_min, self.n_max).detach().cpu().numpy()
+                tqdm.write(f"[E{epoch+1}/{epochs}] loss={loss_history[-1]:.4g} "
+                           f"recon={recon_history[-1]:.4g} "
+                           f"k=[{k_now.min():.3g}, {k_now.max():.3g}] "
+                           f"n=[{n_now.min():.2f}, {n_now.max():.2f}] "
+                           f"frozen={self._hill_frozen}")
+
+        return loss_history, recon_history
