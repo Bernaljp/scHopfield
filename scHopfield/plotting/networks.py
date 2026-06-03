@@ -3,10 +3,11 @@
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
+from matplotlib.colors import Colormap
 from typing import Optional, List, Dict, Union
 from anndata import AnnData
 
-from .._utils.io import get_genes_used
+from .._utils.io import get_genes_used, get_cluster_genes
 
 
 def plot_interaction_matrix(
@@ -140,13 +141,13 @@ def plot_network_centrality_rank(
     plt.Axes
         Axes with plot
     """
-    genes = get_genes_used(adata)
-    gene_names = adata.var.index[genes]
-
     if clusters is None:
-        clusters = adata.obs[cluster_key].unique().tolist()
-    elif isinstance(clusters, str):
-        clusters = [clusters]
+        genes, gene_names, clusters = get_cluster_genes(adata, cluster_key)
+    else:
+        genes = get_genes_used(adata)
+        gene_names = adata.var.index[genes]
+        if isinstance(clusters, str):
+            clusters = [clusters]
 
     n_clusters = len(clusters)
     size_per_gene = 0.2
@@ -199,6 +200,7 @@ def plot_network_centrality_rank(
         scores_filtered = [scores[i] for i, gene in enumerate(genes_cluster) if gene in all_top_genes]
 
         # Plot
+        
         color = colors[cluster] if colors is not None and cluster in colors else 'tab:blue'
         ax.scatter(scores_filtered, y_positions, color=color, label=cluster, s=50, alpha=0.7)
 
@@ -267,7 +269,7 @@ def plot_centrality_comparison(
 
     if col1 not in adata.var.columns or col2 not in adata.var.columns:
         raise ValueError(
-            f"Centrality data not found. Please run sch.tl.compute_network_centrality() first."
+            "Centrality data not found. Please run sch.tl.compute_network_centrality() first."
         )
 
     scores1 = adata.var[col1].values[genes]
@@ -491,12 +493,7 @@ def plot_centrality_scatter(
     plt.Figure
         Figure with subplots
     """
-    genes = get_genes_used(adata)
-    gene_names = adata.var.index[genes]
-
-    clusters = adata.obs[cluster_key].unique().tolist()
-    if order is not None:
-        clusters = [c for c in order if c in clusters]
+    genes, gene_names, clusters = get_cluster_genes(adata, cluster_key, order)
 
     n_clusters = len(clusters)
     ncols = 4
@@ -556,6 +553,7 @@ def plot_centrality_scatter(
             top_idx = np.argsort(y_scores)[::-1][:n_top_genes]
 
         # Plot
+        
         color = colors[cluster] if colors is not None and cluster in colors else 'tab:blue'
         ax.scatter(x_scores, y_scores, color=color, s=10, alpha=0.6)
 
@@ -716,6 +714,7 @@ def plot_eigenvalue_spectrum(
     for cluster in clusters:
         eigenvalues = adata.uns['scHopfield']['eigenanalysis'][f'eigenvalues_{cluster}']
 
+        
         color = colors[cluster] if colors is not None and cluster in colors else 'tab:blue'
         ax.scatter(eigenvalues.real, eigenvalues.imag, color=color, alpha=0.6,
                   s=15, label=cluster)
@@ -892,7 +891,7 @@ def plot_eigenanalysis_grid(
         axs = axs.reshape(1, -1)
 
     for i, cluster in enumerate(clusters):
-        color = colors[cluster] if colors is not None and cluster in colors else 'tab:blue'
+        
 
         # Column 1: Eigenvalue spectrum
         plot_eigenvalue_spectrum(
@@ -938,7 +937,7 @@ def plot_grn_network(
     cluster_key: str = 'cell_type',
     score_size: Optional[str] = None,
     size_threshold: float = 0,
-    cmap: Union[str, 'Colormap'] = 'RdBu_r',
+    cmap: str = 'RdBu_r',
     topn: Optional[int] = None,
     w_quantile: float = 0.99,
     figsize: tuple = (10, 10),
@@ -980,7 +979,7 @@ def plot_grn_network(
     """
     try:
         import networkx as nx
-        from matplotlib.colors import Colormap
+        
     except ImportError:
         raise ImportError(
             "NetworkX is required for this plot. "
@@ -1038,7 +1037,7 @@ def plot_grn_network(
 
     # Create directed graph
     G = nx.from_pandas_adjacency(df, create_using=nx.DiGraph)
-    Gp = nx.from_pandas_adjacency(df.abs(), create_using=nx.DiGraph)
+    # Gp = nx.from_pandas_adjacency(df.abs(), create_using=nx.DiGraph)
 
     # Compute edge weights for visualization
     weights = np.array([abs(G[u][v]['weight']) for u, v in G.edges()])

@@ -3,7 +3,6 @@
 import numpy as np
 from typing import Optional, Union
 from anndata import AnnData
-from scipy.sparse import issparse
 
 from .._utils.io import get_matrix, to_numpy, get_genes_used, ensure_sigmoid_layer
 from .._utils.math import sigmoid
@@ -61,7 +60,6 @@ def compute_reconstructed_velocity(
         # Compute for specific cluster
         cluster_mask = (adata.obs[cluster_key] == cluster).values
         cluster_indices = np.where(cluster_mask)[0]
-        n_cells = len(cluster_indices)
 
         # Get cluster-specific parameters
         W = adata.varp[f'W_{cluster}']
@@ -253,12 +251,10 @@ def compute_velocity(
         cluster_mask = (adata.obs[cluster_key] == cluster).values
         X_full = get_matrix(adata, spliced_key, genes=genes_mask)
         X = to_numpy(X_full[cluster_mask])
-        n_cells = X.shape[0]
     else:
         # All cells
         X_full = get_matrix(adata, spliced_key, genes=genes_mask)
-        X = to_numpy(X_full)
-        n_cells = X.shape[0]
+        X = np.nan_to_num(X)
 
     # Determine clusters to iterate over
     if cluster is not None:

@@ -5,7 +5,7 @@ from typing import Union, List, Optional
 from anndata import AnnData
 
 from .._utils.math import fit_sigmoid, sigmoid
-from .._utils.io import get_matrix, write_to_adata, parse_genes, to_numpy
+from .._utils.io import get_matrix, parse_genes, to_numpy
 
 
 def fit_all_sigmoids(

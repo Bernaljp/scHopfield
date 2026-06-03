@@ -2,7 +2,7 @@
 
 import numpy as np
 from scipy.integrate import odeint, solve_ivp
-from typing import Optional, Callable, Tuple
+from typing import Optional
 from anndata import AnnData
 
 from .._utils.math import sigmoid
@@ -23,7 +23,7 @@ class ODESolver:
     def __init__(
         self,
         W: np.ndarray,
-        I: np.ndarray,
+        bias_vector: np.ndarray,
         gamma: np.ndarray,
         threshold: np.ndarray,
         exponent: np.ndarray,
@@ -57,7 +57,7 @@ class ODESolver:
             Values to fix the genes at (must match length of fixed_indices)
         """
         self.W = W
-        self.I = I
+        self.I = bias_vector
         self.gamma = gamma
         self.threshold = threshold
         self.exponent = exponent
@@ -301,7 +301,7 @@ def create_solver(
     genes = get_genes_used(adata)
 
     W = _get_W_matrix(adata, cluster, use_cluster_specific=True)
-    I = adata.var[f'I_{cluster}'].values[genes]
+    bias_vector = adata.var[f'I_{cluster}'].values[genes]
 
     gamma_key = f'gamma_{cluster}'
     gamma = adata.var[gamma_key].values[genes] if gamma_key in adata.var else adata.var[degradation_key].values[genes]
@@ -318,4 +318,4 @@ def create_solver(
     else:
         x_max = None
 
-    return ODESolver(W, I, gamma, threshold, exponent, x_min=0.0, x_max=x_max)
+    return ODESolver(W, bias_vector, gamma, threshold, exponent, x_min=0.0, x_max=x_max)

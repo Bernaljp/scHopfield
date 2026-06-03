@@ -15,6 +15,7 @@ Two variants are exported:
 """
 from __future__ import annotations
 from dataclasses import dataclass, field
+from .base import BaseCircuit
 from typing import Tuple
 import numpy as np
 
@@ -24,7 +25,7 @@ import numpy as np
 # ---------------------------------------------------------------------------
 
 @dataclass
-class OscillatorCircuit:
+class OscillatorCircuit(BaseCircuit):
     """Elowitz-Leibler repressilator, three genes in a cyclic repression loop.
 
     Original (Elowitz & Leibler, 2000) form (after :math:`k = 1`):
@@ -98,6 +99,10 @@ class OscillatorCircuit:
     def gamma_vec(self) -> np.ndarray:
         return np.array([self.gamma, self.gamma, self.gamma], dtype=np.float64)
 
+    @property
+    def state_names(self) -> Tuple[str, ...]:
+        return ("A", "B", "C")
+
     def rhs(self, x: np.ndarray) -> np.ndarray:
         return self.W() @ self.sigma(x) + self.I_vec() - self.gamma_vec() * x
 
@@ -146,7 +151,7 @@ class OscillatorCircuit:
 # ---------------------------------------------------------------------------
 
 @dataclass
-class DissertationOscillatorCircuit:
+class DissertationOscillatorCircuit(BaseCircuit):
     """3-gene cyclic-repression oscillator from Dissertation §3.4.2.
 
     .. math::
@@ -192,6 +197,10 @@ class DissertationOscillatorCircuit:
 
     def gamma_vec(self) -> np.ndarray:
         return np.array([self.gamma, self.gamma, self.gamma], dtype=np.float64)
+
+    @property
+    def state_names(self) -> Tuple[str, ...]:
+        return ("A", "B", "C")
 
     def rhs(self, x: np.ndarray) -> np.ndarray:
         return self.W() @ self.sigma(x) + self.I_vec() - self.gamma_vec() * x

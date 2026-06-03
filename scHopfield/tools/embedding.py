@@ -1,8 +1,8 @@
 """Dimensionality reduction and energy landscape embedding."""
+from typing import Tuple, Optional
 
 import numpy as np
 import pickle
-from typing import Optional
 from anndata import AnnData
 
 from .._utils.math import soften, sigmoid, int_sig_act_inv
@@ -137,7 +137,7 @@ def energy_embedding(
         sig_grid = sigmoid(x_grid, threshold[None, :], exponent[None, :])
         
         W = adata.varp[f'W_{cluster}']
-        I = adata.var[f'I_{cluster}'].values[genes]
+        bias_vector = adata.var[f'I_{cluster}'].values[genes]
         
         gamma_key = f'gamma_{cluster}'
         g = adata.var[gamma_key].values[genes] if gamma_key in adata.var else adata.var[degradation_key].values[genes]
@@ -145,7 +145,7 @@ def energy_embedding(
         e_int = -0.5 * np.sum((sig_grid @ W.T) * sig_grid, axis=1)
         integral = int_sig_act_inv(sig_grid, threshold, exponent)
         e_deg = np.sum(g[None, :] * integral, axis=1)
-        e_bias = -np.sum(I[None, :] * sig_grid, axis=1)
+        e_bias = -np.sum(bias_vector[None, :] * sig_grid, axis=1)
         e_total = e_int + e_deg + e_bias
         
         shape = grid_X[cluster].shape
@@ -235,8 +235,6 @@ def load_embedding(
     return adata if copy else None
 
 
-from typing import Tuple, Optional
-import numpy as np
 
 def project_to_embedding(
     adata: 'AnnData',
@@ -295,14 +293,17 @@ def project_to_embedding(
     else:
         X = adata.X[:, genes]
         
-    if issparse(X): X = X.toarray()
-    if issparse(vectors): vectors = vectors.toarray()
+    if issparse(X):
+        X = X.toarray()
+    if issparse(vectors):
+        vectors = vectors.toarray()
 
     # -------------------------------------------------------------------
     # Method 1: Gene-Space Dot Product Alignment
     # -------------------------------------------------------------------
     if method == 'dot_product':
-        if verbose: print("Projecting using gene-space dot product alignment...")
+        if verbose:
+            print("Projecting using gene-space dot product alignment...")
         nn = NearestNeighbors(n_neighbors=n_neighbors + 1, n_jobs=n_jobs)
         nn.fit(X)
         distances, indices = nn.kneighbors(X)
@@ -328,7 +329,8 @@ def project_to_embedding(
     # Method 2: Embedding-Space Correlation (CellOracle)
     # -------------------------------------------------------------------
     elif method == 'correlation':
-        if verbose: print("Projecting using embedding-space correlation (CellOracle style)...")
+        if verbose:
+            print("Projecting using embedding-space correlation (CellOracle style)...")
         np.random.seed(random_seed)
         
         nn = NearestNeighbors(n_neighbors=n_neighbors + 1, n_jobs=n_jobs)
@@ -367,7 +369,8 @@ def project_to_embedding(
 
         if np.any(np.isnan(corrcoef)):
             corrcoef[np.isnan(corrcoef)] = 1
-            if verbose: print("Warning: NaNs in correlation matrix corrected to 1s.")
+            if verbose:
+                print("Warning: NaNs in correlation matrix corrected to 1s.")
 
         knn_array = embedding_knn_used.toarray()
         transition_prob = np.exp(corrcoef / sigma_corr) * knn_array

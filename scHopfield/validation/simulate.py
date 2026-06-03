@@ -13,7 +13,7 @@ For these synthetic circuits, the "velocity" is the analytic dx/dt, not an
 estimate from RNA velocity tools, which is the whole point per Jesper's J1.5.
 """
 from __future__ import annotations
-from typing import Optional, Tuple
+from typing import Optional
 import numpy as np
 import anndata as ad
 from scipy.integrate import solve_ivp

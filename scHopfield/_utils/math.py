@@ -2,7 +2,6 @@
 
 import numpy as np
 from scipy.interpolate import griddata
-from scipy.optimize import minimize
 from scipy.special import hyp2f1 as hyper
 from scipy.signal import convolve2d
 

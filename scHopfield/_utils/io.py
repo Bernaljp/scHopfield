@@ -2,7 +2,6 @@
 
 import numpy as np
 import scipy.sparse as sp
-from typing import Union, List, Optional
 
 
 def to_numpy(matrix):
@@ -186,3 +185,16 @@ def ensure_sigmoid_layer(adata, spliced_key=None):
     compute_sigmoid(adata, spliced_key=resolved_key)
 
 
+
+def get_cluster_genes(adata, cluster_key, order=None):
+    """
+    Get used genes, gene names, and filtered clusters.
+    """
+    genes = get_genes_used(adata)
+    gene_names = adata.var.index[genes]
+
+    clusters = adata.obs[cluster_key].unique().tolist()
+    if order is not None:
+        clusters = [c for c in order if c in clusters]
+
+    return genes, gene_names, clusters

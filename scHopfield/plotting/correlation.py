@@ -68,7 +68,7 @@ def plot_gene_correlation_scatter(
 
     if corr_col1 not in adata.var.columns or corr_col2 not in adata.var.columns:
         raise ValueError(
-            f"Correlation data not found. Please run sch.tl.energy_gene_correlation() first."
+            "Correlation data not found. Please run sch.tl.energy_gene_correlation() first."
         )
 
     corr1 = adata.var[corr_col1].values[genes]

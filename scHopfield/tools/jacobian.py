@@ -287,7 +287,7 @@ def compute_jacobian_stats(
                         # Load full Jacobians if needed
                         print("Note: Full Jacobian matrices needed for rotational part.")
                         print("This requires computing Jacobians on-the-fly or storing them.")
-            except:
+            except Exception:
                 pass
 
     return adata if copy else None

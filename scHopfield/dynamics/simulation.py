@@ -214,7 +214,7 @@ def _simulate_cluster_gpu(
     solver: 'ODESolver',
     t_span: np.ndarray,
     method: str,
-    device: 'torch.device',
+    device: str,
 ) -> np.ndarray:
     """
     Integrate all cells in a cluster simultaneously on the GPU.

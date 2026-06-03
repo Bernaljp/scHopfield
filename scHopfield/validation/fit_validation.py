@@ -8,12 +8,12 @@ the activation rather than scHopfield's empirical-CDF Hill fit (which would
 be miscalibrated on toy data with only 2-3 genes).
 """
 from __future__ import annotations
-from typing import Optional, Tuple
 import numpy as np
 import torch
 from torch.utils.data import DataLoader, TensorDataset
 
 from ..inference.optimizer import ScaffoldOptimizer
+from ._scalenorm_helpers import LoaderShim
 
 
 def _build_scaffold(W_true: np.ndarray, mode: str, seed: int = 0,
@@ -34,7 +34,6 @@ def _build_scaffold(W_true: np.ndarray, mode: str, seed: int = 0,
     false_pos_rate
         Fraction of off-edges to flip to "in-scaffold" under the partial regime.
     """
-    n = W_true.shape[0]
     if mode == "none":
         return np.ones_like(W_true, dtype=np.float32)
     if mode == "full":
@@ -147,15 +146,7 @@ def fit_circuit(
     dataset = TensorDataset(sig_t, x_t, v_t)
     loader = DataLoader(dataset, batch_size=batch_size, shuffle=True, drop_last=False)
 
-    # Wrap loader to deliver the (sig, x), v tuple ScaffoldOptimizer expects.
-    class _LoaderShim:
-        def __init__(self, base):
-            self.base = base
-        def __iter__(self):
-            for sig_b, x_b, v_b in self.base:
-                yield (sig_b, x_b), v_b
-        def __len__(self):
-            return len(self.base)
+
 
     opt = ScaffoldOptimizer(
         g=gamma_true.astype(np.float32),
@@ -168,7 +159,7 @@ def fit_circuit(
         normalize_regularization=True,
     )
     loss_hist, recon_hist = opt.train_model(
-        train_loader=_LoaderShim(loader),
+        train_loader=LoaderShim(loader),
         epochs=n_epochs,
         learning_rate=learning_rate,
         criterion="MSE",

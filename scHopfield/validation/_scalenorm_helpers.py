@@ -7,7 +7,6 @@ evaluation logic is shared. Keeps every change additive: the original
 import numpy as np
 import torch
 import torch.optim as optim
-import torch.nn as nn
 from torch.utils.data import DataLoader, TensorDataset
 from tqdm import tqdm
 
@@ -43,9 +42,12 @@ def train_with_weighted_mse(opt: ScaffoldOptimizer, loader, weights_torch: torch
     mask_m = 1.0 - opt.scaffold_raw
     loss_hist, recon_hist = [], []
     for epoch in tqdm(range(epochs), desc="Training", disable=not verbose):
-        epoch_loss = 0.0; epoch_recon = 0.0
+        epoch_loss = 0.0
+        epoch_recon = 0.0
         for (s_b, x_b), tgt in loader:
-            s_b = s_b.to(opt.device); x_b = x_b.to(opt.device); tgt = tgt.to(opt.device)
+            s_b = s_b.to(opt.device)
+            x_b = x_b.to(opt.device)
+            tgt = tgt.to(opt.device)
             optimizer.zero_grad()
             out = opt((s_b, x_b))
             err = (out - tgt) * weights_torch
@@ -58,9 +60,12 @@ def train_with_weighted_mse(opt: ScaffoldOptimizer, loader, weights_torch: torch
                 graph = opt.scaffold_lambda * ((opt.W.weight * mask_m).norm(2) + (opt.W.weight * mask_m).norm(1))
                 bias = opt.bias_lambda * torch.abs(opt.I + opt.bias_bias).norm(2)
             total = recon + graph + bias
-            total.backward(); optimizer.step()
-            epoch_loss += total.item(); epoch_recon += recon.item()
-        loss_hist.append(epoch_loss / len(loader)); recon_hist.append(epoch_recon / len(loader))
+            total.backward()
+            optimizer.step()
+            epoch_loss += total.item()
+            epoch_recon += recon.item()
+        loss_hist.append(epoch_loss / len(loader))
+        recon_hist.append(epoch_recon / len(loader))
     return loss_hist, recon_hist
 
 
@@ -72,12 +77,18 @@ def make_loader(train_X: np.ndarray, sig_arr: np.ndarray, train_DX: np.ndarray,
     dataset = TensorDataset(sig_t, x_t, v_t)
     base = DataLoader(dataset, batch_size=batch_size, shuffle=True, drop_last=False)
 
-    class _Shim:
-        def __init__(self, b): self.b = b
-        def __iter__(self):
-            for sig_b, x_b, v_b in self.b: yield (sig_b, x_b), v_b
-        def __len__(self): return len(self.b)
-    return _Shim(base)
+    return LoaderShim(base)
+
+
+class LoaderShim:
+    """Wrap DataLoader to deliver the ((sig, x), v) tuple ScaffoldOptimizer expects."""
+    def __init__(self, base):
+        self.base = base
+    def __iter__(self):
+        for sig_b, x_b, v_b in self.base:
+            yield (sig_b, x_b), v_b
+    def __len__(self):
+        return len(self.base)
 
 
 def forward_simulate(opt: ScaffoldOptimizer, x0: np.ndarray, t_eval: np.ndarray,
@@ -101,7 +112,8 @@ def per_gene_pearson(X_gt: np.ndarray, X_fit: np.ndarray) -> np.ndarray:
     """Pearson r per column (gene), ignoring constant-std species (returns NaN)."""
     out = np.full(X_gt.shape[1], np.nan)
     for k in range(X_gt.shape[1]):
-        a = X_gt[:, k]; b = X_fit[:, k]
+        a = X_gt[:, k]
+        b = X_fit[:, k]
         if a.std() > 1e-9 and b.std() > 1e-9:
             out[k] = np.corrcoef(a, b)[0, 1]
     return out
@@ -131,8 +143,10 @@ def average_jacobian(rhs, X_samples: np.ndarray, n_eval: int = 500,
     J_sum = np.zeros((n_dim, n_dim))
     for x in X:
         for j in range(n_dim):
-            xp = x.copy(); xp[j] += eps
-            xm = x.copy(); xm[j] = max(xm[j] - eps, 0.0)
+            xp = x.copy()
+            xp[j] += eps
+            xm = x.copy()
+            xm[j] = max(xm[j] - eps, 0.0)
             actual_eps = xp[j] - xm[j]
             if actual_eps > 0:
                 J_sum[:, j] += (rhs(xp) - rhs(xm)) / actual_eps

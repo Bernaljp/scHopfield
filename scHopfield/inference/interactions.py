@@ -4,12 +4,12 @@ import math
 import numpy as np
 import torch
 from torch.utils.data import WeightedRandomSampler
-from typing import Optional, Union, List, Dict, Tuple
+from typing import Optional, List, Dict, Tuple
 from anndata import AnnData
 
 from .optimizer import ScaffoldOptimizer
 from .datasets import CustomDataset
-from .._utils.io import get_matrix, to_numpy, parse_genes, get_genes_used
+from .._utils.io import get_matrix, to_numpy, get_genes_used
 
 
 def _build_hierarchy_levels(
@@ -194,7 +194,7 @@ def _get_parent_params(
     W = adata.varp[W_key].copy()
 
     gene_indices = get_genes_used(adata)
-    I = adata.var[I_key].values[gene_indices].copy()
+    bias_vector = adata.var[I_key].values[gene_indices].copy()
 
     # Check for refitted gamma
     gamma_key = f'gamma_{parent_cluster}'
@@ -203,7 +203,7 @@ def _get_parent_params(
     else:
         gamma = None
 
-    return W, I, gamma
+    return W, bias_vector, gamma
 
 
 def fit_interactions(
@@ -393,7 +393,7 @@ def fit_interactions(
     if hierarchical_pretrain:
         # Build hierarchy levels
         levels = _build_hierarchy_levels(adata, cluster_key, hierarchy_keys, hierarchy_mappings)
-        adata.uns['scHopfield']['hierarchy_levels'] = [(l[0], l[1]) for l in levels]
+        adata.uns['scHopfield']['hierarchy_levels'] = [(lvl[0], lvl[1]) for lvl in levels]
 
         for level_idx, (level_key, clusters, parent_mapping) in enumerate(levels):
             # Determine if this is a pretraining level (not the final level)
@@ -608,21 +608,21 @@ def _fit_interactions_for_cluster(
         device = torch.device("cpu")
 
     W = None
-    I = None
+    bias_vector = None
 
     # Use parent parameters if provided (hierarchical pretraining)
     if parent_W is not None:
         W = parent_W.copy()
-        I = parent_I.copy() if parent_I is not None else None
-        print(f"  Using parent parameters as initialization")
+        bias_vector = parent_I.copy() if parent_I is not None else None
+        print("  Using parent parameters as initialization")
     # Otherwise use least squares initialization
     elif (w_scaffold is None) or pre_initialize_W:
         rhs = np.hstack((sig, np.ones((sig.shape[0], 1), dtype=x.dtype))) if infer_I else sig
         try:
             WI = np.linalg.lstsq(rhs, v + g[None, :] * x, rcond=1e-5)[0]
             W = WI[:-1, :].T if infer_I else WI.T
-            I = WI[-1, :] if infer_I else -np.clip(WI, a_min=None, a_max=0).sum(axis=0)
-        except:
+            bias_vector = WI[-1, :] if infer_I else -np.clip(WI, a_min=None, a_max=0).sum(axis=0)
+        except Exception:
             pass
 
     # Use ScaffoldOptimizer if scaffold provided
@@ -635,7 +635,7 @@ def _fit_interactions_for_cluster(
             bias_bias=bias_bias,
             use_masked_linear=only_TFs,
             pre_initialized_W=W,
-            pre_initialized_I=I,
+            pre_initialized_I=bias_vector,
             normalize_regularization=normalize_regularization
         )
         train_loader = _create_train_loader(
@@ -670,13 +670,13 @@ def _fit_interactions_for_cluster(
             get_plots=get_plots
         )
         W = model.W.weight.detach().cpu().numpy()
-        I = model.I.detach().cpu().numpy()
+        bias_vector = model.I.detach().cpu().numpy()
         g = np.exp(model.gamma.detach().cpu().numpy())
         adata.uns['scHopfield']['models'][cluster] = model.cpu()
 
     # Threshold and store
     W[np.abs(W) < w_threshold] = 0
-    I[np.abs(I) < w_threshold] = 0
+    bias_vector[np.abs(bias_vector) < w_threshold] = 0
 
     # Store interaction matrix in varp
     adata.varp[f'W_{cluster}'] = W
@@ -684,7 +684,7 @@ def _fit_interactions_for_cluster(
     # Store bias vector in var (one column per cluster)
     adata.var[f'I_{cluster}'] = 0.0
     gene_indices = get_genes_used(adata)
-    adata.var.iloc[gene_indices, adata.var.columns.get_loc(f'I_{cluster}')] = I
+    adata.var.iloc[gene_indices, adata.var.columns.get_loc(f'I_{cluster}')] = bias_vector
 
     # Store refitted gamma in var if applicable
     if refit_gamma:

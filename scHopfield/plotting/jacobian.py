@@ -3,7 +3,7 @@
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
-from typing import Optional, List, Dict, Union
+from typing import Optional, List, Dict
 from anndata import AnnData
 
 from .._utils.io import get_genes_used

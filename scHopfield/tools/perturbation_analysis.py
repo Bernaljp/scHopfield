@@ -6,7 +6,7 @@ from KO perturbation flow, and CellOracle-compatible perturbation scores.
 
 import numpy as np
 import pandas as pd
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional
 from anndata import AnnData
 
 from .._utils.io import get_genes_used

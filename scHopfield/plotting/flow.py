@@ -291,7 +291,7 @@ def _plot_inner_product_on_embedding(
 
     try:
         norm = mpl_colors.TwoSlopeNorm(vmin=vmin, vcenter=0, vmax=vmax)
-    except:
+    except Exception:
         norm = mpl_colors.Normalize(vmin=vmin, vmax=vmax)
 
     if on_grid:
@@ -899,7 +899,7 @@ def visualize_ode_perturbation(
     try:
         plot_reference_flow(adata, basis=basis, velocity_key=velocity_key,
                           ax=ax, scale=scale_flow*5, title='Reference Velocity')
-    except:
+    except Exception:
         ax.text(0.5, 0.5, 'No velocity data', ha='center', va='center',
                transform=ax.transAxes)
         ax.axis('off')
@@ -917,7 +917,7 @@ def visualize_ode_perturbation(
     if 'ode_perturbation_inner_product' in adata.obs:
         try:
             norm = mpl_colors.TwoSlopeNorm(vmin=-vm, vcenter=0, vmax=vm)
-        except:
+        except Exception:
             norm = mpl_colors.Normalize(vmin=-vm, vmax=vm)
         sc = ax.scatter(embedding[:, 0], embedding[:, 1],
                        c=adata.obs['ode_perturbation_inner_product'],

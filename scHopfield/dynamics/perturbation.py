@@ -226,7 +226,6 @@ def simulate_perturbation(
     # Get gene indices used in scHopfield
     genes = get_genes_used(adata)
     gene_names = adata.var_names[genes].values
-    n_genes = len(genes)
 
     # Get base expression from spliced layer
     spliced_key = adata.uns.get('scHopfield', {}).get('spliced_key', 'Ms')
@@ -332,15 +331,15 @@ def simulate_perturbation(
                            n_propagation=n_propagation, dt=dt)
 
     if verbose:
-        print(f"Perturbation simulation complete")
+        print("Perturbation simulation complete")
         print(f"  Genes perturbed: {list(perturb_condition.keys())}")
         print(f"  Propagation steps: {n_propagation}")
         print(f"  dt (scaling): {dt}")
         if residual_gene_dynamics:
-            print(f"  Perturbed genes: can evolve (residual_gene_dynamics=True)")
+            print("  Perturbed genes: can evolve (residual_gene_dynamics=True)")
         else:
-            print(f"  Perturbed genes: held constant")
-        print(f"  Results stored in adata.layers['simulated_count'] and adata.layers['delta_X']")
+            print("  Perturbed genes: held constant")
+        print("  Results stored in adata.layers['simulated_count'] and adata.layers['delta_X']")
 
     return adata
 

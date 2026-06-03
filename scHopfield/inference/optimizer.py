@@ -1,4 +1,5 @@
 """Neural network models for parameter optimization."""
+import math
 
 import torch
 import torch.nn as nn
@@ -265,7 +266,6 @@ class ScaffoldOptimizer(nn.Module):
         return loss_history, reconstruction_loss_history
 
 
-import math
 
 
 class HillScaffoldOptimizer(ScaffoldOptimizer):

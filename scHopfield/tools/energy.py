@@ -1,11 +1,11 @@
 """Energy landscape computation."""
 
 import numpy as np
-from typing import Optional, Union, Tuple, Dict
+from typing import Optional
 from anndata import AnnData
 
 from .._utils.math import sigmoid, int_sig_act_inv
-from .._utils.io import get_matrix, to_numpy, get_genes_used, ensure_sigmoid_layer
+from .._utils.io import get_matrix, get_genes_used, ensure_sigmoid_layer
 
 
 def compute_energies(
@@ -52,8 +52,6 @@ def compute_energies(
     adata = adata.copy() if copy else adata
 
     ensure_sigmoid_layer(adata, spliced_key)
-
-    genes = get_genes_used(adata)
 
     # Find all clusters that have been fitted
     clusters = adata.obs[cluster_key].unique()
@@ -238,10 +236,10 @@ def _bias_energy(
         sig = get_matrix(adata, 'sigmoid', genes=genes)[idx]
 
     # Get bias vector
-    I = adata.var[f'I_{cluster}'].values[genes]
+    bias_vector = adata.var[f'I_{cluster}'].values[genes]
 
     # Calculate bias energy
-    bias_energy = -np.sum(I[None, :] * sig, axis=1)
+    bias_energy = -np.sum(bias_vector[None, :] * sig, axis=1)
     return bias_energy
 
 
@@ -358,8 +356,8 @@ def decompose_bias_energy(
             idx = (adata.obs[cluster_key] == cluster).values
         sig = get_matrix(adata, 'sigmoid', genes=genes)[idx]
 
-    I = adata.var[f'I_{cluster}'].values[genes]
-    return -I[None, :] * sig
+    bias_vector = adata.var[f'I_{cluster}'].values[genes]
+    return -bias_vector[None, :] * sig
 
 
 def decompose_interaction_energy(

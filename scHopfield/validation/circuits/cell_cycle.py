@@ -45,7 +45,8 @@ is handled by the simulator loop.
 """
 from __future__ import annotations
 from dataclasses import dataclass, field
-from typing import Tuple, Dict, List
+from .base import BaseCircuit
+from typing import Tuple, Dict
 import numpy as np
 from scipy.integrate import solve_ivp
 
@@ -121,7 +122,7 @@ STATE_NAMES: Tuple[str, ...] = tuple(DEFAULT_IC.keys())
 
 
 @dataclass
-class Novak1997CellCycle:
+class Novak1997CellCycle(BaseCircuit):
     """Fission yeast cell cycle from BIOMD0000000007 (Novak-Tyson 1997).
 
     Parameters are stored as a mutable dict so the Division event can mutate
@@ -134,18 +135,14 @@ class Novak1997CellCycle:
     params: Dict[str, float] = field(default_factory=lambda: dict(DEFAULT_PARAMS))
     initial_conditions: Dict[str, float] = field(default_factory=lambda: dict(DEFAULT_IC))
 
-    @property
-    def n_genes(self) -> int:
-        return len(STATE_NAMES)
 
-    @property
-    def gene_names(self) -> Tuple[str, ...]:
-        return STATE_NAMES
 
     # ----------------------------------------------------------------- rhs --
 
-    def _unpack(self, x: np.ndarray) -> Dict[str, float]:
-        return dict(zip(STATE_NAMES, x))
+
+    @property
+    def state_names(self) -> Tuple[str, ...]:
+        return STATE_NAMES
 
     def rhs(self, x: np.ndarray, params: Dict[str, float] = None) -> np.ndarray:
         """dx/dt for the 13 dynamical variables. Mirrors xdot() in the .m file."""

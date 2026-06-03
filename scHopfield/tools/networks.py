@@ -3,10 +3,10 @@
 import numpy as np
 import pandas as pd
 import itertools
-from typing import Optional, Dict, Union, List, Tuple
+from typing import Optional, Dict, Union, List
 from anndata import AnnData
 
-from .._utils.io import get_genes_used
+from .._utils.io import get_cluster_genes
 
 
 def network_correlations(
@@ -137,9 +137,7 @@ def get_network_links(
             - coef_abs: absolute value of coefficient
         If 'combined': Single DataFrame with additional 'cluster' column
     """
-    genes = get_genes_used(adata)
-    gene_names = adata.var.index[genes]
-    clusters = adata.obs[cluster_key].unique()
+    genes, gene_names, clusters = get_cluster_genes(adata, cluster_key)
 
     links = {}
     for k in clusters:
@@ -226,9 +224,7 @@ def compute_network_centrality(
     """
     adata = adata.copy() if copy else adata
 
-    genes = get_genes_used(adata)
-    gene_names = adata.var.index[genes]
-    clusters = adata.obs[cluster_key].unique()
+    genes, gene_names, clusters = get_cluster_genes(adata, cluster_key)
 
     # Try to use igraph, fall back to NetworkX
     if use_igraph:
@@ -378,12 +374,7 @@ def get_top_genes_table(
     pd.DataFrame
         DataFrame with MultiIndex columns (cluster, ['Gene', metric_name])
     """
-    genes = get_genes_used(adata)
-    gene_names = adata.var.index[genes]
-
-    clusters = adata.obs[cluster_key].unique().tolist()
-    if order is not None:
-        clusters = [c for c in order if c in clusters]
+    genes, gene_names, clusters = get_cluster_genes(adata, cluster_key, order)
 
     # Create result DataFrame
     metric_display = metric.replace('_', ' ').title()
@@ -448,9 +439,7 @@ def compute_eigenanalysis(
     """
     adata = adata.copy() if copy else adata
 
-    genes = get_genes_used(adata)
-    gene_names = adata.var.index[genes]
-    clusters = adata.obs[cluster_key].unique()
+    genes, gene_names, clusters = get_cluster_genes(adata, cluster_key)
 
     if 'eigenanalysis' not in adata.uns['scHopfield']:
         adata.uns['scHopfield']['eigenanalysis'] = {}
@@ -468,7 +457,7 @@ def compute_eigenanalysis(
         # Store results
         adata.uns['scHopfield']['eigenanalysis'][f'eigenvalues_{cluster}'] = eigenvalues
         adata.uns['scHopfield']['eigenanalysis'][f'eigenvectors_{cluster}'] = eigenvectors
-        adata.uns['scHopfield']['eigenanalysis'][f'gene_names'] = gene_names.values
+        adata.uns['scHopfield']['eigenanalysis']['gene_names'] = gene_names.values
 
     return adata if copy else None
 

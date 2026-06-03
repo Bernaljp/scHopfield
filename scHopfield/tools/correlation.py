@@ -256,7 +256,7 @@ def get_correlation_table(
     test_col = f'correlation_{energy_type}_{order[0]}'
     if test_col not in adata.var.columns:
         raise ValueError(
-            f"No correlation data found. Please run sch.tl.energy_gene_correlation() first."
+            "No correlation data found. Please run sch.tl.energy_gene_correlation() first."
         )
 
     # Create DataFrame with MultiIndex columns

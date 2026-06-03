@@ -39,12 +39,13 @@ equilibria on the diagonal (bistable).
 """
 from __future__ import annotations
 from dataclasses import dataclass, field
+from .base import BaseCircuit
 from typing import Tuple
 import numpy as np
 
 
 @dataclass
-class ToggleCircuit:
+class ToggleCircuit(BaseCircuit):
     """Two-gene mutual inhibition + positive autoregulation circuit.
 
     Parameters
@@ -102,6 +103,10 @@ class ToggleCircuit:
     def gamma_vec(self) -> np.ndarray:
         """Ground-truth degradation rate vector."""
         return np.array([self.gamma, self.gamma], dtype=np.float64)
+
+    @property
+    def state_names(self) -> Tuple[str, ...]:
+        return ("A", "B")
 
     def rhs(self, x: np.ndarray) -> np.ndarray:
         """Right-hand side of the ODE: dx/dt = W sigma(x) + I - gamma x."""

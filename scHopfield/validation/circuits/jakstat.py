@@ -50,9 +50,9 @@ produces a clear npSTAT5 pulse over ~120 time units.
 """
 from __future__ import annotations
 from dataclasses import dataclass, field
+from .base import BaseCircuit
 from typing import Tuple, Dict
 import numpy as np
-from scipy.integrate import solve_ivp
 
 
 DEFAULT_PARAMS: Dict[str, float] = {
@@ -113,7 +113,7 @@ DEFAULT_IC: Dict[str, float] = {
 
 
 @dataclass
-class Adlung2021JakStat:
+class Adlung2021JakStat(BaseCircuit):
     """JAK2/STAT5 signaling in erythroid progenitor cells (BIOMD0000001077).
 
     Parameters
@@ -127,16 +127,12 @@ class Adlung2021JakStat:
     params: Dict[str, float] = field(default_factory=lambda: dict(DEFAULT_PARAMS))
     initial_conditions: Dict[str, float] = field(default_factory=lambda: dict(DEFAULT_IC))
 
-    @property
-    def n_genes(self) -> int:
-        return len(STATE_NAMES)
+
+
 
     @property
-    def gene_names(self) -> Tuple[str, ...]:
+    def state_names(self) -> Tuple[str, ...]:
         return STATE_NAMES
-
-    def _unpack(self, x: np.ndarray) -> Dict[str, float]:
-        return dict(zip(STATE_NAMES, x))
 
     def rhs(self, x: np.ndarray) -> np.ndarray:
         """Right-hand side of the ODE system.
@@ -148,7 +144,8 @@ class Adlung2021JakStat:
         p = self.params
         s = self._unpack(x)
 
-        cyt = p["cyt"]; nuc = p["nuc"]
+        cyt = p["cyt"]
+        nuc = p["nuc"]
         SOCS3_inh_factor = s["SOCS3"] * p["SOCS3Inh"] / p["SOCS3Eqc"] + 1.0
         CIS_inh_factor = s["CIS"] * p["CISInh"] / p["CISEqc"] + 1.0
 
@@ -206,21 +203,6 @@ class Adlung2021JakStat:
         dx[i["CIS"]]          = (1.0/cyt) * ( v22 - v23)
         dx[i["SOCS3"]]        = (1.0/cyt) * ( v24 - v25 + v26)
         return dx
-
-    def simulate(self, t_end: float = 200.0, n_samples: int = 2000,
-                 initial_state: np.ndarray = None,
-                 rtol: float = 1e-7, atol: float = 1e-9):
-        """Standard simulation: stimulate with Epo at t=0 from resting state."""
-        if initial_state is None:
-            initial_state = np.array([self.initial_conditions[n] for n in STATE_NAMES])
-        sol = solve_ivp(
-            lambda t, x: self.rhs(x),
-            t_span=(0.0, t_end),
-            y0=initial_state,
-            t_eval=np.linspace(0.0, t_end, n_samples),
-            method="LSODA", rtol=rtol, atol=atol,
-        )
-        return sol.t, sol.y.T
 
     def __repr__(self) -> str:
         return (f"Adlung2021JakStat(14 vars, Epo={self.params['Epo']:.1f}, "

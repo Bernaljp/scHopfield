@@ -176,7 +176,7 @@ def plot_energy_boxplots(
         })
 
         # Create boxplot with better styling
-        bp = sns.boxplot(
+        sns.boxplot(
             data=df, x='Cluster', y='Energy', order=order,
             ax=ax, palette=plot_palette,
             linewidth=1.5,
