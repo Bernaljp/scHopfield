@@ -305,3 +305,20 @@ class Landscape:
             jacobians.append(jacobian_matrix)
 
         return jacobians
+
+    @property
+    def total_energy(self) -> np.ndarray:
+        assert 'total_energy' in self.adata.obs, "Total energy not computed; run get_energies first"
+        return self.adata.obs['total_energy']
+    @property
+    def interaction_energy(self) -> np.ndarray:
+        assert 'interaction_energy' in self.adata.obs, "Interaction energy not computed; run get_energies first"
+        return self.adata.obs['interaction_energy']
+    @property
+    def degradation_energy(self) -> np.ndarray:
+        assert 'degradation_energy' in self.adata.obs, "Degradation energy not computed; run get_energies first"
+        return self.adata.obs['degradation_energy']
+    @property
+    def bias_energy(self) -> np.ndarray:
+        assert 'bias_energy' in self.adata.obs, "Bias energy not computed; run get_energies first"
+        return self.adata.obs['bias_energy']
