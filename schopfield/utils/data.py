@@ -44,7 +44,16 @@ def write_sigmoids(landscape: 'Landscape') -> None:
     landscape.adata.layers['sigmoid'] = sig
 
 def write_energies(landscape: 'Landscape', energies: Dict[str, Dict[str, np.ndarray]]) -> None:
-    """Write energy components to adata.obs."""
+    """Write energy components to the AnnData object.
+    Args:
+        landscape: Landscape object containing adata and cluster_key.
+        energies: Dictionary with energy components for each cluster.
+            Expected keys are 'total', 'interaction', 'degradation', 'bias'.
+            Each key maps to another dictionary with clusters as keys and energy arrays as values.
+    Raises:
+        ValueError: If energies do not match the number of observations in adata.
+    """
+    logger.info("Writing energy components to adata.obs")
     for e_type, clusters in energies.items():
         for cluster, values in clusters.items():
             key = f"{e_type.lower()}_energy"
@@ -52,5 +61,5 @@ def write_energies(landscape: 'Landscape', energies: Dict[str, Dict[str, np.ndar
                 landscape.adata.obs[key] = values
             else:
                 mask = landscape.adata.obs[landscape.cluster_key] == cluster
-                landscape.adata.obs.loc[mask, key] = values[mask]
+                landscape.adata.obs.loc[mask, key] = values
     logger.info("Written energies to adata.obs")

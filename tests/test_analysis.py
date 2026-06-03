@@ -17,7 +17,6 @@ def test_compute_energies(sample_adata):
     
     energies = compute_energies(landscape)
     assert set(energies.keys()) == {"total", "interaction", "degradation", "bias"}
-    assert "all" in energies["total"]
     assert energies["total"]["all"].shape == (100,)
     
     x = np.random.rand(5, 10)

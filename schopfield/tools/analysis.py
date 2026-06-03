@@ -6,6 +6,7 @@ from scipy.sparse import issparse
 from schopfield.utils.math import compute_sigmoid, int_sig_act_inv
 from schopfield.utils.data import to_numpy, write_energies, get_matrix
 
+
 logger = logging.getLogger(__name__)
 
 def compute_energies(landscape: 'Landscape', x: Optional[np.ndarray] = None) -> Dict[str, Dict[str, np.ndarray]]:
@@ -36,10 +37,14 @@ def compute_energies(landscape: 'Landscape', x: Optional[np.ndarray] = None) -> 
         raise ValueError("Interaction parameters not initialized; run schopfield.tools.fitting.fit_interactions")
     if x is not None and (landscape.threshold is None or landscape.exponent is None):
         raise ValueError("Sigmoid parameters not initialized; run schopfield.tools.fitting.fit_sigmoids")
-    
     # Initialize energy dictionaries
-    energies = {'total': {}, 'interaction': {}, 'degradation': {}, 'bias': {}}
-    
+    energies = {
+        'total': {},
+        'interaction': {},
+        'degradation': {},
+        'bias': {}
+    }
+
     # Compute energies for each cluster
     for cluster in landscape.W.keys():
         interaction = _interaction_energy(landscape, cluster, x)
@@ -47,15 +52,11 @@ def compute_energies(landscape: 'Landscape', x: Optional[np.ndarray] = None) -> 
         bias = _bias_energy(landscape, cluster, x)
         total = interaction + degradation + bias
         
+        energies['total'][cluster] = total
         energies['interaction'][cluster] = interaction
         energies['degradation'][cluster] = degradation
         energies['bias'][cluster] = bias
-        energies['total'][cluster] = total
-    
-    # Store in adata if x is None
-    if x is None:
-        write_energies(landscape, energies)
-    
+
     return energies
 
 def _interaction_energy(landscape: 'Landscape', cluster: str, x: Optional[np.ndarray] = None) -> np.ndarray:
@@ -217,3 +218,23 @@ def interaction_energy_decomposed(landscape: 'Landscape', cluster: str, side: st
            else get_matrix(landscape.adata, 'sigmoid', genes=landscape.genes)[idx])
     
     return -0.5 * (sig @ W.T) * sig if side == 'out' else -0.5 * (sig @ W) * sig
+
+def get_energies(landscape: 'Landscape') -> None:
+    """Compute and store energy components for all cells.
+
+    Args:
+        landscape: Landscape object containing adata and parameters.
+        x: Optional input data (n_cells, n_genes). If None, use adata.layers['sigmoid'].
+
+    Notes:
+        Stores results in landscape.E, E_interaction, E_degradation, E_bias.
+    """
+    logger.info("Computing energies for all cells")
+    energies = compute_energies(landscape)
+    write_energies(landscape, energies)
+    
+    # Store results in landscape attributes
+    landscape.E = energies['total']
+    landscape.E_interaction = energies['interaction']
+    landscape.E_degradation = energies['degradation']
+    landscape.E_bias = energies['bias']
