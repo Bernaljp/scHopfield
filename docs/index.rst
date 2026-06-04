@@ -81,13 +81,13 @@ Contents
    :maxdepth: 2
    :caption: User Guide & Examples
 
-   Getting Started <../notebooks/core/01_getting_started>
-   Energy Analysis <../notebooks/core/02_energy_analysis>
-   Network Analysis <../notebooks/core/03_network_analysis>
-   Stability Analysis <../notebooks/core/04_stability_analysis>
-   Perturbation Analysis <../notebooks/core/05_perturbation_analysis>
-   Lineage Drivers <../notebooks/core/06_lineage_drivers>
-   Extended Perturbation <../notebooks/core/07_perturbation_extended_analyses>
+   Getting Started <notebooks/01_getting_started>
+   Energy Analysis <notebooks/02_energy_analysis>
+   Network Analysis <notebooks/03_network_analysis>
+   Stability Analysis <notebooks/04_stability_analysis>
+   Perturbation Analysis <notebooks/05_perturbation_analysis>
+   Lineage Drivers <notebooks/06_lineage_drivers>
+   Extended Perturbation <notebooks/07_perturbation_extended_analyses>
 
 .. toctree::
    :maxdepth: 2

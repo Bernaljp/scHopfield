@@ -12,7 +12,8 @@ build:
   jobs:
     pre_build:
       # Copy notebooks into docs/notebooks so Sphinx can find them
-      - cp notebooks/*.ipynb docs/notebooks/
+      - mkdir -p docs/notebooks
+      - cp notebooks/core/*.ipynb docs/notebooks/
     post_install:
       # Install the package itself
       - pip install -e .
