@@ -2,24 +2,61 @@
 
 ## Installation Methods
 
-### Method 1: Development Installation (Recommended for local development)
+### Method 1: Robust Installation with Conda (Recommended)
 
-From the project directory:
+This method ensures all complex dependencies (like `gimmemotifs`, `velocyto`, and `celloracle`) are installed correctly without build conflicts.
 
 ```bash
+# 1. Create and activate a fresh environment
+conda create -n schopfield python=3.10.8 -y
+conda activate schopfield
+
+# 2. Upgrade core build tools
+conda install "setuptools<82" -y
+pip install --upgrade pip wheel
+
+# 3. Install core numerical and single-cell dependencies
+pip install \
+  numpy==1.26.4 \
+  pandas==1.5.3 \
+  scikit-learn==1.5.2 \
+  matplotlib==3.6.3 \
+  scipy \
+  numba \
+  seaborn \
+  h5py \
+  scanpy \
+  anndata \
+  networkx \
+  umap-learn \
+  tqdm \
+  cython
+
+# 4. Remove conflicting packages (optional safety step)
+pip uninstall -y pims omnipath xarray-dataclasses xarray-schema dask-expr ome-zarr || true
+
+# 5. Install mamba and gimmemotifs
+conda install -c conda-forge "mamba>=0.27" -y
+mamba install -c bioconda -c conda-forge gimmemotifs -y
+
+# 6. Install velocyto and celloracle without build isolation
+pip install --no-build-isolation velocyto
+pip install --no-build-isolation celloracle
+
+# 7. Install scHopfield LAST
 git clone https://github.com/Bernaljp/scHopfield.git
 cd scHopfield
 pip install -e .
 ```
 
-The `-e` flag installs in "editable" mode, meaning changes to the source code are immediately reflected without reinstalling.
+### Method 2: Minimal Installation
 
-### Method 2: Standard Installation
+If you already have a working environment and just want to install the package directly:
 
 ```bash
 git clone https://github.com/Bernaljp/scHopfield.git
 cd scHopfield
-pip install .
+pip install -e .
 ```
 
 ### Method 3: With Optional Dependencies

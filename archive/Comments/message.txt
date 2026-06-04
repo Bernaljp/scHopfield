@@ -1,0 +1,1 @@
+¡Hola! Una recomendación con respecto a lo que hablamos ayer, intentaría unificar las dos secciones de example notebooks + user guide. En general, metería las explicaciones del user guide dentro de los notebooks. Así quedaria más completo y unificado

@@ -72,7 +72,9 @@ Before using scHopfield, you need:
 
 ## Installation
 
-### From source
+For the most robust setup (including complex dependencies like `velocyto` and `celloracle`), we strongly recommend using conda. See [INSTALL.md](INSTALL.md) for detailed step-by-step instructions.
+
+### Basic Installation
 
 ```bash
 git clone https://github.com/Bernaljp/scHopfield.git
