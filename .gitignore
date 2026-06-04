@@ -51,10 +51,10 @@ coverage.xml
 
 # Jupyter Notebook
 .ipynb_checkpoints
-cell_oracle_vs_schopfield.ipynb
-cell_oracle_vs_schopfield copy.ipynb
-cell_oracle_vs_schopfield.py
-sctour_schopfield_pipeline.py
+notebooks/celloracle/cell_oracle_vs_schopfield.ipynb
+notebooks/celloracle/cell_oracle_vs_schopfield copy.ipynb
+scripts/cell_oracle_vs_schopfield.py
+scripts/sctour_schopfield_pipeline.py
 
 # pyenv
 .python-version
@@ -80,24 +80,24 @@ venv.bak/
 Thumbs.db
 
 # Project specific
-Base/
-Methods/
-CellOracle/
-IMPLEMENTATION_PLAN.md
+archive/Base/
+docs/methods/
+notebooks/celloracle/
+docs/archive/IMPLEMENTATION_PLAN.md
 *.h5
 *.h5ad
-cellOracle.pdf
+figures/cellOracle.pdf
 data/
 results/
 figures/
-scTour_inference_basic.ipynb
-sctorubasic.py
-hematopoiesis_analysis_sch.py
-/notebooks/*.py
-/notebooks/08_*.ipynb
+notebooks/experiments/scTour_inference_basic.ipynb
+scripts/sctorubasic.py
+scripts/hematopoiesis_analysis_sch.py
+/notebooks/core/*.py
+/notebooks/celloracle/08_*.ipynb
 /docs/notebooks/*.ipynb
-perturbation_extended_analyses.ipynb
-enhanced_recipe_analysis.ipynb
-robustness_analyses.ipynb
-_fit_one_reg.py
+notebooks/experiments/perturbation_extended_analyses.ipynb
+notebooks/experiments/enhanced_recipe_analysis.ipynb
+notebooks/experiments/robustness_analyses.ipynb
+scripts/_fit_one_reg.py
 scHopfield/validation/run_*.py
