@@ -1,4 +1,4 @@
-# Results (draft) — scHopfield
+# Results (draft): scHopfield
 
 Draft Results narrative assembled from the committed benchmark findings
 (`benchmark_results/FINDINGS.md`, M1-M7). Figures reference the committed PNGs.
