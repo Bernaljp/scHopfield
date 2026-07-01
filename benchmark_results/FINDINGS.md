@@ -192,3 +192,27 @@ Spearman rank correlation trivial baseline approx 0. "Reproducible" target = 1.0
   placeholder ("benchmarked against X and Y"). Honest scope: GENIE3 is expression-only by
   design; SCENIC (motif-based) and dyngen (R) remain as further baselines if required.
 - Disposition: Fig 2 baseline panel; supports the velocity-based-inference claim. audit? y.
+
+## M9 - Biophysical circuits: DissOsc fixable, Novak/Adlung representable (not W-recoverable)
+- Setup: audited the three "hard" circuits (task #8). Checked Hopfield-form consistency
+  (||rhs - (W sigma + I - gamma x)|| / ||rhs||) and, for the non-Hopfield ones, velocity
+  representation R^2 with a Hill + linear + bias least-squares fit (data-estimated Hill).
+- Result:
+  - Dissertation oscillator IS exactly Hopfield-form (residual 0.0000). Its earlier poor
+    recovery (corr -0.62) was a VALIDATION-HARNESS bug: fit_circuit clips negatives
+    (max(x,0)^n) while the circuit's activation uses power(x,n); using the circuit's own
+    activation recovers W at **corr 1.000**. Fixable, not a method limitation.
+  - Novak1997 cell cycle (13 genes) and Adlung2021 JAK-STAT (14 genes) have NO W() and are
+    NOT Hopfield-form (mass-action / Michaelis-Menten). W-recovery is undefined. But the
+    Hill model REPRESENTS their velocity fields essentially perfectly: Hopfield-form
+    (Hill+linear+bias) R^2 = **1.000** for both; Hill-only basis R^2 = 0.983 (Novak) /
+    0.999 (Adlung).
+- What it means: the "biophysical limitation" (M3) is nuanced and largely favorable.
+  scHopfield cannot recover a meaningful interaction matrix for genuinely non-Hopfield
+  systems (there isn't one), but it faithfully represents their dynamics, and the one
+  Hopfield-form case that appeared to fail was a harness activation mismatch, now
+  diagnosed. Improvement direction for true W-recovery on non-Hopfield systems (richer
+  multi-Hill / MLP basis) remains open.
+- Disposition: sharpens the M3 limitation into an honest, mostly-positive characterization;
+  fold into Discussion. Suggested one-line harness fix: fit_circuit should use the
+  circuit's activation (or power(x,n)) rather than max(x,0)^n. audit? y.
