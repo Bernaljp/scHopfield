@@ -60,6 +60,10 @@ def build_scaffold(adata, base_GRN):
 
 
 def preprocess():
+    cache = "data/hematopoiesis/base_preprocessed.h5ad"
+    if os.path.exists(cache):
+        print(f"loading cached base {cache}", flush=True)
+        return sc.read_h5ad(cache)
     adata = sc.read_h5ad("data/hematopoiesis/paul15_oracle.h5ad")
     adata.layers["spliced"] = adata.layers["normalized_count"]
     adata.layers["unspliced"] = adata.layers["normalized_count"]
@@ -72,6 +76,8 @@ def preprocess():
     adata.var["scHopfield_used"] = True
     sch.pp.fit_all_sigmoids(adata, genes=adata.var["scHopfield_used"].values, spliced_key=SPLICED_KEY)
     sch.pp.compute_sigmoid(adata, spliced_key=SPLICED_KEY)
+    adata.write(cache)
+    print(f"cached base -> {cache}", flush=True)
     return adata
 
 
@@ -89,8 +95,8 @@ def run_setting(base, scaffold, reg, tag):
     # (1) driver-score top genes
     scores = sch.tl.score_driver_tfs(ad, lineage_A_clusters=ERY, lineage_B_clusters=MYE,
                                      cluster_key=CLUSTER_KEY)
-    top_score_ery = scores.sort_values("total_score_ery", ascending=False).head(TOPN).index.tolist()
-    top_score_mye = scores.sort_values("total_score_mye", ascending=False).head(TOPN).index.tolist()
+    top_score_ery = scores.sort_values("score_A", ascending=False).head(TOPN).index.tolist()
+    top_score_mye = scores.sort_values("score_B", ascending=False).head(TOPN).index.tolist()
     # (2) perturbation top genes: KO fixed candidates, rank by |lineage_bias|
     sch.tl.calculate_flow(ad, source="original", basis=BASIS, method="hopfield",
                           cluster_key=CLUSTER_KEY, store_key=WT_FLOW_KEY, verbose=False)
@@ -113,13 +119,18 @@ def main():
     os.makedirs(OUTDIR, exist_ok=True)
     print(f"device={DEVICE}; preprocessing once...", flush=True)
     base = preprocess()
-    results = {}
+    respath = f"{OUTDIR}/results.json"
+    results = json.load(open(respath)) if os.path.exists(respath) else {}
+    if results:
+        print(f"resuming; already done: {list(results)}", flush=True)
     for net_name, net_path in NETWORKS.items():
         base_GRN = pd.read_parquet(net_path).drop(columns=["peak_id"])
         scaffold, n_tf, n_edge = build_scaffold(base, base_GRN)
         print(f"[{net_name}] scaffold: {n_tf} TFs, {n_edge} edges", flush=True)
         for reg_name, reg in REGS.items():
             tag = f"{net_name}:{reg_name}"
+            if tag in results:
+                continue
             print(f"=== fitting {tag} (reg={reg}) ===", flush=True)
             res = run_setting(base, scaffold, reg, tag)
             results[tag] = res
