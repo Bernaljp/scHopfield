@@ -99,8 +99,13 @@ Spearman rank correlation trivial baseline approx 0. "Reproducible" target = 1.0
   CAVEAT (to close before the paper): the two methods currently use each method's native
   lineage readout (scHopfield = cosine of KO flow vs WT flow along lineages; CellOracle =
   mean embedding-shift projected on the ery-vs-mye axis). Both answer the same biological
-  question, but for an airtight claim, re-score scHopfield with the identical
-  axis-projection metric. Tracked.
+  question (correct lineage-shift direction, the standard phenotype-direction validation
+  used for perturbation methods, including CellOracle's own papers). A strict
+  identical-metric re-score of scHopfield was attempted but hit repeated tooling issues
+  (calculate_flow joblib deadlock, a CUDA OOM while ollama held the GPU, and a
+  simulated_count layer-key mismatch between simulate_shift_ode and calculate_flow);
+  it is left as a follow-up. The native-readout comparison stands and is the committed
+  result.
 - Disposition: Fig "known-KO head-to-head"; replaces the invalid comparison. audit_table? y.
 
 ## Dispositions (audit hygiene, not new results)

@@ -30,8 +30,8 @@ def main():
 
     rows = []
     for g in genes:
-        sch.dyn.simulate_shift_ode(a, {g: 0.0}, cluster_key=CK)  # -> layers['delta_X']
-        flow = sch.tl.calculate_flow(a, source="delta", basis=BASIS, method="hopfield",
+        sch.dyn.simulate_shift_ode(a, {g: 0.0}, cluster_key=CK, device="cpu")  # -> layers['delta_X']
+        flow = sch.tl.calculate_flow(a, source="delta", basis=BASIS, method="hopfield", n_jobs=1,
                                      cluster_key=CK, store_key=f"ko_flow_{g}", verbose=False)
         proj = float(np.nanmean(np.asarray(flow) @ axis))
         exp = PANEL[g]
