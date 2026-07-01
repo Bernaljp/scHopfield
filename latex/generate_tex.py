@@ -24,9 +24,23 @@ UNI = {"≥": r"$\geq$", "≤": r"$\leq$", "×": r"$\times$", "−": "-", "→":
        "“": "``", "”": "''", "‘": "`", "’": "'", "–": "--", "…": r"\ldots{}", "≠": r"$\neq$"}
 
 
+NOTATION = [
+    (r"W\^\(C\)", "W^{(C)}"), (r"R-squared", "R^2"),
+    (r"sigma_j\(x_j\)", r"\sigma_j(x_j)"), (r"\bsigma_j\b", r"\sigma_j"),
+    (r"\bn_j\b", "n_j"), (r"\bk_j\b", "k_j"), (r"\bgamma_i\b", r"\gamma_i"),
+    (r"\bI_i\b", "I_i"), (r"\bx_j\b", "x_j"), (r"\bx_i\b", "x_i"),
+]
+
+
 def esc(t):
     # escape LaTeX specials in body text (no math mode here)
     t = t.replace("\\", "")  # drop stray backslashes
+    # protect known inline notation as math placeholders (survive escaping)
+    store = []
+    def stash(latex):
+        store.append("$" + latex + "$"); return f"@@N{len(store)-1}@@"
+    for pat, latex in NOTATION:
+        t = re.sub(pat, lambda m, l=latex: stash(l), t)
     for u, r in UNI.items():
         t = t.replace(u, r)
     for a, b in [("&", r"\&"), ("%", r"\%"), ("#", r"\#"), ("_", r"\_"),
@@ -35,6 +49,8 @@ def esc(t):
         t = t.replace(a, b)
     # markdown bold/italic
     t = re.sub(r"\*\*(.+?)\*\*", r"\\textbf{\1}", t)
+    # restore protected inline math
+    t = re.sub(r"@@N(\d+)@@", lambda m: store[int(m.group(1))], t)
     return t
 
 
