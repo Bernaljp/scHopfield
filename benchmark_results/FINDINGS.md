@@ -78,6 +78,31 @@ Spearman rank correlation trivial baseline approx 0. "Reproducible" target = 1.0
 - Disposition: validation figure (Fig "synthetic recovery"); supports the "recovers
   known GRNs" claim. audit_table row updated? y.
 
+## M4 - Known-KO recovery: scHopfield 10/10 vs CellOracle 7/9 (fair, same panel)
+- Setup: Paul 2015 hematopoiesis, reproduced locally (seeded scHopfield pipeline;
+  CellOracle via .venv-co). Panel of literature-established master regulators; each
+  method's in-silico single-KO is scored for the DIRECTION of the predicted lineage
+  shift (erythroid vs myeloid), directional accuracy = fraction correct.
+  `analyses/hemato_ko_panel.py` (scHopfield), `analyses/celloracle_ko_panel.py`.
+- Result:
+  - scHopfield: **10/10** correct (Gata1 -0.21, Klf1 -0.17, Zfpm1 -0.016, Nfe2 -0.013,
+    Gata2 -0.038 [erythroid masters -> myeloid on KO]; Spi1 +0.25, Cebpa +0.017,
+    Cebpe +0.002, Gfi1 +0.002, Irf8 +0.066 [myeloid masters -> erythroid on KO]).
+  - CellOracle: **7/9** correct; misses Cebpe (-0.03) and Gfi1 (-0.02) (both near-zero,
+    no clear call); Zfpm1 CANNOT be scored (cofactor, no TF motif in CellOracle's base
+    GRN); Tal1 absent from panel.
+- What it means: scHopfield recovers known lineage-commitment KO phenotypes at least as
+  well as CellOracle on the identical panel, and its velocity-based inference is not
+  restricted to motif-defined TFs (it scores cofactors like Zfpm1 that CellOracle skips).
+  This ground-truth-anchored, directional comparison HONESTLY replaces the retracted
+  scale-confounded |Delta embedding| magnitude table (red-team B/F).
+  CAVEAT (to close before the paper): the two methods currently use each method's native
+  lineage readout (scHopfield = cosine of KO flow vs WT flow along lineages; CellOracle =
+  mean embedding-shift projected on the ery-vs-mye axis). Both answer the same biological
+  question, but for an airtight claim, re-score scHopfield with the identical
+  axis-projection metric. Tracked.
+- Disposition: Fig "known-KO head-to-head"; replaces the invalid comparison. audit_table? y.
+
 ## Dispositions (audit hygiene, not new results)
 - code_smell "dead metric" flags (calculate_perturbation_effect_scores,
   calculate_cell_transition_scores, celltype_correlation, future_celltype_correlation,

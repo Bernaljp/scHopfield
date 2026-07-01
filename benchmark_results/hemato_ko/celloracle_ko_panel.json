@@ -1,0 +1,105 @@
+{
+  "n": 9,
+  "directional_accuracy": 0.7777777777777778,
+  "metric": "mean embedding-shift . (ery-mye) axis",
+  "rows": [
+    {
+      "gene": "Gata1",
+      "axis_projection": -0.154528,
+      "expected_sign": -1,
+      "pred_sign": -1,
+      "correct": true,
+      "role": "erythroid-master"
+    },
+    {
+      "gene": "Klf1",
+      "axis_projection": -0.036053,
+      "expected_sign": -1,
+      "pred_sign": -1,
+      "correct": true,
+      "role": "erythroid-master"
+    },
+    {
+      "gene": "Zfpm1",
+      "error": "Gene Zfpm1 is not included in the base GRN; It is not TF or TF motif information is not available. Cannot perform simula",
+      "correct": false
+    },
+    {
+      "gene": "Nfe2",
+      "axis_projection": -0.095445,
+      "expected_sign": -1,
+      "pred_sign": -1,
+      "correct": true,
+      "role": "erythroid-master"
+    },
+    {
+      "gene": "Gata2",
+      "axis_projection": -0.143032,
+      "expected_sign": -1,
+      "pred_sign": -1,
+      "correct": true,
+      "role": "erythroid-master"
+    },
+    {
+      "gene": "Spi1",
+      "axis_projection": 0.150851,
+      "expected_sign": 1,
+      "pred_sign": 1,
+      "correct": true,
+      "role": "myeloid-master"
+    },
+    {
+      "gene": "Cebpa",
+      "axis_projection": 0.028033,
+      "expected_sign": 1,
+      "pred_sign": 1,
+      "correct": true,
+      "role": "myeloid-master"
+    },
+    {
+      "gene": "Cebpe",
+      "axis_projection": -0.031553,
+      "expected_sign": 1,
+      "pred_sign": -1,
+      "correct": false,
+      "role": "myeloid-master"
+    },
+    {
+      "gene": "Gfi1",
+      "axis_projection": -0.018409,
+      "expected_sign": 1,
+      "pred_sign": -1,
+      "correct": false,
+      "role": "myeloid-master"
+    },
+    {
+      "gene": "Irf8",
+      "axis_projection": 0.204219,
+      "expected_sign": 1,
+      "pred_sign": 1,
+      "correct": true,
+      "role": "myeloid-master"
+    }
+  ],
+  "ery_clusters": [
+    "1Ery",
+    "2Ery",
+    "3Ery",
+    "4Ery",
+    "5Ery",
+    "6Ery",
+    "7MEP"
+  ],
+  "mye_clusters": [
+    "9GMP",
+    "10GMP",
+    "11DC",
+    "12Baso",
+    "13Baso",
+    "14Mo",
+    "15Mo",
+    "16Neu",
+    "17Neu",
+    "18Eos"
+  ]
+}

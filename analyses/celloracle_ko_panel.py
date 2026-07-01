@@ -32,6 +32,8 @@ PANEL = {"Gata1": -1, "Klf1": -1, "Zfpm1": -1, "Tal1": -1, "Nfe2": -1, "Gata2": 
 
 def main():
     oracle = co.data.load_tutorial_oracle_object()
+    # fit the simulation GRN (the tutorial object ships the TFdict but not the fitted coefs)
+    oracle.fit_GRN_for_simulation(alpha=10, use_cluster_specific_TFdict=True, verbose_level=0)
     adata = oracle.adata
     emb = adata.obsm[f"X_{BASIS}"]
     cl = adata.obs[CLUSTER_KEY].astype(str).values

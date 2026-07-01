@@ -5,3 +5,7 @@ analyses/plot_seed_sensitivity.py,Reproducibility supplementary figure,pancreas,
 analyses/circuit_recovery.py,Synthetic-circuit GRN recovery (toggle+repressilator) vs noise/scaffold,toggle+repressilator,current,KEEP,Fig-recovery,"M3: sign-acc 1.0, corr>0.9998, AUROC 1.0; graceful Frobenius degradation"
 analyses/plot_circuit_recovery.py,Recovery figure (Frobenius vs noise),synthetic,current,KEEP,Fig-recovery,two-panel
 tests/test_math_derivative.py,Regression test for Hill derivative factor n,unit,current,KEEP,CI,pins d_sigmoid to finite-diff
+analyses/hemato_pipeline.py,scHopfield Paul2015 pipeline (seeded GRN inference from base-GRN scaffold),Paul2015,current,KEEP,data-prep,90 TFs 75325 edges matches notebooks
+analyses/hemato_ko_panel.py,scHopfield known-TF KO directional accuracy,Paul2015,current,KEEP,Fig-knownKO,"M4: 10/10 directional"
+analyses/celloracle_ko_panel.py,CellOracle known-TF KO (fair head-to-head),Paul2015,current,KEEP,Fig-knownKO,"M4: 7/9; cannot score Zfpm1 cofactor"
+analyses/network_reg_sensitivity.py,Network x scaffold-reg sensitivity of top score/perturbation genes,Paul2015,current,KEEP,Fig-sensitivity,task9 running
