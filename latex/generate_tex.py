@@ -15,9 +15,20 @@ FIGS = {
 }
 
 
+UNI = {"≥": r"$\geq$", "≤": r"$\leq$", "×": r"$\times$", "−": "-", "→": r"$\to$",
+       "·": r"$\cdot$", "∈": r"$\in$", "∑": r"$\sum$", "∫": r"$\int$", "∇": r"$\nabla$",
+       "⊙": r"$\odot$", "≈": r"$\approx$", "∼": r"$\sim$", "√": r"$\surd$", "∞": r"$\infty$",
+       "σ": r"$\sigma$", "γ": r"$\gamma$", "φ": r"$\varphi$", "τ": r"$\tau$", "λ": r"$\lambda$",
+       "ρ": r"$\rho$", "Δ": r"$\Delta$", "α": r"$\alpha$", "β": r"$\beta$", "μ": r"$\mu$",
+       "θ": r"$\theta$", "π": r"$\pi$", "Σ": r"$\Sigma$", "Φ": r"$\Phi$", "ε": r"$\varepsilon$",
+       "“": "``", "”": "''", "‘": "`", "’": "'", "–": "--", "…": r"\ldots{}", "≠": r"$\neq$"}
+
+
 def esc(t):
     # escape LaTeX specials in body text (no math mode here)
     t = t.replace("\\", "")  # drop stray backslashes
+    for u, r in UNI.items():
+        t = t.replace(u, r)
     for a, b in [("&", r"\&"), ("%", r"\%"), ("#", r"\#"), ("_", r"\_"),
                  ("^", r"\textasciicircum{}"), ("~", r"\textasciitilde{}"),
                  (">=", r"$\geq$"), ("<=", r"$\leq$"), ("+/-", r"$\pm$")]:
@@ -32,6 +43,89 @@ def fig_block(n):
     return (f"\n\\begin{{figure}}[htbp]\n\\centering\n"
             f"\\includegraphics[width={w}\\linewidth]{{{path}}}\n"
             f"\\caption{{{esc(cap)}}}\n\\label{{fig:{n}}}\n\\end{{figure}}\n")
+
+
+def methods_tex(path="../docs/methods/scHopfield - Methods Final.md"):
+    """Math-aware markdown->LaTeX for the Methods (preserves $...$ and $$...$$)."""
+    import os
+    if not os.path.exists(path):
+        return ""
+    raw = open(path, encoding="utf-8").read()
+    # protect math
+    store = []
+    def stash(m):
+        store.append(m.group(0)); return f"@@M{len(store)-1}@@"
+    raw = re.sub(r"\$\$.*?\$\$", stash, raw, flags=re.S)
+    raw = re.sub(r"\$[^$\n]+\$", stash, raw)
+    out = ["\n\\clearpage\n\\section*{Methods}\n"]
+    for ln in raw.split("\n"):
+        s = ln.rstrip()
+        if s.startswith("# Methods"):
+            continue
+        if s.startswith("### "):
+            out.append(f"\n\\subsubsection*{{{esc(s[4:])}}}\n")
+        elif s.startswith("## "):
+            out.append(f"\n\\subsection*{{{esc(s[3:])}}}\n")
+        elif s.startswith("---") or s.startswith("## References"):
+            if s.startswith("## References"):
+                break
+            continue
+        else:
+            out.append(esc(s) + "\n" if s.strip() else "\n")
+    text = "".join(out)
+    # restore math: $$..$$ -> equation; $..$ stays inline
+    def restore(m):
+        i = int(m.group(1)); frag = store[i]
+        if frag.startswith("$$"):
+            body = frag.strip("$").strip()
+            body = re.sub(r"\\tag\{[^}]*\}", "", body)
+            return "\n\\begin{equation}\n" + body + "\n\\end{equation}\n"
+        return frag
+    text = re.sub(r"@@M(\d+)@@", restore, text)
+    return text
+
+
+def supp_tex():
+    return r"""
+\clearpage
+\section*{Supplementary Information}
+\subsection*{S1. Reproducibility}
+Cluster-specific inference is seeded. On the pancreatic dataset (3696 cells, 300 genes),
+two fits with the same seed were bit-identical (interaction-matrix and out-strength
+centrality correlations 1.000); unseeded fits were numerically stable in $W$ (Pearson
+0.999) but their gene rankings drifted (centrality Spearman 0.73--0.93 across five seeds).
+\begin{figure}[htbp]\centering
+\includegraphics[width=0.7\linewidth]{figures/supp_repro.png}
+\caption{Reproducibility of seeded vs unseeded inference (benchmark M1).}\end{figure}
+
+\subsection*{S2. GRN recovery vs GENIE3}
+On four synthetic 40-gene Hopfield networks with known ground truth, scHopfield recovered
+edges at AUROC $0.975\pm0.018$ / AUPRC $0.970$ versus GENIE3 (expression-only ExtraTrees)
+AUROC $0.701\pm0.025$ / AUPRC $0.240$ (benchmark M8).
+\begin{figure}[htbp]\centering
+\includegraphics[width=0.55\linewidth]{figures/supp_genie3.png}
+\caption{scHopfield vs GENIE3 GRN edge recovery.}\end{figure}
+
+\subsection*{S3. Robustness of driver identification}
+Across two mouse base networks and three scaffold-regularization regimes, perturbation-based
+drivers were stable (mean pairwise Jaccard of top-15 genes 0.67) while the static network
+score was unstable (0.20); an unconstrained pseudoinverse fit was an outlier (0.36) that
+dropped Gata1/Klf1 (benchmarks M5, M6).
+\begin{figure}[htbp]\centering
+\includegraphics[width=0.9\linewidth]{figures/supp_sensitivity.png}
+\caption{Network and regularization sensitivity of driver identification.}\end{figure}
+
+\subsection*{S4. Biophysical circuits}
+The dissertation oscillator is Hopfield-form and recovers at correlation 1.000. The Novak
+cell-cycle and Adlung JAK-STAT circuits are not of Hopfield form (no true interaction
+matrix) but the Hill model represents their velocity fields at $R^2=1.000$ (Hill-only basis
+$R^2=0.98$/$0.99$); benchmark M9.
+
+\subsection*{S5. Note on the Methods-equation Hill derivative}
+The Hill derivative used in the Jacobian is $\varphi'(x)=n\,\varphi(1-\varphi)/x$; the
+factor $n$ (present in the implementation) should be shown explicitly in Eq. (4) and
+Eq. (21) (benchmark M2).
+"""
 
 
 def main():
@@ -121,8 +215,9 @@ Elowitz MB, Leibler S (2000) \textit{Nature} 403:335.
 Kingma DP, Ba J (2015) \textit{ICLR} (Adam).
 Cannoodt R et al. (2021) \textit{Nat Commun} 12:3942 (dyngen).
 """
-    open(OUT, "w", encoding="utf-8").write(preamble + text + refs + "\n\\end{document}\n")
-    print(f"wrote {OUT} ({len(text)} chars body)")
+    full = preamble + text + refs + methods_tex() + supp_tex() + "\n\\end{document}\n"
+    open(OUT, "w", encoding="utf-8").write(full)
+    print(f"wrote {OUT} (main {len(text)} chars + Methods + Supplementary)")
 
 
 if __name__ == "__main__":
