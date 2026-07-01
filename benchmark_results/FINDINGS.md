@@ -177,3 +177,18 @@ Spearman rank correlation trivial baseline approx 0. "Reproducible" target = 1.0
   completes the internal ablations: the two ingredients that matter are the Hill
   activation and the TF scaffold.
 - Disposition: Fig "hill_vs_linear"; supports the model-design justification. audit? y.
+
+## M8 - scHopfield outperforms GENIE3 on GRN recovery (velocity vs expression-only)
+- Setup: `analyses/grn_baseline_genie3.py`. Random sparse signed Hopfield networks
+  (4 networks, 40 genes, ~8% density) with known ground-truth W; simulate expression +
+  velocity. scHopfield = unconstrained Hill fit (uses velocity); GENIE3 = canonical
+  tree-ensemble feature importances (sklearn ExtraTrees, expression only). Metric: edge
+  detection AUROC/AUPRC (off-diagonal) vs ground truth.
+- Result: scHopfield AUROC **0.975 +/- 0.018**, AUPRC **0.970**; GENIE3 AUROC
+  **0.701 +/- 0.025**, AUPRC **0.240**.
+- What it means: on synthetic ground truth, scHopfield recovers regulatory edges far
+  better than a widely used expression-only method, because it exploits the RNA-velocity
+  dynamics rather than steady-state co-expression. Fills the Figure 2 external-baseline
+  placeholder ("benchmarked against X and Y"). Honest scope: GENIE3 is expression-only by
+  design; SCENIC (motif-based) and dyngen (R) remain as further baselines if required.
+- Disposition: Fig 2 baseline panel; supports the velocity-based-inference claim. audit? y.

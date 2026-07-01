@@ -1,0 +1,45 @@
+{
+  "n_genes": 40,
+  "density": 0.08,
+  "n_networks": 4,
+  "schopfield_auroc_mean": 0.975459201570873,
+  "schopfield_auroc_sd": 0.01824592055531478,
+  "genie3_auroc_mean": 0.701295426732033,
+  "genie3_auroc_sd": 0.024755486940857926,
+  "schopfield_auprc_mean": 0.9701809778553454,
+  "genie3_auprc_mean": 0.24015231313662308,
+  "rows": [
+    {
+      "net": 0,
+      "sch_auroc": 0.9766065287993124,
+      "sch_auprc": 0.976230581541508,
+      "genie3_auroc": 0.7340421721272328,
+      "genie3_auprc": 0.2940382501552507,
+      "n_edges": 116
+    },
+    {
+      "net": 1,
+      "sch_auroc": 1.0,
+      "sch_auprc": 1.0,
+      "genie3_auroc": 0.6746212724805073,
+      "genie3_auprc": 0.19891726601373888,
+      "n_edges": 127
+    },
+    {
+      "net": 2,
+      "sch_auroc": 0.9683262596270368,
+      "sch_auprc": 0.9578094208722574,
+      "genie3_auroc": 0.7025137980346774,
+      "genie3_auprc": 0.25285159260574797,
+      "n_edges": 121
+    },
+    {
+      "net": 3,
+      "sch_auroc": 0.9569040178571429,
+      "sch_auprc": 0.9466839090076161,
+      "genie3_auroc": 0.6940044642857143,
+      "genie3_auprc": 0.21480214377175477,
+      "n_edges": 160
+    }
+  ]
+}
