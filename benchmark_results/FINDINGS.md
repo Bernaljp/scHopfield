@@ -216,3 +216,26 @@ Spearman rank correlation trivial baseline approx 0. "Reproducible" target = 1.0
 - Disposition: sharpens the M3 limitation into an honest, mostly-positive characterization;
   fold into Discussion. Suggested one-line harness fix: fit_circuit should use the
   circuit's activation (or power(x,n)) rather than max(x,0)^n. audit? y.
+
+## M10 - Biophysical-circuit recovery is limited by IDENTIFIABILITY, not model expressiveness
+- Setup: for the non-Hopfield circuits (Novak cell-cycle 13 genes, Adlung JAK-STAT 14 genes),
+  defined the true "effective GRN" as the sign of the average off-diagonal Jacobian
+  (d f_i / d x_j) of the true system, and tested whether scHopfield's additive-Hill fit
+  recovers those signs, under (a) trajectory data vs (b) broad state-space sampling.
+- Result:
+  - Trajectory data (single limit cycle): effective-GRN sign-accuracy = 0.47 (Novak) / 0.49
+    (Adlung), AUROC 0.48 / 0.59 -- chance level, despite velocity R^2 ~ 1.0 (M9).
+  - BROAD state-space sampling (random points across the state box, instantaneous velocity):
+    sign-accuracy = **0.85** (Novak) / **0.98** (Adlung), AUROC 0.80 / 0.90.
+- What it means: the additive-Hill Hopfield model IS expressive enough to recover a
+  meaningful effective GRN even for mass-action / Michaelis-Menten systems; the bottleneck
+  is IDENTIFIABILITY. Data confined to a low-dimensional trajectory underdetermines W (many
+  W fit the velocity equally; least squares picks an arbitrary one), so the recovered W does
+  not match the true regulatory sensitivities. Broadening state-space coverage resolves this.
+  This reframes the biophysical "limitation" (M9) as a data-conditioning problem with clear
+  fixes: (1) broaden the training cell set (scHopfield's include_neighbors / neighbor_fraction
+  already does this on real data); (2) a Jacobian-consistency regularizer tying W*sigma'(x) to
+  local finite-difference velocity sensitivities; (3) the scaffold prior (M6) as an
+  identifiability constraint. A richer (multiplicative) basis is lower priority because the
+  additive basis already suffices given identifiable data.
+- Disposition: upgrades M9; motivates the biophysical-improvement work (task #8). audit? y.

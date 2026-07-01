@@ -13,3 +13,4 @@ analyses/network_reg_sensitivity.py,see M5,Paul2015,current,KEEP,Fig-sensitivity
 analyses/no_scaffold_compare.py,No-scaffold pseudoinverse vs 6 scaffold settings,Paul2015,current,KEEP,Fig-sensitivity,M6: Jaccard 0.36 loses Gata1/Klf1
 analyses/grn_baseline_genie3.py,scHopfield vs GENIE3 GRN recovery on synthetic ground truth,synthetic,current,KEEP,Fig2-baseline,M8 AUROC 0.98 vs 0.70
 analyses/(inline biophysical audit),DissOsc corr 1.0 harness fix; Novak/Adlung velocity-R2 1.0,synthetic,current,KEEP,Discussion-limitation,M9
+(inline biophysical identifiability audit),effective-GRN recovery: trajectory 0.48 -> broad-sampling 0.85/0.98,synthetic,current,KEEP,Discussion,M10
