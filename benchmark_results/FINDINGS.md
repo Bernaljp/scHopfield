@@ -299,3 +299,17 @@ Spearman rank correlation trivial baseline approx 0. "Reproducible" target = 1.0
   inference is underdetermined and a transcription-factor scaffold prior is essential
   across systems. Strengthens M6.
 - Disposition: generalizes M6/M10/M12; fold into S3. audit? y.
+
+## M14 - Energy/stability analysis generalizes to murine neural crest (#3)
+- Setup: `analyses/energy_stability.py` (general Fig-5 pipeline) on murine neural crest
+  (DynamiSC, velocity-prepped), 250 top-velocity genes, seeded pseudoinverse per cell type,
+  per-cell Jacobian eigenvalues + energy. `benchmark_results/energy_stability/murine_NC.{png,json}`.
+- Result: the progenitor-instability -> terminal-stability pattern (seen in pancreas, Fig 5)
+  reproduces: neural-crest progenitor/transitional states have positive leading Jacobian
+  eigenvalues (PNS glia +0.44, PNS neurons +0.34; unstable), whereas terminally
+  differentiated states are more stable with deeper energy wells (melanocytes eig ~0,
+  E=-143; myelinating Schwann cells eig -2.6, E=-1767).
+- What it means: the energy-landscape + Jacobian-stability readout is not pancreas-specific;
+  it recovers the expected developmental ordering (unstable progenitors, stable terminal
+  fates) in an independent system, supporting the generality of the stability analysis.
+- Disposition: generalizes Fig 5; candidate supplementary panel. audit? y.

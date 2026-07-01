@@ -1,0 +1,47 @@
+{
+  "Neural crest (PNS neurons)": {
+    "jacobian_eig1_real": 0.3381578028202057,
+    "jacobian_positive_evals": 3.0,
+    "energy_total": -129.48293309631774
+  },
+  "Neural crest (PNS glia)": {
+    "jacobian_eig1_real": 0.43903636932373047,
+    "jacobian_positive_evals": 5.0,
+    "energy_total": -389.0886760678179
+  },
+  "Myelinating Schwann cells": {
+    "jacobian_eig1_real": 0.16426238417625427,
+    "jacobian_positive_evals": 3.0,
+    "energy_total": -636.5739757032094
+  },
+  "Otic sensory neurons": {
+    "jacobian_eig1_real": -0.892461359500885,
+    "jacobian_positive_evals": 12.0,
+    "energy_total": -444.5806405817492
+  },
+  "Myelinating Schwann cells (Tgfb2+)": {
+    "jacobian_eig1_real": -2.613943099975586,
+    "jacobian_positive_evals": 16.0,
+    "energy_total": -1767.031065399517
+  },
+  "Dorsal root ganglion neurons": {
+    "jacobian_eig1_real": 5.858186721801758,
+    "jacobian_positive_evals": 26.0,
+    "energy_total": -3800.3458959648947
+  },
+  "Enteric neurons": {
+    "jacobian_eig1_real": 0.03991764411330223,
+    "jacobian_positive_evals": 1.0,
+    "energy_total": -78.92496788330934
+  },
+  "Melanocyte cells": {
+    "jacobian_eig1_real": -0.013128900900483131,
+    "jacobian_positive_evals": 0.0,
+    "energy_total": -143.23573515510958
+  },
+  "Olfactory ensheathing cells": {
+    "jacobian_eig1_real": 0.10475970804691315,
+    "jacobian_positive_evals": 1.0,
+    "energy_total": -165.22507933351773
+  }
+}
