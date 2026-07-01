@@ -1,0 +1,56 @@
+{
+  "Novak_cellcycle": [
+    {
+      "lambda": 0.0,
+      "sign_acc": 0.725,
+      "auroc": 0.544
+    },
+    {
+      "lambda": 0.1,
+      "sign_acc": 0.625,
+      "auroc": 0.548
+    },
+    {
+      "lambda": 1.0,
+      "sign_acc": 0.55,
+      "auroc": 0.596
+    },
+    {
+      "lambda": 10.0,
+      "sign_acc": 0.575,
+      "auroc": 0.599
+    },
+    {
+      "lambda": 100.0,
+      "sign_acc": 0.5,
+      "auroc": 0.625
+    }
+  ],
+  "Adlung_jakstat": [
+    {
+      "lambda": 0.0,
+      "sign_acc": 0.683,
+      "auroc": 0.469
+    },
+    {
+      "lambda": 0.1,
+      "sign_acc": 0.659,
+      "auroc": 0.441
+    },
+    {
+      "lambda": 1.0,
+      "sign_acc": 0.61,
+      "auroc": 0.462
+    },
+    {
+      "lambda": 10.0,
+      "sign_acc": 0.707,
+      "auroc": 0.474
+    },
+    {
+      "lambda": 100.0,
+      "sign_acc": 0.659,
+      "auroc": 0.473
+    }
+  ]
+}

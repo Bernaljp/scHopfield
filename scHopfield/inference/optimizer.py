@@ -92,6 +92,49 @@ class ScaffoldOptimizer(nn.Module):
             else:
                 nn.init.xavier_uniform_(self.W.weight)
 
+        # optional Jacobian-consistency target (set via configure_jacobian_consistency)
+        self._jac = None
+        self._jac_nsub = 512
+
+    def configure_jacobian_consistency(self, x, sig, exponent, jac_data, n_sub=512):
+        """Store a per-cell data-estimated Jacobian target for the consistency loss.
+
+        The model's local sensitivity is J_model[i,j] = W_ij * sigma'_j(x) (off-diagonal).
+        The regularizer pulls this toward ``jac_data`` (a finite-difference velocity
+        Jacobian estimated from each cell's neighbors), injecting the identifying
+        information that plain velocity reconstruction lacks on low-dimensional
+        (e.g. trajectory-confined) data.
+
+        Parameters
+        ----------
+        x : (n_cells, N) raw expression at the cells.
+        sig : (n_cells, N) Hill activations sigma(x) at the cells.
+        exponent : (N,) per-gene Hill exponents n_j (for sigma'(x) = n*sigma(1-sigma)/x).
+        jac_data : (n_cells, N, N) target Jacobian per cell (only off-diagonal is used).
+        n_sub : max cells subsampled per optimization step (bounds memory).
+        """
+        dev = self.device
+        n = self.W.weight.shape[0]
+        self._jac = {
+            "x": torch.as_tensor(x, dtype=torch.float32, device=dev).clamp(min=1e-6),
+            "sig": torch.as_tensor(sig, dtype=torch.float32, device=dev),
+            "n": torch.as_tensor(exponent, dtype=torch.float32, device=dev).reshape(-1),
+            "data": torch.as_tensor(jac_data, dtype=torch.float32, device=dev),
+            "offmask": (~torch.eye(n, dtype=torch.bool, device=dev)),
+        }
+        self._jac_nsub = int(n_sub)
+
+    def _jacobian_loss(self):
+        j = self._jac
+        m = j["x"].shape[0]
+        idx = torch.randint(0, m, (min(self._jac_nsub, m),), device=self.device)
+        x = j["x"][idx]
+        sig = j["sig"][idx]
+        sp = j["n"][None, :] * sig * (1.0 - sig) / x          # sigma'(x): (b, N)
+        Jmodel = self.W.weight[None, :, :] * sp[:, None, :]    # W[i,j]*sigma'_j: (b, i, j)
+        diff = (Jmodel - j["data"][idx]) * j["offmask"][None]
+        return diff.pow(2).sum() / idx.shape[0]
+
     def forward(self, inputs):
         """
         Args:
@@ -121,9 +164,16 @@ class ScaffoldOptimizer(nn.Module):
         get_plots=False,
         display_epoch=100,
         verbose: bool = True,
+        jacobian_lambda: float = 0.0,
     ):
         """
         Train the model.
+
+        jacobian_lambda (default 0.0 = off): weight of the optional Jacobian-consistency
+        term (requires configure_jacobian_consistency). Kept off by default: on the
+        biophysical validation circuits it did not improve effective-GRN recovery with
+        neighbor-estimated Jacobian targets (see FINDINGS M11); broad data coverage and
+        the scaffold prior are the effective identifiability fixes.
 
         Parameters
         ----------
@@ -216,6 +266,8 @@ class ScaffoldOptimizer(nn.Module):
                     bias_loss = self.bias_lambda * torch.abs(self.I+self.bias_bias).norm(2)
 
                 total_loss = reconstruction_loss + graph_constr_loss + bias_loss
+                if jacobian_lambda > 0 and self._jac is not None:
+                    total_loss = total_loss + jacobian_lambda * self._jacobian_loss()
 
                 total_loss.backward()
                 optimizer.step()

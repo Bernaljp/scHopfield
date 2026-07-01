@@ -239,3 +239,26 @@ Spearman rank correlation trivial baseline approx 0. "Reproducible" target = 1.0
   identifiability constraint. A richer (multiplicative) basis is lower priority because the
   additive basis already suffices given identifiable data.
 - Disposition: upgrades M9; motivates the biophysical-improvement work (task #8). audit? y.
+
+## M11 - Jacobian-consistency regularizer: implemented, opt-in, default OFF (negative result)
+- Setup: implemented an optional Jacobian-consistency term in ScaffoldOptimizer
+  (`configure_jacobian_consistency` + `train_model(jacobian_lambda=...)`): it pulls the
+  model's local sensitivity offdiag(W*sigma'(x)) toward a per-cell finite-difference
+  velocity Jacobian estimated from k neighbors. Validated on Novak/Adlung (8 ICs + 3%
+  noise) over lambda in {0, 0.1, 1, 10, 100}, scored vs the true effective GRN (avg
+  Jacobian sign). `analyses/jacobian_reg_validation.py`,
+  `benchmark_results/jacobian_reg/validation.json`.
+- Result: it did NOT improve effective-GRN recovery.
+  - Novak: lambda=0 sign-acc 0.725; regularizer degrades it (0.63/0.55/0.58/0.50), AUROC
+    up slightly (0.54->0.63).
+  - Adlung: lambda=0 sign-acc 0.683; best is lambda=10 at 0.707 (marginal), AUROC flat ~0.47.
+- What it means: neighbor-estimated Jacobian targets on limited/noisy trajectory data are
+  too unreliable to add identifying information (they inherit the same coverage limitation
+  as the data and add noise); regularizing toward them can pull W toward a worse solution.
+  The mechanism is sound (it correctly constrains W*sigma' to a target) but the target
+  quality is the bottleneck. The EFFECTIVE fix for biophysical identifiability remains broad
+  state-space data coverage (M10, sign-acc 0.85/0.98) and the scaffold prior (M6). DECISION:
+  keep the regularizer as an opt-in option with **default jacobian_lambda=0.0 (off)**, since
+  the evidence shows it does not help and can hurt on the tested systems.
+- Disposition: honest negative result; regularizer shipped as opt-in; Discussion/S4 note
+  that data-conditioning is the biophysical fix. audit? y.
