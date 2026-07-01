@@ -9,3 +9,4 @@ analyses/hemato_pipeline.py,scHopfield Paul2015 pipeline (seeded GRN inference f
 analyses/hemato_ko_panel.py,scHopfield known-TF KO directional accuracy,Paul2015,current,KEEP,Fig-knownKO,"M4: 10/10 directional"
 analyses/celloracle_ko_panel.py,CellOracle known-TF KO (fair head-to-head),Paul2015,current,KEEP,Fig-knownKO,"M4: 7/9; cannot score Zfpm1 cofactor"
 analyses/network_reg_sensitivity.py,Network x scaffold-reg sensitivity of top score/perturbation genes,Paul2015,current,KEEP,Fig-sensitivity,task9 running
+analyses/network_reg_sensitivity.py,see M5,Paul2015,current,KEEP,Fig-sensitivity,pert Jaccard 0.67 vs score 0.20

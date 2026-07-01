@@ -1,0 +1,50 @@
+{
+  "scATAC_atlas:free": {
+    "scATAC_atlas:free": 1.0,
+    "scATAC_atlas:low": 0.579,
+    "scATAC_atlas:high": 0.579,
+    "promoter:free": 1.0,
+    "promoter:low": 0.5,
+    "promoter:high": 0.429
+  },
+  "scATAC_atlas:low": {
+    "scATAC_atlas:free": 0.579,
+    "scATAC_atlas:low": 1.0,
+    "scATAC_atlas:high": 0.875,
+    "promoter:free": 0.579,
+    "promoter:low": 0.765,
+    "promoter:high": 0.765
+  },
+  "scATAC_atlas:high": {
+    "scATAC_atlas:free": 0.579,
+    "scATAC_atlas:low": 0.875,
+    "scATAC_atlas:high": 1.0,
+    "promoter:free": 0.579,
+    "promoter:low": 0.765,
+    "promoter:high": 0.765
+  },
+  "promoter:free": {
+    "scATAC_atlas:free": 1.0,
+    "scATAC_atlas:low": 0.579,
+    "scATAC_atlas:high": 0.579,
+    "promoter:free": 1.0,
+    "promoter:low": 0.5,
+    "promoter:high": 0.429
+  },
+  "promoter:low": {
+    "scATAC_atlas:free": 0.5,
+    "scATAC_atlas:low": 0.765,
+    "scATAC_atlas:high": 0.765,
+    "promoter:free": 0.5,
+    "promoter:low": 1.0,
+    "promoter:high": 0.875
+  },
+  "promoter:high": {
+    "scATAC_atlas:free": 0.429,
+    "scATAC_atlas:low": 0.765,
+    "scATAC_atlas:high": 0.765,
+    "promoter:free": 0.429,
+    "promoter:low": 0.875,
+    "promoter:high": 1.0
+  }
+}

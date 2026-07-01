@@ -1,0 +1,50 @@
+{
+  "scATAC_atlas:free": {
+    "scATAC_atlas:free": 1.0,
+    "scATAC_atlas:low": 0.154,
+    "scATAC_atlas:high": 0.154,
+    "promoter:free": 1.0,
+    "promoter:low": 0.111,
+    "promoter:high": 0.071
+  },
+  "scATAC_atlas:low": {
+    "scATAC_atlas:free": 0.154,
+    "scATAC_atlas:low": 1.0,
+    "scATAC_atlas:high": 0.304,
+    "promoter:free": 0.154,
+    "promoter:low": 0.25,
+    "promoter:high": 0.071
+  },
+  "scATAC_atlas:high": {
+    "scATAC_atlas:free": 0.154,
+    "scATAC_atlas:low": 0.304,
+    "scATAC_atlas:high": 1.0,
+    "promoter:free": 0.154,
+    "promoter:low": 0.111,
+    "promoter:high": 0.111
+  },
+  "promoter:free": {
+    "scATAC_atlas:free": 1.0,
+    "scATAC_atlas:low": 0.154,
+    "scATAC_atlas:high": 0.154,
+    "promoter:free": 1.0,
+    "promoter:low": 0.111,
+    "promoter:high": 0.071
+  },
+  "promoter:low": {
+    "scATAC_atlas:free": 0.111,
+    "scATAC_atlas:low": 0.25,
+    "scATAC_atlas:high": 0.111,
+    "promoter:free": 0.111,
+    "promoter:low": 1.0,
+    "promoter:high": 0.2
+  },
+  "promoter:high": {
+    "scATAC_atlas:free": 0.071,
+    "scATAC_atlas:low": 0.071,
+    "scATAC_atlas:high": 0.111,
+    "promoter:free": 0.071,
+    "promoter:low": 0.2,
+    "promoter:high": 1.0
+  }
+}

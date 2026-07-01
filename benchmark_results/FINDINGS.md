@@ -111,3 +111,27 @@ Spearman rank correlation trivial baseline approx 0. "Reproducible" target = 1.0
   called internally in a library. Red-team item D is a false positive here.
 - sigmoid/Hill naming: code uses `sigmoid()`; Methods says "Hill". Documented the
   equivalence in the sigmoid/d_sigmoid docstrings. fit_sigmoid log(0) warnings silenced.
+
+## M5 - Perturbation drivers are robust to network/regularization; static scores are not
+- Setup: `analyses/network_reg_sensitivity.py`, Paul 2015, CellOracle's 2 mouse base
+  GRNs (scATAC atlas, promoter) x 3 scaffold-reg regimes (free=0, low=0.01, high=1.0);
+  seeded scHopfield fit each. Compared top-15 driver-SCORE genes (score_driver_tfs,
+  score_A/score_B) and top-15 PERTURBATION genes (KO of a fixed candidate set, ranked
+  by |lineage_bias|) across the 6 settings via mean pairwise Jaccard.
+  Results: benchmark_results/network_reg_sensitivity/{results,jaccard_*}.json + sensitivity.png
+- Result:
+  - PERTURBATION top-genes are STABLE: mean pairwise Jaccard = **0.67**. Canonical
+    lineage drivers Spi1, Gata1, Klf1 (plus E2f4, Stat3, Irf8) appear in the top-8 of
+    ESSENTIALLY EVERY setting, regardless of network or regularization.
+  - Static driver-SCORE top-genes are UNSTABLE: Jaccard = **0.20** (ery) / **0.20** (mye),
+    and are dominated by ribosomal/housekeeping genes (Rpl4, Rpl23, Rps3, Actb, Mt2)
+    that shuffle drastically across settings.
+  - At reg=0 (free) the two networks give identical top lists (only the TF mask acts);
+    divergence grows with regularization.
+- What it means: scHopfield's PERTURBATION-based lineage-driver identification is robust
+  to the base-network choice and scaffold-regularization strength, while the static
+  W-norm/centrality SCORE is not and surfaces generic high-expression genes. Practical
+  guidance: prefer perturbation simulation over static network scores for driver
+  discovery. Directly answers the network/reg-sensitivity question.
+- Disposition: Fig "sensitivity"; supports a robustness claim + the perturbation-over-score
+  recommendation. audit_table? y.
