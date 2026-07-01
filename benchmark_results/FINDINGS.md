@@ -37,3 +37,29 @@ Spearman rank correlation trivial baseline approx 0. "Reproducible" target = 1.0
 - Disposition: feeds Methods "Reproducibility" note + a supplementary reproducibility
   figure (`benchmark_results/seed_sensitivity_real/reproducibility.png`); resolves
   red-team item C (determinism FAIL). audit_table row updated? y.
+
+## M2 - Hill-derivative factor n: manuscript-equation typo, code is correct
+- Setup: audited phi'(x) for the Hill activation phi=x^n/(x^n+k^n) against finite
+  differences (`tests/test_math_derivative.py`); checked every call site.
+- Result: the exact derivative is phi'(x) = **n** * phi*(1-phi)/x. Methods Eq. 4 and
+  Eq. 21 (as written) omit the factor n, and the latent, UNUSED utility
+  `_utils/math.d_sigmoid` also omitted it (verified off by exactly the factor n; FD
+  ratio = n). BUT both Jacobian code paths (`tools/jacobian.py:104` compute_jacobians
+  and ~403 compute_jacobian_elements) DO multiply by `exponent`, so the computed
+  Jacobians and all Section-6 stability results are CORRECT. Fitted exponents on real
+  pancreas: median n = 2.72 (all genes > 1.5).
+- What it means: NOT a results-invalidating bug. It is (a) a manuscript typo -- Methods
+  Eq. 4 and Eq. 21 must show phi'(x) = n*phi(1-phi)/x -- and (b) a latent bug in an
+  unused utility, now fixed with a regression test. No stability figure needs
+  regeneration. Downgrades red-team correctness concern to a doc edit.
+- Disposition: fix d_sigmoid [DONE] + test [DONE]; Methods Eq. 4/21 correction queued
+  for the manuscript pass (task #6). audit_table row updated? y.
+
+## Dispositions (audit hygiene, not new results)
+- code_smell "dead metric" flags (calculate_perturbation_effect_scores,
+  calculate_cell_transition_scores, celltype_correlation, future_celltype_correlation,
+  get_correlation_table, network_correlations, plot_correlations_grid): DISMISSED --
+  all are exported public API (in module __all__ and the README), legitimately not
+  called internally in a library. Red-team item D is a false positive here.
+- sigmoid/Hill naming: code uses `sigmoid()`; Methods says "Hill". Documented the
+  equivalence in the sigmoid/d_sigmoid docstrings. fit_sigmoid log(0) warnings silenced.

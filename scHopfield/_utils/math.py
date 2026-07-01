@@ -8,7 +8,11 @@ from scipy.signal import convolve2d
 
 def sigmoid(x, s, n):
     """
-    Compute the sigmoid function for given input x, threshold s, and exponent n.
+    Compute the sigmoid (Hill) function for given input x, threshold s, and exponent n.
+
+    This is the Hill function phi(x) = x^n / (x^n + s^n) referred to as the Hill
+    activation in the Methods; "sigmoid" and "Hill" are used interchangeably in the
+    code. ``s`` is the half-maximal threshold (k) and ``n`` is the Hill coefficient.
 
     Args:
         x (np.ndarray): Input array for which to compute the sigmoid function.
@@ -38,9 +42,18 @@ def d_sigmoid(x, s, n):
 
     Returns:
         np.ndarray: The derivative of the sigmoid function applied to each element of x.
+
+    Notes:
+        For the Hill function phi(x) = x^n / (x^n + s^n), the exact derivative is
+        phi'(x) = n * phi(x) * (1 - phi(x)) / x. The factor ``n`` must be included
+        (it is omitted in Methods Eq. 4/21 as written, a typographical error; the
+        Jacobian code in tools/jacobian.py includes it correctly). x = 0 is guarded.
     """
+    x = np.asarray(x, dtype=float)
+    n = np.asarray(n, dtype=float)
     sig = sigmoid(x, s, n)
-    return np.nan_to_num(sig * (1 - sig) / x)
+    x_safe = np.where(x == 0, 1.0, x)
+    return n * sig * (1 - sig) / x_safe
 
 
 def fit_k(g):
@@ -88,8 +101,11 @@ def fit_sigmoid(g, min_th=0.05):
     # Fast fit
     x = np.sort(valid_data)
     y = np.linspace(0, 1, len(valid_data))
-    tx = np.log(x)
-    ty = np.log(y / (1 - y))
+    # y spans [0, 1] inclusive, so the endpoints give log(0) / divide-by-zero;
+    # these are dropped by the isfinite mask below. Silence the expected warnings.
+    with np.errstate(divide="ignore", invalid="ignore"):
+        tx = np.log(x)
+        ty = np.log(y / (1 - y))
 
     valid = np.isfinite(tx) & np.isfinite(ty)
     tx, ty = tx[valid], ty[valid]
