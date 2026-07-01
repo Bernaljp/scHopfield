@@ -130,6 +130,19 @@ dropped Gata1/Klf1 (benchmarks M5, M6).
 \begin{figure}[htbp]\centering
 \includegraphics[width=0.9\linewidth]{figures/supp_sensitivity.png}
 \caption{Network and regularization sensitivity of driver identification.}\end{figure}
+Why the scaffold matters is clarified by an identifiability analysis on the same data
+(benchmark M12): at a fixed cell count, adding neighbouring (off-manifold) cells raises the
+effective rank of the sigmoid design matrix (participation ratio 6.0 to 7.1), confirming that
+broader state-space coverage improves identifiability. However, real single-cell expression
+is intrinsically low-rank (participation ratio only about 6--7 for 100 genes), so the
+unconstrained interaction matrix remains underdetermined (split-half correlation near zero)
+regardless of coverage. The data alone therefore cannot determine the network, which is the
+concrete reason a transcription-factor scaffold prior is required for identifiable inference.
+\begin{figure}[htbp]\centering
+\includegraphics[width=0.6\linewidth]{figures/supp_identifiability.png}
+\caption{Real-data identifiability: neighbour augmentation raises the effective rank of
+$\sigma(X)$, but the data is too low-rank to determine $W$ without a scaffold (benchmark M12).}
+\end{figure}
 
 \subsection*{S4. Biophysical circuits and identifiability}
 The dissertation oscillator is Hopfield-form and recovers at correlation 1.000. The Novak
