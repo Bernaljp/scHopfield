@@ -131,11 +131,23 @@ dropped Gata1/Klf1 (benchmarks M5, M6).
 \includegraphics[width=0.9\linewidth]{figures/supp_sensitivity.png}
 \caption{Network and regularization sensitivity of driver identification.}\end{figure}
 
-\subsection*{S4. Biophysical circuits}
+\subsection*{S4. Biophysical circuits and identifiability}
 The dissertation oscillator is Hopfield-form and recovers at correlation 1.000. The Novak
 cell-cycle and Adlung JAK-STAT circuits are not of Hopfield form (no true interaction
 matrix) but the Hill model represents their velocity fields at $R^2=1.000$ (Hill-only basis
-$R^2=0.98$/$0.99$); benchmark M9.
+$R^2=0.98$/$0.99$; benchmark M9). For these systems we asked whether the fitted interaction
+matrix recovers a meaningful \emph{effective} regulatory network, defined as the sign of the
+average off-diagonal Jacobian of the true system. On data confined to a low-dimensional
+trajectory, the effective-GRN sign-accuracy was at chance (0.47/0.49), but with broad
+state-space sampling it rose to 0.85 (Novak) and 0.98 (Adlung) (benchmark M10). Thus the
+limiting factor for these systems is \emph{identifiability} of the interaction matrix, not
+the expressiveness of the additive-Hill model: trajectory-confined data underdetermine the
+network, whereas broad coverage of state space (which the neighbour-augmented inference
+provides on real data) resolves it, as does a transcription-factor scaffold prior (S3). We
+also implemented an optional Jacobian-consistency regulariser that pulls the model's local
+sensitivity toward a neighbour-estimated velocity Jacobian; on these circuits it did not
+improve recovery (benchmark M11), because neighbour-estimated Jacobian targets on limited,
+noisy data are themselves unreliable, so it is provided as an off-by-default option.
 
 \subsection*{S5. Note on the Methods-equation Hill derivative}
 The Hill derivative used in the Jacobian is $\varphi'(x)=n\,\varphi(1-\varphi)/x$; the
