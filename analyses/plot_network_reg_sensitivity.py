@@ -1,4 +1,5 @@
 """Figure: stability of top score vs perturbation genes across network x reg."""
+import os
 import itertools
 import json
 
