@@ -166,6 +166,36 @@ noisy data are themselves unreliable, so it is provided as an off-by-default opt
 The Hill derivative used in the Jacobian is $\varphi'(x)=n\,\varphi(1-\varphi)/x$; the
 factor $n$ (present in the implementation) should be shown explicitly in Eq. (4) and
 Eq. (21) (benchmark M2).
+
+\subsection*{S6. Generalization across developmental systems}
+The main findings reproduce across independent developmental datasets (hematopoiesis,
+pancreatic endocrinogenesis, murine neural crest, human limb).
+\emph{Identifiability (M13).} The neighbour-augmentation effect of S3 holds in every system:
+adding off-manifold neighbour cells raises the effective rank of $\sigma(X)$ (hematopoiesis
+6.0 to 7.1, pancreas 13.9 to 15.5, murine neural crest 19.4 to 23.1, human limb 18.2 to
+19.5), while the split-half correlation of the unconstrained $W$ stays near zero in all
+four, confirming that real single-cell data are intrinsically low-rank and require a
+scaffold prior.
+\emph{Stability (M14).} The energy-landscape and Jacobian-stability analysis reproduces the
+progenitor-instability to terminal-stability ordering in murine neural crest: progenitor
+states (PNS glia and neurons) have positive leading Jacobian eigenvalues, whereas terminal
+states (myelinating Schwann cells, melanocytes) are more stable with deeper energy wells.
+\emph{Perturbation (M15).} The known-driver knockout validation generalizes to neural crest:
+for bona-fide transcription-factor masters the predicted glia-versus-neuron shift direction
+is correct in 4 of 4 cases (Sox10 toward neuron; Neurod1, Isl1, Pou4f1 toward glia); the full
+eight-gene panel scores 5 of 8, the three misses being non-transcription-factor genes
+(a receptor and two myelin structural proteins) that are not regulators in the model and
+produce near-zero effects. Overall accuracy is lower than in hematopoiesis, reflecting the
+less cleanly separable glia-neuron programme and the use of a genome-wide scaffold prior.
+\begin{figure}[htbp]\centering
+\includegraphics[width=0.9\linewidth]{figures/supp_multi_ident.png}
+\caption{Identifiability across four developmental systems (M13): neighbour augmentation
+raises the effective rank of $\sigma(X)$ everywhere, but split-half $W$ stability stays near
+zero, so a scaffold prior is required in all systems.}\end{figure}
+\begin{figure}[htbp]\centering
+\includegraphics[width=0.95\linewidth]{figures/supp_murine_energy.png}
+\caption{Energy and Jacobian-stability analysis on murine neural crest (M14): progenitor
+states are less stable than terminal states.}\end{figure}
 """
 
 
