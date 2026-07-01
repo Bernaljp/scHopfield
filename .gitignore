@@ -115,3 +115,7 @@ scHopfield/validation/run_*.py
 scratch_*.log
 scratchpad_*.log
 .venv-co/
+._*
+~$*
+benchmark_results/logs/
+benchmark_results/*_sanity/
