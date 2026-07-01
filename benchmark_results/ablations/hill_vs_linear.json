@@ -1,0 +1,16 @@
+{
+  "toggle_bistable": {
+    "hill_recon_r2": 1.0,
+    "linear_recon_r2": 0.0001,
+    "hill_stable_fixedpoints": 3,
+    "linear_stable_fixedpoints": 0,
+    "true_stable_fixedpoints": 3
+  },
+  "repressilator": {
+    "hill_recon_r2": 1.0,
+    "linear_recon_r2": 0.4406,
+    "hill_stable_fixedpoints": 0,
+    "linear_stable_fixedpoints": 0,
+    "true_stable_fixedpoints": 0
+  }
+}

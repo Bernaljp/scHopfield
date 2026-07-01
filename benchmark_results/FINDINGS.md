@@ -154,3 +154,21 @@ Spearman rank correlation trivial baseline approx 0. "Reproducible" target = 1.0
   but NOT interchangeable with no-scaffold. (The 6 scaffold "free/low/high" results are
   retained; no-scaffold is an added comparison.)
 - Disposition: added column in Fig "sensitivity"; supports "use a TF scaffold" guidance. audit? y.
+
+## M7 - Hill activation is necessary: linear model cannot fit dynamics or multistability
+- Setup: `analyses/hill_vs_linear.py`, toggle switch + repressilator (ground-truth Hill
+  dynamics). Compare scHopfield's Hill activation vs a linear model (phi=identity), both
+  fit by least squares on the same (x, v). Metrics: velocity reconstruction R^2 and the
+  number of stable fixed points (via multi-start root finding + Jacobian eigenvalues).
+- Result:
+  - Toggle: Hill R^2 = **1.0000** and recovers **3/3** stable fixed points; linear
+    R^2 = **0.0001** and finds **0** fixed points (a linear autonomous system has at most
+    one, so it structurally cannot represent bistability).
+  - Repressilator: Hill R^2 = 1.0000; linear R^2 = 0.44. Both correctly report 0 stable
+    fixed points (limit cycle).
+- What it means: the Hill nonlinearity is not cosmetic. It is required both to fit the
+  velocity field and to give the energy landscape its multiple attractors; the linear
+  ablation fails on both counts. Together with M6 (scaffold vs pseudoinverse) this
+  completes the internal ablations: the two ingredients that matter are the Hill
+  activation and the TF scaffold.
+- Disposition: Fig "hill_vs_linear"; supports the model-design justification. audit? y.
