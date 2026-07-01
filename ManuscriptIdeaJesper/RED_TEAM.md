@@ -48,3 +48,25 @@ not real-data predictive validity.
 A re-review on the revised prose is expected to move WARN -> PASS on the claim audit;
 the residual WARN drivers are genuinely experimental (validation) and are recorded as
 limitations per honest-framing doctrine.
+
+---
+
+## Round 2 (after revisions + Methods/Supplementary added)
+
+Fresh independent codex reviewer. **Verdict: PASS with minor WARN** (up from WARN).
+Prior items: C1 resolved, C4 partial, C7 resolved, C9 resolved, C10 resolved, M4
+kill-argument partial (softened by disclosure). No new fatal blocker.
+
+Round-2 fixes applied (prose):
+1. C4: replaced "at least as well as CellOracle" with a non-ranking statement
+   ("recovers the panel consistently with known phenotypes and aligns with CellOracle's
+   native-readout results; not a metric-parity ranking").
+2. C2: labeled the synthetic recovery as a "recovery test under correct model
+   specification" (identifiability for Hopfield-form systems), explicitly not evidence
+   for arbitrary biological networks.
+3. Discussion: added a consistency limitation that the pancreas stability ordering,
+   knockout landscapes, and dose-response/higher-order predictions are model-derived
+   hypotheses requiring experimental validation.
+
+Residual (honest limitations): M4 strict metric parity (experimental), and experimental
+validation of the biological predictions. Recorded as limitations per honest framing.
