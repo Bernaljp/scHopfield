@@ -313,3 +313,22 @@ Spearman rank correlation trivial baseline approx 0. "Reproducible" target = 1.0
   it recovers the expected developmental ordering (unstable progenitors, stable terminal
   fates) in an independent system, supporting the generality of the stability analysis.
 - Disposition: generalizes Fig 5; candidate supplementary panel. audit? y.
+
+## M15 - Known-driver KO validation generalizes to neural crest (glia vs neuron) (#2)
+- Setup: `analyses/nc_ko_panel.py`, murine neural crest (DynamiSC), scaffold-guided fit
+  (CellOracle mouse scATAC base GRN, 68 TFs / 19768 edges, 9 cell types, seeded), glia vs
+  neuron lineages (major_trajectory). Single-KO directional scoring (bias = score_glia -
+  score_neuron; glia master -> negative, neuronal master -> positive).
+- Result: 5/8 overall directional accuracy. Restricted to bona-fide transcription factors
+  (Sox10, Neurod1, Isl1, Pou4f1) it is **4/4**: Sox10 KO biases toward neuron (-0.003, glia
+  master, correct); Neurod1 (+0.018), Isl1 (+0.004), Pou4f1 (+0.009) KO bias toward glia
+  (neuronal masters, correct). The 3 misses are all NON-TF genes -- Erbb3 (receptor tyrosine
+  kinase), Mpz and Plp1 (myelin structural proteins) -- which are not regulators in a
+  TF-based GRN and produce near-zero, noise-dominated KO effects.
+- What it means: the known-driver KO validation (M4) generalizes to a second developmental
+  system for the appropriate targets (transcription factors), with weaker overall accuracy
+  than hematopoiesis because (i) neural-crest glia-vs-neuron biology is less cleanly
+  separable than the Gata1/Spi1 erythroid-myeloid toggle, and (ii) a genome-wide scATAC
+  scaffold is a coarse prior for this specific system. Honest caveat: the model's
+  perturbation predictions apply to transcription factors, not structural/receptor genes.
+- Disposition: generalizes M4; fold into a cross-dataset note. audit? y.

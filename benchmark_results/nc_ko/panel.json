@@ -1,0 +1,74 @@
+{
+  "directional_accuracy": 0.625,
+  "n": 8,
+  "rows": [
+    {
+      "gene": "Sox10",
+      "lineage_bias": -0.0025,
+      "role": "glia-master",
+      "expected_sign": -1,
+      "correct": true
+    },
+    {
+      "gene": "Erbb3",
+      "lineage_bias": 0.0028,
+      "role": "glia-master",
+      "expected_sign": -1,
+      "correct": false
+    },
+    {
+      "gene": "Mpz",
+      "lineage_bias": 0.0005,
+      "role": "glia-master",
+      "expected_sign": -1,
+      "correct": false
+    },
+    {
+      "gene": "Plp1",
+      "lineage_bias": 0.002,
+      "role": "glia-master",
+      "expected_sign": -1,
+      "correct": false
+    },
+    {
+      "gene": "Neurod1",
+      "lineage_bias": 0.0179,
+      "role": "neuronal-master",
+      "expected_sign": 1,
+      "correct": true
+    },
+    {
+      "gene": "Isl1",
+      "lineage_bias": 0.0039,
+      "role": "neuronal-master",
+      "expected_sign": 1,
+      "correct": true
+    },
+    {
+      "gene": "Pou4f1",
+      "lineage_bias": 0.0087,
+      "role": "neuronal-master",
+      "expected_sign": 1,
+      "correct": true
+    },
+    {
+      "gene": "Elavl4",
+      "lineage_bias": 0.0039,
+      "role": "neuronal-master",
+      "expected_sign": 1,
+      "correct": true
+    }
+  ],
+  "glia": [
+    "Neural crest (PNS glia)",
+    "Myelinating Schwann cells",
+    "Myelinating Schwann cells (Tgfb2+)",
+    "Olfactory ensheathing cells"
+  ],
+  "neuron": [
+    "Neural crest (PNS neurons)",
+    "Otic sensory neurons",
+    "Dorsal root ganglion neurons",
+    "Enteric neurons"
+  ]
+}
