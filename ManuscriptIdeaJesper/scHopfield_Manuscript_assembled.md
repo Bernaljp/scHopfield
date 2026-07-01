@@ -136,7 +136,10 @@ near-perfect signed correlation (>= 0.9998) across all noise levels and scaffold
 priors tested, with edge-detection AUROC and AUPRC of 1.0 for the sparse repressilator.
 Reconstruction error grew gracefully with observation noise (relative Frobenius
 distance from 0.0005 at zero noise to 0.38 at the highest noise), and recovery held
-even with no scaffold prior (benchmark M3). The Hill nonlinearity was essential to
+even with no scaffold prior (benchmark M3). This exact recovery is demonstrated for
+systems in the model's function class (networks of Hopfield form); mass-action or
+Michaelis-Menten circuits that are not natively of Hopfield form are not recovered as
+faithfully, which we treat as a scope limitation rather than a general claim. The Hill nonlinearity was essential to
 these results: replacing it with a linear model collapsed velocity reconstruction on
 the toggle switch (R-squared 0.0001 versus 1.000) and could not represent the switch's
 bistability, since a linear autonomous system admits at most one fixed point and
@@ -165,10 +168,14 @@ master regulators, every knockout was assigned the correct direction of lineage 
 Gata2) biased differentiation toward the myeloid branch, and knockout of myeloid
 masters (Spi1/PU.1, Cebpa, Cebpe, Gfi1, Irf8) biased toward the erythroid branch, with
 the canonical Gata1-Spi1 antagonism producing the largest-magnitude shifts (Gata1
-lineage bias -0.21, Spi1 +0.25). Scored on the identical panel and geometry, CellOracle
-predicted 7 of 9 correctly and could not score the erythroid cofactor Zfpm1, which
-lacks a transcription-factor motif in its base network, whereas scHopfield's
-velocity-based inference scored it correctly (benchmark M4). Dose-response analyses
+lineage bias -0.21, Spi1 +0.25). On the same gene panel, CellOracle predicted 7 of 9
+correctly and could not score the erythroid cofactor Zfpm1, which lacks a
+transcription-factor motif in its base network, whereas scHopfield's velocity-based
+inference scored it correctly (benchmark M4). We note that the two methods were scored
+with each method's native lineage-direction readout rather than a byte-identical metric,
+so this comparison establishes that scHopfield recovers known KO phenotypes at least as
+well as CellOracle on this panel, not a precise ranking; a strict metric-parity
+comparison is a planned refinement. Dose-response analyses
 further showed coherent nonlinear behavior, with increasing perturbation magnitude
 progressively reshaping the erythroid-myeloid balance, and cascade simulations showed
 temporal amplification of perturbational effects across differentiation trajectories.
@@ -208,12 +215,13 @@ strength are largely interchangeable.
 Because the inferred networks define a dynamical system, we used Jacobian eigenvalues,
 energy landscapes, and network topology to analyze pancreatic endocrinogenesis, a
 developmental system spanning ductal progenitors, endocrine progenitor states, and
-terminally differentiated endocrine populations. Jacobian spectra revealed pronounced
-lineage-specific differences in stability: Delta and Epsilon cells exhibited broader
-distributions of positive real eigenvalues, indicating greater instability and
-heightened perturbational sensitivity, whereas pre-endocrine and mature Beta cells
-occupied more stable dynamical regimes; imaginary components indicated stronger
-oscillatory tendencies in Delta and Epsilon populations. Energy decomposition showed
+terminally differentiated endocrine populations. Jacobian spectra (a local
+linearization of the inferred dynamics at each cell) revealed lineage-specific
+differences in stability: Delta and Epsilon cells exhibited broader distributions of
+positive real eigenvalues, indicating greater local instability and heightened
+perturbational sensitivity, whereas Pre-endocrine, Alpha, and mature Beta cells occupied
+more stable regimes; imaginary components indicated stronger oscillatory tendencies in
+Delta and Epsilon populations. Energy decomposition showed
 that ductal progenitors occupied relatively low-energy states while terminally
 differentiated Beta cells exhibited strongly negative interaction energies, and
 Ngn3-high endocrine progenitors displayed the greatest cell-to-cell energetic
@@ -246,10 +254,13 @@ Irf8, Cxxc1, Serp1, Apoe, Mt2, and Cathepsin G. Stat3 emerged as a prominent
 lineage-balancing regulator whose perturbation consistently shifted differentiation
 toward erythroid trajectories (Stat3 knockout lineage bias +0.165, overexpression
 -0.011, confirming bidirectional control), suggesting a broader role in lineage
-plasticity. Several predicted interactions were detectable only through dynamical
-perturbation analysis and were not apparent from static co-expression patterns or
-network topology, demonstrating that scHopfield provides an interpretable framework for
-out-of-distribution perturbation prediction and hypothesis generation.
+plasticity. These candidate interactions were surfaced by the dynamical perturbation
+analysis but not by the static co-expression or network-topology rankings computed on
+the same data; we present them as in-silico predictions and hypotheses that require
+experimental validation (for example by Perturb-seq or targeted knockouts), not as
+established regulatory relationships. Their value is in demonstrating that scHopfield
+provides an interpretable framework for generating out-of-distribution, experimentally
+testable perturbation hypotheses.
 
 ---
 
