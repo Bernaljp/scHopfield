@@ -135,3 +135,22 @@ Spearman rank correlation trivial baseline approx 0. "Reproducible" target = 1.0
   discovery. Directly answers the network/reg-sensitivity question.
 - Disposition: Fig "sensitivity"; supports a robustness claim + the perturbation-over-score
   recommendation. audit_table? y.
+
+## M6 - No-scaffold (pseudoinverse) diverges from all scaffold settings; loses Gata1/Klf1
+- Setup: `analyses/no_scaffold_compare.py`. Same Paul 2015 base; fit with w_scaffold=None
+  (Moore-Penrose pseudoinverse, Methods 3.1: full dense W, NO TF restriction), same
+  top-score / top-perturbation scoring, compared vs the 6 scaffold settings (M5).
+- Result:
+  - No-scaffold top perturbation genes = [Cebpe, Gfi1, Myb, Spi1, Stat3, Fli1, Gata2,
+    Nfe2, Meis1, Stat1] -- it DROPS Gata1 and Klf1 (top-3 in every scaffold setting).
+  - Mean Jaccard(no-scaffold vs scaffold) = **0.36** perturbation, 0.23 score-ery, 0.07
+    score-mye -- well below the within-scaffold stability (0.67 pert). No-scaffold recovers
+    only **2/9** of the scaffold-consensus perturbation drivers (Spi1, Stat3).
+- What it means: the scaffold's TF-restriction (which genes may regulate) is the ingredient
+  that matters -- with it, canonical drivers (Gata1/Klf1/Spi1) are recovered robustly
+  regardless of WHICH network or regularization; WITHOUT any scaffold, the dense
+  pseudoinverse dilutes regulatory influence and the perturbation ranking loses the
+  canonical erythroid masters. Complements M5: robust to network/reg *within* scaffold,
+  but NOT interchangeable with no-scaffold. (The 6 scaffold "free/low/high" results are
+  retained; no-scaffold is an added comparison.)
+- Disposition: added column in Fig "sensitivity"; supports "use a TF scaffold" guidance. audit? y.

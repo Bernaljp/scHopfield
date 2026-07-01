@@ -1,0 +1,152 @@
+{
+  "no_scaffold": {
+    "top_score_ery": [
+      "Malat1",
+      "Ube2c",
+      "Top2a",
+      "Hba-a2",
+      "Car1",
+      "Mt2",
+      "Rpl23",
+      "Mt1",
+      "Dctn5",
+      "Lgals9",
+      "Taok3",
+      "Lmo2",
+      "Rps11",
+      "Cenp-a",
+      "Ly6e"
+    ],
+    "top_score_mye": [
+      "Elane",
+      "Rpl23",
+      "Gstm1",
+      "Gpr56",
+      "Napsa",
+      "Ly6e",
+      "Gnb2l1",
+      "Cd27",
+      "Ube2c",
+      "Alas1",
+      "Chd4",
+      "Ctsg",
+      "Gm10653",
+      "Prtn3",
+      "Pgd"
+    ],
+    "top_pert": [
+      [
+        "Cebpe",
+        0.0079
+      ],
+      [
+        "Gfi1",
+        0.0071
+      ],
+      [
+        "Myb",
+        0.007
+      ],
+      [
+        "Spi1",
+        0.0068
+      ],
+      [
+        "Stat3",
+        0.0064
+      ],
+      [
+        "Fli1",
+        0.0064
+      ],
+      [
+        "Gata2",
+        0.0062
+      ],
+      [
+        "Nfe2",
+        0.0061
+      ],
+      [
+        "Meis1",
+        0.0061
+      ],
+      [
+        "Stat1",
+        0.0057
+      ],
+      [
+        "Klf1",
+        0.0056
+      ],
+      [
+        "Gfi1b",
+        0.0056
+      ],
+      [
+        "Sox4",
+        0.0055
+      ],
+      [
+        "Myc",
+        0.0055
+      ],
+      [
+        "Bcl11a",
+        0.0054
+      ]
+    ]
+  },
+  "jaccard_vs_scaffold": {
+    "scATAC_atlas:free": {
+      "pert": 0.304,
+      "score_ery": 0.429,
+      "score_mye": 0.071
+    },
+    "scATAC_atlas:low": {
+      "pert": 0.364,
+      "score_ery": 0.111,
+      "score_mye": 0.111
+    },
+    "scATAC_atlas:high": {
+      "pert": 0.364,
+      "score_ery": 0.2,
+      "score_mye": 0.111
+    },
+    "promoter:free": {
+      "pert": 0.304,
+      "score_ery": 0.429,
+      "score_mye": 0.071
+    },
+    "promoter:low": {
+      "pert": 0.364,
+      "score_ery": 0.071,
+      "score_mye": 0.071
+    },
+    "promoter:high": {
+      "pert": 0.429,
+      "score_ery": 0.111,
+      "score_mye": 0.0
+    }
+  },
+  "mean_jaccard_vs_scaffold": {
+    "pert": 0.355,
+    "score_ery": 0.225,
+    "score_mye": 0.072
+  },
+  "scaffold_consensus_pert": [
+    "Spi1",
+    "Gata1",
+    "Gfi1b",
+    "E2f4",
+    "Klf1",
+    "Stat3",
+    "Irf8",
+    "Myc",
+    "Zbtb7a"
+  ],
+  "no_scaffold_recovers_consensus": [
+    "Spi1",
+    "Stat3"
+  ]
+}
