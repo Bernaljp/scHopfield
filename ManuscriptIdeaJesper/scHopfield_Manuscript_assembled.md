@@ -217,8 +217,15 @@ lineage bifurcation. Network analysis placed several regulators (Meis2, Pax6, Is
 Mlxipl) at central positions across endocrine populations, with Sox9 associated with
 ductal networks, Foxa3 with Ngn3-high progenitors, and Pdx1 with mature Beta programs,
 and identified chromatin-associated regulators (Hmga2, Hmgn3, Prdm16) as prominent
-hubs. *[Figure 5; pancreas pipeline reproduced locally via scVelo; Jacobian/energy
-panels to be regenerated from the seeded fit.]*
+hubs. Long non-coding RNAs such as Malat1 and Meg3 contributed prominently to the
+dominant eigenmodes, whereas endocrine-specific genes (Ptprn2, Ins2) defined mature
+lineage programs. The stability ordering is quantitatively supported by the per-cell
+Jacobian spectra: the median positive real eigenvalue is highest for Delta (~0.05,
+with a long tail to ~0.26) and elevated for Epsilon, and lowest for Pre-endocrine,
+Alpha, and Beta, with Delta and Epsilon also showing the largest imaginary parts
+(stronger oscillatory tendency). *[Figure 5 panels: notebook 08 executed analysis,
+extracted to `benchmark_results/pancreas/nb08_figures/` (energy on UMAP, Jacobian
+eigenvalue spectra, positive-eigenvalue boxplots, rotational dynamics).]*
 
 ### Higher-order perturbational simulations uncover lineage-balancing regulatory programs *[Figure 6]*
 
@@ -297,6 +304,7 @@ perturbational responses emerge from a common dynamical representation.
   celloracle_ko_panel.json)
 - Figure 4 (scaffold / robustness): `benchmark_results/network_reg_sensitivity/sensitivity.png`
   and `FIGURE_GUIDE.md`
+- Figure 5 (pancreas stability/energy): `benchmark_results/pancreas/nb08_figures/`
 - Reproducibility (Methods/supplementary): `benchmark_results/seed_sensitivity_real/reproducibility.png`
 
 ## Outstanding placeholders
@@ -304,5 +312,4 @@ perturbational responses emerge from a common dynamical representation.
 - Word/figure/reference counts (Main_v5 front matter).
 - Figure 1 schematic (method overview).
 - External GRN-inference baselines (GENIE3, SCENIC, dyngen) for Figure 2, not yet run.
-- Figure 5 pancreas Jacobian/energy panels to be regenerated from the seeded fit.
 - References list (the Methods section reference list can seed this).
