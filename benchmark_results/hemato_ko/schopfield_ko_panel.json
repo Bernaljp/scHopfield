@@ -1,0 +1,108 @@
+{
+  "n": 10,
+  "directional_accuracy": 1.0,
+  "rows": [
+    {
+      "gene": "Gata1",
+      "lineage_bias": -0.2139,
+      "expected_sign": -1,
+      "pred_sign": -1,
+      "correct": true,
+      "role": "erythroid-master"
+    },
+    {
+      "gene": "Klf1",
+      "lineage_bias": -0.1729,
+      "expected_sign": -1,
+      "pred_sign": -1,
+      "correct": true,
+      "role": "erythroid-master"
+    },
+    {
+      "gene": "Zfpm1",
+      "lineage_bias": -0.0156,
+      "expected_sign": -1,
+      "pred_sign": -1,
+      "correct": true,
+      "role": "erythroid-master"
+    },
+    {
+      "gene": "Nfe2",
+      "lineage_bias": -0.0125,
+      "expected_sign": -1,
+      "pred_sign": -1,
+      "correct": true,
+      "role": "erythroid-master"
+    },
+    {
+      "gene": "Gata2",
+      "lineage_bias": -0.0376,
+      "expected_sign": -1,
+      "pred_sign": -1,
+      "correct": true,
+      "role": "erythroid-master"
+    },
+    {
+      "gene": "Spi1",
+      "lineage_bias": 0.2482,
+      "expected_sign": 1,
+      "pred_sign": 1,
+      "correct": true,
+      "role": "myeloid-master"
+    },
+    {
+      "gene": "Cebpa",
+      "lineage_bias": 0.0167,
+      "expected_sign": 1,
+      "pred_sign": 1,
+      "correct": true,
+      "role": "myeloid-master"
+    },
+    {
+      "gene": "Cebpe",
+      "lineage_bias": 0.0023,
+      "expected_sign": 1,
+      "pred_sign": 1,
+      "correct": true,
+      "role": "myeloid-master"
+    },
+    {
+      "gene": "Gfi1",
+      "lineage_bias": 0.0018,
+      "expected_sign": 1,
+      "pred_sign": 1,
+      "correct": true,
+      "role": "myeloid-master"
+    },
+    {
+      "gene": "Irf8",
+      "lineage_bias": 0.0663,
+      "expected_sign": 1,
+      "pred_sign": 1,
+      "correct": true,
+      "role": "myeloid-master"
+    }
+  ],
+  "ery_clusters": [
+    "1Ery",
+    "2Ery",
+    "3Ery",
+    "4Ery",
+    "5Ery",
+    "6Ery",
+    "7MEP"
+  ],
+  "mye_clusters": [
+    "9GMP",
+    "10GMP",
+    "11DC",
+    "12Baso",
+    "13Baso",
+    "14Mo",
+    "15Mo",
+    "16Neu",
+    "17Neu",
+    "18Eos"
+  ],
+  "seed": 0
+}
