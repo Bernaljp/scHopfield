@@ -2,3 +2,6 @@ script,purpose,dataset,model_era,disposition,target,note
 analyses/prep_pancreas.py,scVelo steady-state preprocessing -> scHopfield-ready pancreas,pancreas(BastidasPonce2019),current,KEEP,data-prep,3696x2000 8 clusters Ms/velocity_S/gamma
 analyses/seed_sensitivity.py,Determinism + seed-sensitivity of GRN inference (W/centrality),pancreas + synthetic,current,KEEP,Methods-repro + SuppFig,"M1: seeded=bit-exact; unseeded centrality Spearman 0.73-0.93"
 analyses/plot_seed_sensitivity.py,Reproducibility supplementary figure,pancreas,current,KEEP,SuppFig,grouped bar W vs centrality agreement
+analyses/circuit_recovery.py,Synthetic-circuit GRN recovery (toggle+repressilator) vs noise/scaffold,toggle+repressilator,current,KEEP,Fig-recovery,"M3: sign-acc 1.0, corr>0.9998, AUROC 1.0; graceful Frobenius degradation"
+analyses/plot_circuit_recovery.py,Recovery figure (Frobenius vs noise),synthetic,current,KEEP,Fig-recovery,two-panel
+tests/test_math_derivative.py,Regression test for Hill derivative factor n,unit,current,KEEP,CI,pins d_sigmoid to finite-diff

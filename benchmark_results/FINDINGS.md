@@ -55,6 +55,29 @@ Spearman rank correlation trivial baseline approx 0. "Reproducible" target = 1.0
 - Disposition: fix d_sigmoid [DONE] + test [DONE]; Methods Eq. 4/21 correction queued
   for the manuscript pass (task #6). audit_table row updated? y.
 
+## M3 - scHopfield recovers ground-truth GRNs on identifiable synthetic circuits
+- Setup: `analyses/circuit_recovery.py`, toggle switch (2 genes) and Elowitz
+  repressilator (3 genes), both natively Hopfield-form with an exactly known W.
+  Simulate expression + analytic velocity, fit the scaffold-guided optimizer under
+  3 scaffold priors (full/partial/none) x 5 noise levels (sigma 0-0.2) x 3 seeds
+  (800 epochs, CPU). Metrics vs ground truth W.
+  Results: `benchmark_results/circuit_recovery/summary.csv` + `recovery.png`.
+- Result:
+  - Edge-SIGN accuracy = **1.00** for BOTH circuits at EVERY noise level and scaffold.
+  - Edge correlation (vec W_hat vs W_true) >= **0.9998** everywhere.
+  - Edge-detection AUROC = AUPRC = **1.0** (repressilator; toggle is dense so N/A).
+  - Relative Frobenius distance degrades gracefully with noise: repressilator
+    0.0005 (clean) -> 0.38 (sigma=0.2); toggle 0.0004 -> 0.058.
+  - Scaffold prior barely matters (full ~ partial ~ none): the method recovers
+    these identifiable circuits even with NO prior structure.
+- What it means: on systems where the true regulatory network is known, scHopfield's
+  inference recovers it (sign + structure exactly; magnitude with graceful noise
+  degradation). Honest scope: this holds for circuits that ARE in the Hopfield class;
+  biophysical/mass-action circuits (cell cycle, JAK-STAT, dissertation oscillator) are
+  NOT and recover poorly -- reported as a limitation (task #8), not a claim.
+- Disposition: validation figure (Fig "synthetic recovery"); supports the "recovers
+  known GRNs" claim. audit_table row updated? y.
+
 ## Dispositions (audit hygiene, not new results)
 - code_smell "dead metric" flags (calculate_perturbation_effect_scores,
   calculate_cell_transition_scores, celltype_correlation, future_celltype_correlation,
