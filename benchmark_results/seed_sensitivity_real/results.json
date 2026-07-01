@@ -1,0 +1,117 @@
+{
+  "dataset": "real",
+  "shape": [
+    3696,
+    300
+  ],
+  "device": "cuda",
+  "n_epochs": 300,
+  "runs": {
+    "unseeded_a": {
+      "seed": null,
+      "W_sparsity": 0.00013333333333333334,
+      "W_absmean": 0.07671542649423058
+    },
+    "unseeded_b": {
+      "seed": null,
+      "W_sparsity": 0.0002555555555555556,
+      "W_absmean": 0.07424115423337657
+    },
+    "seed0_a": {
+      "seed": 0,
+      "W_sparsity": 0.00018888888888888888,
+      "W_absmean": 0.07570826363157335
+    },
+    "seed0_b": {
+      "seed": 0,
+      "W_sparsity": 0.00018888888888888888,
+      "W_absmean": 0.07570826363157335
+    },
+    "seed1": {
+      "seed": 1,
+      "W_sparsity": 0.0002111111111111111,
+      "W_absmean": 0.08067707284726713
+    },
+    "seed2": {
+      "seed": 2,
+      "W_sparsity": 0.00015555555555555556,
+      "W_absmean": 0.08094213320820334
+    },
+    "seed3": {
+      "seed": 3,
+      "W_sparsity": 0.00011111111111111112,
+      "W_absmean": 0.07916662382478332
+    },
+    "seed4": {
+      "seed": 4,
+      "W_sparsity": 0.00016666666666666666,
+      "W_absmean": 0.07643634697009728
+    }
+  },
+  "pairs": {
+    "unseeded_a_vs_b": {
+      "W_pearson": 0.998823157417285,
+      "W_rel_frobenius": 0.04859949984677568,
+      "centrality_spearman": 0.9311196791075455
+    },
+    "seed0_a_vs_b": {
+      "W_pearson": 0.9999999999999999,
+      "W_rel_frobenius": 0.0,
+      "centrality_spearman": 1.0
+    },
+    "cross_seed": {
+      "0_vs_1": {
+        "W_pearson": 0.9983505205373968,
+        "W_rel_frobenius": 0.05742959272504624,
+        "centrality_spearman": 0.79553772819698
+      },
+      "0_vs_2": {
+        "W_pearson": 0.9982916992199864,
+        "W_rel_frobenius": 0.058512477800634066,
+        "centrality_spearman": 0.8057578417537973
+      },
+      "0_vs_3": {
+        "W_pearson": 0.998472231361794,
+        "W_rel_frobenius": 0.055418528453414544,
+        "centrality_spearman": 0.8622491361015122
+      },
+      "0_vs_4": {
+        "W_pearson": 0.9987059331824795,
+        "W_rel_frobenius": 0.05085607201918766,
+        "centrality_spearman": 0.8869734108156757
+      },
+      "1_vs_2": {
+        "W_pearson": 0.9978933767084646,
+        "W_rel_frobenius": 0.06498434102062114,
+        "centrality_spearman": 0.7328343648262757
+      },
+      "1_vs_3": {
+        "W_pearson": 0.9980420380592799,
+        "W_rel_frobenius": 0.06273488504519198,
+        "centrality_spearman": 0.7677520861342904
+      },
+      "1_vs_4": {
+        "W_pearson": 0.9983070408931405,
+        "W_rel_frobenius": 0.05816144391087234,
+        "centrality_spearman": 0.802081800908899
+      },
+      "2_vs_3": {
+        "W_pearson": 0.9979842006802407,
+        "W_rel_frobenius": 0.06354212973380888,
+        "centrality_spearman": 0.756763519594662
+      },
+      "2_vs_4": {
+        "W_pearson": 0.998237528630309,
+        "W_rel_frobenius": 0.059360933258440975,
+        "centrality_spearman": 0.8030764786275403
+      },
+      "3_vs_4": {
+        "W_pearson": 0.9984190616175757,
+        "W_rel_frobenius": 0.05628119972601575,
+        "centrality_spearman": 0.8573353037255969
+      }
+    }
+  },
+  "cross_seed_W_pearson_mean": 0.9982703630890667,
+  "cross_seed_W_pearson_std": 0.00023195412106727706
+}

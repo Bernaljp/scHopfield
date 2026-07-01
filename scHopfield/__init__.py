@@ -41,6 +41,7 @@ from . import plotting as pl
 from . import dynamics as dyn
 
 # Expose key classes and functions at top level
+from ._utils.seed import set_seed
 from .preprocessing import fit_all_sigmoids, compute_sigmoid
 from .inference import fit_interactions
 from .tools import compute_energies, compute_umap, energy_embedding
@@ -52,6 +53,7 @@ __all__ = [
     'tl',
     'pl',
     'dyn',
+    'set_seed',
     'fit_all_sigmoids',
     'compute_sigmoid',
     'fit_interactions',

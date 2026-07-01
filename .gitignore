@@ -112,3 +112,5 @@ scHopfield/validation/run_*.py
 *.pdf
 *.svg
 .claude/
+scratch_*.log
+scratchpad_*.log

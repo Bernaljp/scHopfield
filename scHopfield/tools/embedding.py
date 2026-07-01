@@ -15,6 +15,7 @@ def compute_umap(
     n_neighbors: int = 30,
     min_dist: float = 0.1,
     basis: str = 'umap',
+    random_state: Optional[int] = None,
     copy: bool = False
 ) -> Optional[AnnData]:
     """
@@ -36,6 +37,10 @@ def compute_umap(
         Minimum distance parameter for UMAP
     basis : str, optional (default: 'umap')
         Name for the embedding basis (stored as 'X_{basis}' in obsm)
+    random_state : int, optional (default: None)
+        Seed for UMAP. If set, the embedding (and its inverse transform used for
+        the energy landscape) is reproducible. Note that a fixed random_state
+        makes UMAP run single-threaded.
     copy : bool, optional (default: False)
         Whether to return a copy or modify in place
 
@@ -45,12 +50,13 @@ def compute_umap(
         Returns AnnData if copy=True, otherwise modifies in place and returns None
     """
     adata = adata.copy() if copy else adata
-    
+
     genes = get_genes_used(adata)
     X = to_numpy(get_matrix(adata, spliced_key, genes=genes))
-    
+
     import umap
-    emb = umap.UMAP(n_neighbors=n_neighbors, min_dist=min_dist, n_components=2)
+    emb = umap.UMAP(n_neighbors=n_neighbors, min_dist=min_dist, n_components=2,
+                    random_state=random_state)
     cells2d = emb.fit_transform(X)
     
     adata.uns['scHopfield']['embedding'] = emb

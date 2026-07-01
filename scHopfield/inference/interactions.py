@@ -245,6 +245,7 @@ def fit_interactions(
     neighbors_key: str = 'connectivities',
     neighbor_fraction: float = 0.0,
     hierarchical_scaling: bool = False,
+    seed: Optional[int] = None,
     copy: bool = False
 ) -> Optional[AnnData]:
     """
@@ -353,6 +354,11 @@ def fit_interactions(
         based on parent's final learning rate. Child levels start with LR
         exponent = parent_final_lr_exponent / 2 (e.g., parent ends at 1e-8,
         child starts at 1e-4).
+    seed : int, optional (default: None)
+        If set, seed Python/NumPy/PyTorch RNGs before fitting so that weight
+        initialization and DataLoader shuffling are reproducible. The value is
+        recorded in adata.uns['scHopfield']['seed']. Leave as None for the
+        previous (nondeterministic) behavior.
     copy : bool, optional (default: False)
         If True, return a copy instead of modifying in-place
 
@@ -368,9 +374,16 @@ def fit_interactions(
     """
     adata = adata.copy() if copy else adata
 
+    # Seed all RNGs (weight init, DataLoader shuffle, neighbor sampler) for reproducibility
+    if seed is not None:
+        from .._utils.seed import set_seed
+        set_seed(seed)
+
     # Store keys for downstream functions
     if 'scHopfield' not in adata.uns:
         adata.uns['scHopfield'] = {}
+    if seed is not None:
+        adata.uns['scHopfield']['seed'] = seed
     adata.uns['scHopfield']['cluster_key'] = cluster_key
     adata.uns['scHopfield']['spliced_key'] = spliced_key
     adata.uns['scHopfield']['velocity_key'] = velocity_key
