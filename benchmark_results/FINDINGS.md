@@ -262,3 +262,24 @@ Spearman rank correlation trivial baseline approx 0. "Reproducible" target = 1.0
   the evidence shows it does not help and can hurt on the tested systems.
 - Disposition: honest negative result; regularizer shipped as opt-in; Discussion/S4 note
   that data-conditioning is the biophysical fix. audit? y.
+
+## M12 - Real-data identifiability: neighbour augmentation raises rank, but data is low-rank -> scaffold essential
+- Setup: `analyses/real_data_identifiability.py`, hematopoiesis (Paul 2015), 100 top-velocity
+  genes, FIXED 240 cells per fit, varying the fraction of neighbour cells (0-0.4) added to a
+  cluster (off-manifold cells from the connectivity graph); 4 clusters x 3 seeds. Metrics:
+  effective rank (participation ratio) of the sigmoid design sigma(X), and split-half stability
+  of the unconstrained least-squares W.
+- Result:
+  - Effective rank of sigma(X) rises with neighbour fraction: 6.0 -> 6.3 -> 6.6 -> 7.1 (+18%).
+    The M10 identifiability mechanism (broader coverage -> more independent directions) operates
+    on real data via neighbour augmentation.
+  - BUT split-half W correlation stays ~0 (0.02 / -0.04 / 0.02 / 0.01) at all fractions: with an
+    intrinsic participation ratio of only ~6-7 for 100 genes, the unconstrained W is severely
+    underdetermined regardless of broadening.
+- What it means: real single-cell expression data is intrinsically very low-rank, so
+  neighbour augmentation helps identifiability but cannot determine W on its own. This is the
+  concrete, real-data reason the transcription-factor scaffold prior (M6) is essential for
+  identifiable GRN inference: the data alone cannot constrain W, so a structural prior is
+  required. Unifies M6 (scaffold necessary) + M10 (identifiability is the lever) + M12
+  (real data is too low-rank for coverage alone).
+- Disposition: real-data support for the scaffold; fold into Discussion / S3. audit? y.
