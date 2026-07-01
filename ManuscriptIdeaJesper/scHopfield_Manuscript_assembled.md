@@ -301,20 +301,42 @@ perturbational responses emerge from a common dynamical representation.
 
 ---
 
-## Figure pointers (committed benchmark figures)
+## Figure pointers (committed figures)
 
-- Figure 2 (canonical behaviors / recovery): `benchmark_results/circuit_recovery/recovery.png`;
-  Hill-vs-linear `benchmark_results/ablations/hill_vs_linear.png`
-- Figure 3 (known-KO recovery): `benchmark_results/hemato_ko/` (schopfield_ko_panel.json,
-  celloracle_ko_panel.json)
+Each figure pairs an illustrative panel (harvested from the analysis notebooks) with a
+quantitative benchmark panel.
+
+- Figure 1 (method schematic): `benchmark_results/figures/fig1_overview.svg`
+- Figure 2 (canonical behaviors): illustrative `benchmark_results/figures/fig2/`
+  (toggle/repressilator dynamics-recovery, toggle bifurcation energy landscape,
+  repressilator energy landscape); quantitative `benchmark_results/circuit_recovery/recovery.png`,
+  Hill-vs-linear `benchmark_results/ablations/hill_vs_linear.png`, GENIE3 baseline
+  `benchmark_results/grn_baseline/genie3_vs_schopfield.png`
+- Figure 3 (perturbation recovers regulators): illustrative `benchmark_results/figures/fig3/`
+  (WT/KO/OE trajectories, perturbation heatmaps, perturbed flow on embedding);
+  quantitative `benchmark_results/hemato_ko/` (schopfield 10/10 vs CellOracle 7/9)
 - Figure 4 (scaffold / robustness): `benchmark_results/network_reg_sensitivity/sensitivity.png`
   and `FIGURE_GUIDE.md`
 - Figure 5 (pancreas stability/energy): `benchmark_results/pancreas/nb08_figures/`
-- Reproducibility (Methods/supplementary): `benchmark_results/seed_sensitivity_real/reproducibility.png`
+- Figure 6 (higher-order perturbation): illustrative `benchmark_results/figures/fig6/`
+  (dose-response, double-KO recipe, dense top-10 shifters, STAT-family circuit, phase portraits)
+- Reproducibility (supplementary): `benchmark_results/seed_sensitivity_real/reproducibility.png`
 
 ## Outstanding placeholders
 
 - Word/figure/reference counts (Main_v5 front matter).
-- Figure 1 schematic (method overview).
-- External GRN-inference baselines (GENIE3, SCENIC, dyngen) for Figure 2, not yet run.
-- References list (the Methods section reference list can seed this).
+- Composite figure layout (arrange the illustrative + quantitative panels per figure).
+- Further GRN baselines if required: SCENIC (motif-based), dyngen (R). GENIE3 done (M8).
+- References list (started below from the Methods section + method comparators).
+
+## References (working list)
+
+Hopfield JJ (1982) PNAS 79:2554. Hopfield JJ (1984) PNAS 81:3088. Bastidas-Ponce A et al.
+(2019) Development 146:dev173849 (pancreas). Paul F et al. (2015) Cell 163:1663
+(hematopoiesis). Qiu X et al. (2022) Cell 185:690 (dynamo). Kamimoto K et al. (2023)
+Nature 614:742 (CellOracle). Huynh-Thu VA et al. (2010) PLoS ONE 5:e12776 (GENIE3).
+Aibar S et al. (2017) Nat Methods 14:1083 (SCENIC). Bergen V et al. (2020) Nat
+Biotechnol 38:1408 (scVelo). La Manno G et al. (2018) Nature 560:494 (RNA velocity).
+Elowitz MB, Leibler S (2000) Nature 403:335 (repressilator). Kingma DP, Ba J (2015) ICLR
+(Adam). Waddington CH (1957) The Strategy of the Genes. Cannoodt R et al. (2021) Nat
+Commun 12:3942 (dyngen).
