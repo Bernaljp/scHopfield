@@ -17,7 +17,6 @@ from .perturbation import (
     compare_perturbations,
     run_ko_screen,
     run_pairwise_ko_screen,
-    compute_synergy,
     compute_epistasis,
     run_dose_response,
 )
@@ -43,7 +42,6 @@ __all__ = [
     # KO screen helpers
     'run_ko_screen',
     'run_pairwise_ko_screen',
-    'compute_synergy',
     'compute_epistasis',
     'run_dose_response',
 ]

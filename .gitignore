@@ -101,3 +101,14 @@ notebooks/experiments/enhanced_recipe_analysis.ipynb
 notebooks/experiments/robustness_analyses.ipynb
 scripts/_fit_one_reg.py
 scHopfield/validation/run_*.py
+
+# Data and figure extensions
+*.csv
+*.tsv
+*.pkl
+*.npy
+*.npz
+*.png
+*.pdf
+*.svg
+.claude/

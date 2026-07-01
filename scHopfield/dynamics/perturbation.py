@@ -885,51 +885,6 @@ def run_pairwise_ko_screen(
     return bias_dict, effects_dict
 
 
-def compute_synergy(
-    pair_bias: Dict[str, float],
-    single_bias_A: Dict[str, float],
-    single_bias_B: Dict[str, float],
-) -> float:
-    """
-    Compute synergy between a gene pair KO and individual KOs.
-
-    Synergy measures whether the pair produces a stronger directional
-    lineage bias than either gene alone:
-
-    ``synergy = |pair_lineage_bias| - max(|single_A_lineage_bias|, |single_B_lineage_bias|)``
-
-    Positive synergy → pair amplifies directional bias beyond either single KO.
-    Negative synergy → pair is redundant with one of the single KOs.
-
-    Parameters
-    ----------
-    pair_bias : dict
-        Bias dict for the double KO, e.g. from ``run_pairwise_ko_screen``.
-        Must contain key ``'lineage_bias'``.
-    single_bias_A : dict
-        Bias dict for the single KO of gene A.
-        Must contain key ``'lineage_bias'``.
-    single_bias_B : dict
-        Bias dict for the single KO of gene B.
-        Must contain key ``'lineage_bias'``.
-
-    Returns
-    -------
-    float
-        Synergy score. Positive = synergistic, negative = redundant.
-
-    Examples
-    --------
-    >>> syn = sch.dyn.compute_synergy(
-    ...     pair_bias=pair_ko_bias[('Gata1', 'Spi1')],
-    ...     single_bias_A=single_ko_bias['Gata1'],
-    ...     single_bias_B=single_ko_bias['Spi1'],
-    ... )
-    """
-    bias_pair    = abs(pair_bias.get('lineage_bias', np.nan))
-    bias_singleA = abs(single_bias_A.get('lineage_bias', np.nan))
-    bias_singleB = abs(single_bias_B.get('lineage_bias', np.nan))
-    return float(bias_pair - max(bias_singleA, bias_singleB))
 
 
 def compute_epistasis(
@@ -945,10 +900,8 @@ def compute_epistasis(
 
     - **cancellation_error**: ``actual_bias - (bias_A + bias_B)`` — deviation
       from the additive expectation (Bliss independence on lineage bias).
-    - **synergy_ery** / **synergy_mye**: per-lineage score above the best
-      single agent (HSA-style).
-    - **dominant_epistasis**: the synergy value with the larger absolute
-      magnitude, preserving sign.
+    - **synergy_score**: Directionally corrected cancellation error.
+      Positive means synergistic (amplifies bias in the same direction).
 
     Parameters
     ----------
@@ -970,8 +923,7 @@ def compute_epistasis(
         Indexed by ``'geneA+geneB'`` pair string, sorted by ``lineage_bias``
         descending.  Columns: ``geneA``, ``geneB``, ``score_A``, ``score_B``,
         ``lineage_bias``, ``expected_bias``, ``cancellation_error``,
-        ``synergy_ery``, ``synergy_mye``, ``dominant_epistasis``,
-        ``pair_type``.
+        ``synergy_score``, ``pair_type``.
 
     Examples
     --------
@@ -980,8 +932,6 @@ def compute_epistasis(
     ...     lineage_A_genes=top5_ery, lineage_B_genes=top5_mye,
     ... )
     """
-    def _max_magnitude(a, b):
-        return a if abs(a) >= abs(b) else b
 
     def _get(sko, gene, key):
         if isinstance(sko, pd.DataFrame):
@@ -1005,11 +955,10 @@ def compute_epistasis(
         score_B_pair = bias.get('score_B', 0.0)
         actual_bias  = bias.get('lineage_bias', np.nan)
 
-        synergy_ery  = score_A_pair - max(score_A_A, score_A_B)
-        synergy_mye  = score_B_pair - max(score_B_A, score_B_B)
-        dominant_epi = _max_magnitude(synergy_ery, synergy_mye)
         expected_bias       = bias_A + bias_B
         cancellation_error  = actual_bias - expected_bias
+        bias_sign = 1 if bias_A > 0 else -1
+        synergy_score = cancellation_error * bias_sign
 
         if ery_genes and mye_genes:
             in_ery_A = gA in ery_genes
@@ -1036,9 +985,7 @@ def compute_epistasis(
             'lineage_bias':       actual_bias,
             'expected_bias':      expected_bias,
             'cancellation_error': cancellation_error,
-            'synergy_ery':        synergy_ery,
-            'synergy_mye':        synergy_mye,
-            'dominant_epistasis': dominant_epi,
+            'synergy_score':      synergy_score,
             'pair_type':          pair_type,
         })
 
