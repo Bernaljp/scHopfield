@@ -114,3 +114,4 @@ scHopfield/validation/run_*.py
 .claude/
 scratch_*.log
 scratchpad_*.log
+.venv-co/
