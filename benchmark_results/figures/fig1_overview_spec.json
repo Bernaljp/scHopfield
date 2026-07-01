@@ -1,0 +1,27 @@
+{
+  "canvas": {"width": 1040, "height": 420, "title": "scHopfield: unified dynamical-systems learning from single-cell data"},
+  "nodes": [
+    {"id":"input","label":"scRNA-seq\n+ RNA velocity","x":70,"y":175,"width":150,"height":70,"shape":"rounded","fill":"#EAF2F8","stroke":"#2980B9"},
+    {"id":"hill","label":"Hill activation\nφ(x) fit (k, n)","x":270,"y":175,"width":140,"height":70,"shape":"rounded","fill":"#EAF2F8","stroke":"#2980B9"},
+    {"id":"pinv","label":"Unconstrained\n(pseudoinverse)","x":455,"y":95,"width":150,"height":60,"shape":"rounded","fill":"#FEF9E7","stroke":"#B7950B"},
+    {"id":"scaf","label":"Scaffold-guided\n(TF prior + elastic net)","x":455,"y":265,"width":160,"height":60,"shape":"rounded","fill":"#FEF9E7","stroke":"#B7950B"},
+    {"id":"system","label":"Dynamical system\ndx/dt = W σ(x) − γx + I","x":650,"y":175,"width":180,"height":72,"shape":"rect","fill":"#E8F8F5","stroke":"#148F77"},
+    {"id":"energy","label":"Energy\nlandscape","x":880,"y":70,"width":130,"height":58,"shape":"rounded","fill":"#F5EEF8","stroke":"#7D3C98"},
+    {"id":"jac","label":"Jacobian\nstability","x":880,"y":175,"width":130,"height":58,"shape":"rounded","fill":"#F5EEF8","stroke":"#7D3C98"},
+    {"id":"pert","label":"In-silico\nperturbation","x":880,"y":280,"width":130,"height":58,"shape":"rounded","fill":"#F5EEF8","stroke":"#7D3C98"}
+  ],
+  "edges": [
+    {"from":"input","to":"hill"},
+    {"from":"hill","to":"pinv"},
+    {"from":"hill","to":"scaf"},
+    {"from":"pinv","to":"system"},
+    {"from":"scaf","to":"system"},
+    {"from":"system","to":"energy"},
+    {"from":"system","to":"jac"},
+    {"from":"system","to":"pert"}
+  ],
+  "groups": [
+    {"label":"inference modes","node_ids":["pinv","scaf"],"fill":"#FCF3CF"},
+    {"label":"interpretable outputs","node_ids":["energy","jac","pert"],"fill":"#F4ECF7"}
+  ]
+}

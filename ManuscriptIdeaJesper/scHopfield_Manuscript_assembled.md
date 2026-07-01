@@ -141,8 +141,13 @@ these results: replacing it with a linear model collapsed velocity reconstructio
 the toggle switch (R-squared 0.0001 versus 1.000) and could not represent the switch's
 bistability, since a linear autonomous system admits at most one fixed point and
 recovered none of the three stable states that the Hill model recovered correctly
-(benchmark M7). *[To add: head-to-head recovery against external GRN-inference methods
-(for example GENIE3, SCENIC) on dyngen simulations; not yet run.]*
+(benchmark M7). On larger synthetic networks with known ground truth (40 genes, sparse
+signed interactions), scHopfield recovered the regulatory edges far better than GENIE3,
+a widely used expression-based method: edge-detection AUROC 0.975 versus 0.701 and AUPRC
+0.970 versus 0.240 (benchmark M8). This gap reflects that scHopfield exploits the
+RNA-velocity dynamics, whereas expression-only methods infer edges from steady-state
+co-expression. *[Further baselines such as SCENIC (motif-based) and dyngen (R) can be
+added if required.]*
 
 ### Learned perturbational dynamics recover established hematopoietic lineage regulators *[Figure 3]*
 

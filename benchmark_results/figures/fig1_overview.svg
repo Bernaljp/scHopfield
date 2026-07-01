@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1040" height="420" viewBox="0 0 1040 420">
+<defs><marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#555B66"/></marker></defs>
+<rect width="1040" height="420" fill="white"/>
+<rect x="357.0" y="47.0" width="196.0" height="266.0" rx="12" fill="#FCF3CF" stroke="#BFDBFE" stroke-width="1.2"/>
+<text x="365.0" y="62.0" font-family="Liberation Sans, Arial, Helvetica, sans-serif" font-size="12" fill="#64748B" font-weight="700">inference modes</text>
+<rect x="797.0" y="23.0" width="166.0" height="304.0" rx="12" fill="#F4ECF7" stroke="#A7F3D0" stroke-width="1.2"/>
+<text x="805.0" y="38.0" font-family="Liberation Sans, Arial, Helvetica, sans-serif" font-size="12" fill="#64748B" font-weight="700">interpretable outputs</text>
+<text x="520.0" y="24" font-family="Liberation Sans, Arial, Helvetica, sans-serif" font-size="16" fill="#1f2933" text-anchor="middle" font-weight="700">scHopfield: unified dynamical-systems learning from single-cell data</text>
+<line x1="145.0" y1="175.0" x2="200.0" y2="175.0" stroke="#555B66" stroke-width="1.6" marker-end="url(#ar)"/>
+<line x1="340.0" y1="144.7" x2="385.6" y2="125.0" stroke="#555B66" stroke-width="1.6" marker-end="url(#ar)"/>
+<line x1="340.0" y1="209.1" x2="393.3" y2="235.0" stroke="#555B66" stroke-width="1.6" marker-end="url(#ar)"/>
+<line x1="528.1" y1="125.0" x2="562.2" y2="139.0" stroke="#555B66" stroke-width="1.6" marker-end="url(#ar)"/>
+<line x1="520.0" y1="235.0" x2="572.0" y2="211.0" stroke="#555B66" stroke-width="1.6" marker-end="url(#ar)"/>
+<line x1="728.9" y1="139.0" x2="816.5" y2="99.0" stroke="#555B66" stroke-width="1.6" marker-end="url(#ar)"/>
+<line x1="740.0" y1="175.0" x2="815.0" y2="175.0" stroke="#555B66" stroke-width="1.6" marker-end="url(#ar)"/>
+<line x1="728.9" y1="211.0" x2="816.5" y2="251.0" stroke="#555B66" stroke-width="1.6" marker-end="url(#ar)"/>
+<rect x="-5.0" y="140.0" width="150" height="70" rx="8" ry="8" fill="#EAF2F8" stroke="#2980B9" stroke-width="1.5"/>
+<text x="70.0" y="166.6" font-family="Liberation Sans, Arial, Helvetica, sans-serif" font-size="14" fill="#1f2933" text-anchor="middle" dominant-baseline="central">scRNA-seq</text>
+<text x="70.0" y="183.4" font-family="Liberation Sans, Arial, Helvetica, sans-serif" font-size="14" fill="#1f2933" text-anchor="middle" dominant-baseline="central">+ RNA velocity</text>
+<rect x="200.0" y="140.0" width="140" height="70" rx="8" ry="8" fill="#EAF2F8" stroke="#2980B9" stroke-width="1.5"/>
+<text x="270.0" y="166.6" font-family="Liberation Sans, Arial, Helvetica, sans-serif" font-size="14" fill="#1f2933" text-anchor="middle" dominant-baseline="central">Hill activation</text>
+<text x="270.0" y="183.4" font-family="Liberation Sans, Arial, Helvetica, sans-serif" font-size="14" fill="#1f2933" text-anchor="middle" dominant-baseline="central">φ(x) fit (k, n)</text>
+<rect x="380.0" y="65.0" width="150" height="60" rx="8" ry="8" fill="#FEF9E7" stroke="#B7950B" stroke-width="1.5"/>
+<text x="455.0" y="86.6" font-family="Liberation Sans, Arial, Helvetica, sans-serif" font-size="14" fill="#1f2933" text-anchor="middle" dominant-baseline="central">Unconstrained</text>
+<text x="455.0" y="103.4" font-family="Liberation Sans, Arial, Helvetica, sans-serif" font-size="14" fill="#1f2933" text-anchor="middle" dominant-baseline="central">(pseudoinverse)</text>
+<rect x="375.0" y="235.0" width="160" height="60" rx="8" ry="8" fill="#FEF9E7" stroke="#B7950B" stroke-width="1.5"/>
+<text x="455.0" y="256.6" font-family="Liberation Sans, Arial, Helvetica, sans-serif" font-size="14" fill="#1f2933" text-anchor="middle" dominant-baseline="central">Scaffold-guided</text>
+<text x="455.0" y="273.4" font-family="Liberation Sans, Arial, Helvetica, sans-serif" font-size="14" fill="#1f2933" text-anchor="middle" dominant-baseline="central">(TF prior + elastic net)</text>
+<rect x="560.0" y="139.0" width="180" height="72" rx="0" ry="0" fill="#E8F8F5" stroke="#148F77" stroke-width="1.5"/>
+<text x="650.0" y="166.6" font-family="Liberation Sans, Arial, Helvetica, sans-serif" font-size="14" fill="#1f2933" text-anchor="middle" dominant-baseline="central">Dynamical system</text>
+<text x="650.0" y="183.4" font-family="Liberation Sans, Arial, Helvetica, sans-serif" font-size="14" fill="#1f2933" text-anchor="middle" dominant-baseline="central">dx/dt = W σ(x) − γx + I</text>
+<rect x="815.0" y="41.0" width="130" height="58" rx="8" ry="8" fill="#F5EEF8" stroke="#7D3C98" stroke-width="1.5"/>
+<text x="880.0" y="61.6" font-family="Liberation Sans, Arial, Helvetica, sans-serif" font-size="14" fill="#1f2933" text-anchor="middle" dominant-baseline="central">Energy</text>
+<text x="880.0" y="78.4" font-family="Liberation Sans, Arial, Helvetica, sans-serif" font-size="14" fill="#1f2933" text-anchor="middle" dominant-baseline="central">landscape</text>
+<rect x="815.0" y="146.0" width="130" height="58" rx="8" ry="8" fill="#F5EEF8" stroke="#7D3C98" stroke-width="1.5"/>
+<text x="880.0" y="166.6" font-family="Liberation Sans, Arial, Helvetica, sans-serif" font-size="14" fill="#1f2933" text-anchor="middle" dominant-baseline="central">Jacobian</text>
+<text x="880.0" y="183.4" font-family="Liberation Sans, Arial, Helvetica, sans-serif" font-size="14" fill="#1f2933" text-anchor="middle" dominant-baseline="central">stability</text>
+<rect x="815.0" y="251.0" width="130" height="58" rx="8" ry="8" fill="#F5EEF8" stroke="#7D3C98" stroke-width="1.5"/>
+<text x="880.0" y="271.6" font-family="Liberation Sans, Arial, Helvetica, sans-serif" font-size="14" fill="#1f2933" text-anchor="middle" dominant-baseline="central">In-silico</text>
+<text x="880.0" y="288.4" font-family="Liberation Sans, Arial, Helvetica, sans-serif" font-size="14" fill="#1f2933" text-anchor="middle" dominant-baseline="central">perturbation</text>
+</svg>
