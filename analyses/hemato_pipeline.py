@@ -6,7 +6,6 @@ CellOracle. Pseudotime velocity -> sigmoid fit -> seeded scaffold-guided GRN
 inference. Saves a fitted-adata checkpoint for the KO panel + notebook refresh.
 """
 import os
-import numpy as np
 import pandas as pd
 import scanpy as sc  # noqa
 import scvelo as scv
@@ -28,17 +27,9 @@ OUT = "data/hematopoiesis/adata_schopfield.h5ad"
 
 
 def build_scaffold(adata, base_GRN):
-    gene_names = adata.var.index[adata.var["scHopfield_used"].values]
-    scaffold = pd.DataFrame(0, index=gene_names, columns=gene_names)
-    tfs = list(set(base_GRN.columns.str.lower()) & set(scaffold.index.str.lower()))
-    index_map = {g.lower(): g for g in scaffold.index}
-    col_map = {g.lower(): g for g in scaffold.columns}
-    for tf in tfs:
-        tf_col = [c for c in base_GRN.columns if c.lower() == tf][0]
-        for tgt in base_GRN[base_GRN[tf_col] == 1]["gene_short_name"]:
-            if tgt.lower() in col_map:
-                scaffold.loc[index_map[tf], col_map[tgt.lower()]] = 1
-    print(f"Scaffold: {len(tfs)} TFs, {int(scaffold.sum().sum())} edges", flush=True)
+    # Boilerplate promoted to the package: see scHopfield.inference.build_scaffold.
+    scaffold, ntf, nedge = sch.inf.build_scaffold(adata, base_GRN, return_stats=True)
+    print(f"Scaffold: {ntf} TFs, {nedge} edges", flush=True)
     return scaffold
 
 

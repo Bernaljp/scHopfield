@@ -16,13 +16,27 @@ from .perturbation import (
     get_top_affected_genes,
     compare_perturbations,
     run_ko_screen,
+    score_ko_panel,
     run_pairwise_ko_screen,
     compute_epistasis,
     run_dose_response,
 )
 
-# Alias for backward compatibility
-simulate_shift = simulate_perturbation
+# Deprecated alias, kept for backward compatibility. `simulate_perturbation` is
+# the canonical name; `simulate_shift` will be removed in a future release.
+import functools as _functools
+import warnings as _warnings
+
+
+@_functools.wraps(simulate_perturbation)
+def simulate_shift(*args, **kwargs):
+    _warnings.warn(
+        "sch.dyn.simulate_shift is deprecated and will be removed in a future "
+        "release; use sch.dyn.simulate_perturbation instead (identical behavior).",
+        DeprecationWarning,
+        stacklevel=2,
+    )
+    return simulate_perturbation(*args, **kwargs)
 
 __all__ = [
     # ODE-based simulation
@@ -41,6 +55,7 @@ __all__ = [
     'compare_perturbations',
     # KO screen helpers
     'run_ko_screen',
+    'score_ko_panel',
     'run_pairwise_ko_screen',
     'compute_epistasis',
     'run_dose_response',

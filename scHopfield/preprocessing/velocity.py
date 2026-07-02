@@ -3,7 +3,7 @@
 import numpy as np
 import scipy.sparse as sp
 from anndata import AnnData
-from typing import Union
+from typing import Optional, Union
 
 
 def estimate_velocity_from_pseudotime(
@@ -106,3 +106,115 @@ def estimate_velocity_from_pseudotime(
 
     adata.layers[store_key] = V
     return None
+
+
+def prepare_dataset(
+    adata: AnnData,
+    n_top_genes: int = 2000,
+    velocity_mode: str = 'steady_state',
+    spliced_key: str = 'Ms',
+    velocity_key: str = 'velocity_S',
+    degradation_key: str = 'gamma',
+    used_key: str = 'scHopfield_used',
+    n_pcs: int = 30,
+    n_neighbors: int = 30,
+    min_shared_counts: int = 20,
+    fit_sigmoids: bool = True,
+    copy: bool = False,
+) -> Optional[AnnData]:
+    """Preprocess a raw dataset into a scHopfield-ready AnnData.
+
+    A single entry point for the "make my data scHopfield-ready" boilerplate that
+    was previously copy-pasted per dataset. It runs (as needed) filtering,
+    normalization, HVG selection, moment smoothing, steady-state RNA velocity,
+    keeps genes with a finite positive degradation rate, and fits the per-gene
+    sigmoid activations. The result carries everything downstream steps expect:
+
+    - ``layers[spliced_key]`` (``'Ms'``): moment-smoothed expression
+    - ``layers[velocity_key]`` (``'velocity_S'``): RNA velocity
+    - ``layers['sigmoid']``: sigmoid-activated expression
+    - ``var[degradation_key]`` (``'gamma'``): degradation rates
+    - ``var[used_key]`` (``'scHopfield_used'``): modelled-gene mask
+    - ``obsp['connectivities']``: neighbour graph
+
+    Datasets that already carry moments (``layers['Ms']``) skip re-filtering; only
+    the missing pieces (neighbours, velocity, sigmoids) are added.
+
+    Parameters
+    ----------
+    adata
+        Raw or partially processed annotated data. Needs spliced/unspliced counts
+        (for velocity) unless ``layers['velocity_S']`` is already present.
+    n_top_genes
+        Number of highly variable genes to keep when starting from raw counts.
+    velocity_mode
+        scVelo velocity mode (``'steady_state'``, ``'stochastic'``, ...).
+    spliced_key, velocity_key, degradation_key, used_key
+        Output layer/column names (defaults match the rest of scHopfield).
+    n_pcs, n_neighbors
+        Moment/neighbour-graph parameters.
+    min_shared_counts
+        scVelo gene filter threshold (only when starting from raw counts).
+    fit_sigmoids
+        If ``True``, fit the per-gene sigmoids and populate ``layers['sigmoid']``.
+    copy
+        If ``True``, operate on and return a copy; otherwise modify in place and
+        return ``None``.
+
+    Returns
+    -------
+    :class:`~anndata.AnnData` or None
+        The processed object if ``copy=True``, else ``None``.
+
+    Notes
+    -----
+    Requires `scVelo <https://scvelo.readthedocs.io>`_. Install with
+    ``pip install scvelo``.
+    """
+    try:
+        import scanpy as sc
+        import scvelo as scv
+    except ImportError as exc:  # pragma: no cover - depends on optional dep
+        raise ImportError(
+            "prepare_dataset requires scanpy and scvelo. "
+            "Install with `pip install scvelo scanpy`."
+        ) from exc
+    from .sigmoid_fitting import compute_sigmoid, fit_all_sigmoids
+
+    a = adata.copy() if copy else adata
+
+    if spliced_key not in a.layers:
+        scv.pp.filter_genes(a, min_shared_counts=min_shared_counts)
+        scv.pp.normalize_per_cell(a)
+        sc.pp.log1p(a)
+        sc.pp.highly_variable_genes(a, n_top_genes=min(n_top_genes, a.n_vars))
+        a._inplace_subset_var(a.var['highly_variable'].values)
+        scv.pp.moments(a, n_pcs=n_pcs, n_neighbors=n_neighbors)
+    elif 'connectivities' not in a.obsp:
+        scv.pp.moments(a, n_pcs=n_pcs, n_neighbors=n_neighbors)
+
+    if velocity_key not in a.layers:
+        scv.tl.velocity(a, mode=velocity_mode)
+        a.layers[velocity_key] = a.layers['velocity']
+        a.var[degradation_key] = np.asarray(a.var['velocity_gamma']).astype(np.float32)
+    elif degradation_key not in a.var:
+        a.var[degradation_key] = np.float32(0.1)
+
+    # keep genes with usable degradation + finite velocity
+    gamma = np.asarray(a.var[degradation_key].values, dtype=float)
+    finite_g = np.isfinite(gamma) & (gamma > 0)
+    vel = np.asarray(a.layers[velocity_key])
+    finite_v = np.isfinite(vel).all(axis=0)
+    keep = finite_g & finite_v
+    if not keep.all():
+        a._inplace_subset_var(keep)
+
+    a.var[used_key] = True
+    if fit_sigmoids and 'sigmoid' not in a.layers:
+        fit_all_sigmoids(a, genes=a.var[used_key].values, spliced_key=spliced_key)
+        compute_sigmoid(a, spliced_key=spliced_key)
+
+    if 'connectivities' not in a.obsp:
+        raise ValueError("No neighbour graph in adata.obsp['connectivities'].")
+
+    return a if copy else None

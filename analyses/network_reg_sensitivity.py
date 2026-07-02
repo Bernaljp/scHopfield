@@ -46,17 +46,8 @@ TOPN = 15
 
 
 def build_scaffold(adata, base_GRN):
-    gene_names = adata.var.index[adata.var["scHopfield_used"].values]
-    scaffold = pd.DataFrame(0, index=gene_names, columns=gene_names)
-    tfs = list(set(base_GRN.columns.str.lower()) & set(scaffold.index.str.lower()))
-    imap = {g.lower(): g for g in scaffold.index}
-    cmap = {g.lower(): g for g in scaffold.columns}
-    for tf in tfs:
-        tf_col = [c for c in base_GRN.columns if c.lower() == tf][0]
-        for tgt in base_GRN[base_GRN[tf_col] == 1]["gene_short_name"]:
-            if tgt.lower() in cmap:
-                scaffold.loc[imap[tf], cmap[tgt.lower()]] = 1
-    return scaffold, len(tfs), int(scaffold.sum().sum())
+    # Boilerplate promoted to the package: see scHopfield.inference.build_scaffold.
+    return sch.inf.build_scaffold(adata, base_GRN, return_stats=True)
 
 
 def preprocess():

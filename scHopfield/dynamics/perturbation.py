@@ -608,7 +608,7 @@ def compare_perturbations(
     Returns
     -------
     pd.DataFrame
-        DataFrame with genes as index and mean |delta_X| for each perturbation condition
+        DataFrame with genes as index and mean ``|delta_X|`` for each perturbation condition
 
     References
     ----------
@@ -646,7 +646,7 @@ def compare_perturbations(
             verbose=False
         )
 
-        # Get mean |delta_X| per gene
+        # Get mean ``|delta_X|`` per gene
         delta_X = adata.layers['delta_X'][:, genes]
         mean_abs_delta = np.abs(delta_X).mean(axis=0)
         all_deltas[label] = mean_abs_delta
@@ -719,7 +719,7 @@ def run_ko_screen(
     bias_dict : dict[str, dict]
         ``{gene: {'score_A', 'score_B', 'lineage_bias'}}``
     effects_dict : dict[str, pd.Series]
-        ``{gene: pd.Series(mean |delta_X| per cluster)}``
+        ``{gene: pd.Series(mean ``|delta_X|`` per cluster)}``
 
     Examples
     --------
@@ -778,6 +778,92 @@ def run_ko_screen(
     return bias_dict, effects_dict
 
 
+def score_ko_panel(
+    adata: AnnData,
+    panel: Dict[str, int],
+    lineage_A_clusters: List[str],
+    lineage_B_clusters: List[str],
+    basis: str,
+    wt_flow_key: str,
+    cluster_key: str = 'cell_type',
+    simulate_kwargs: Optional[Dict] = None,
+    verbose: bool = True,
+) -> Tuple[pd.DataFrame, float]:
+    """Score a known-driver KO panel by the *direction* of the predicted shift.
+
+    Ground-truth-anchored validation used across the paper's KO analyses. Given a
+    panel of literature-established regulators annotated with the expected sign of
+    their KO's lineage bias (``+1`` = KO should bias toward lineage A, ``-1`` =
+    toward lineage B), this runs :func:`run_ko_screen` and reports whether each
+    predicted ``lineage_bias`` sign matches expectation, plus the overall
+    directional accuracy. This replaces the per-analysis scoring loops that were
+    duplicated across the hematopoiesis and neural-crest KO panels.
+
+    Parameters
+    ----------
+    adata
+        Base (WT) AnnData with a fitted model and a precomputed WT flow at
+        ``adata.obsm[wt_flow_key]`` (see :func:`~scHopfield.tools.calculate_flow`).
+    panel
+        Mapping ``{gene: expected_sign}`` with ``expected_sign in {+1, -1}``.
+        ``lineage_bias = score_A - score_B``; a driver of lineage A that is knocked
+        out removes lineage-A drive, so its expected sign is ``-1``.
+    lineage_A_clusters, lineage_B_clusters
+        Cluster names defining the two competing lineages.
+    basis
+        Embedding basis for flow projection.
+    wt_flow_key
+        Key in ``adata.obsm`` for the WT Hopfield velocity.
+    cluster_key
+        Key in ``adata.obs`` for cluster labels.
+    simulate_kwargs
+        Extra kwargs forwarded to ``simulate_shift_ode`` via :func:`run_ko_screen`.
+    verbose
+        Print per-gene OK/MISS lines.
+
+    Returns
+    -------
+    table : :class:`pandas.DataFrame`
+        One row per scored gene with columns ``gene``, ``lineage_bias``,
+        ``expected_sign``, ``pred_sign``, ``correct``.
+    accuracy : float
+        Fraction of the panel whose KO-bias sign matched expectation
+        (``nan`` if no panel gene is present in ``adata``).
+    """
+    genes = [g for g in panel if g in adata.var_names]
+    if verbose:
+        missing = [g for g in panel if g not in adata.var_names]
+        if missing:
+            print(f"Panel genes absent from adata (skipped): {missing}")
+
+    bias_dict, _ = run_ko_screen(
+        adata, genes=genes,
+        lineage_A_clusters=lineage_A_clusters,
+        lineage_B_clusters=lineage_B_clusters,
+        basis=basis, wt_flow_key=wt_flow_key,
+        cluster_key=cluster_key, simulate_kwargs=simulate_kwargs, verbose=verbose,
+    )
+
+    rows = []
+    for g in genes:
+        bias = float(bias_dict[g]['lineage_bias'])
+        expected = int(panel[g])
+        pred = int(np.sign(bias)) if bias != 0 else 0
+        correct = pred == expected
+        rows.append({'gene': g, 'lineage_bias': round(bias, 4),
+                     'expected_sign': expected, 'pred_sign': pred, 'correct': bool(correct)})
+        if verbose:
+            print(f"  {g:8s} bias={bias:+.4f} expect={expected:+d} -> "
+                  f"{'OK' if correct else 'MISS'}")
+
+    table = pd.DataFrame(rows)
+    accuracy = float(table['correct'].mean()) if len(table) else float('nan')
+    if verbose:
+        n_ok = int(table['correct'].sum()) if len(table) else 0
+        print(f"\nDirectional accuracy: {accuracy:.2f} ({n_ok}/{len(table)})")
+    return table, accuracy
+
+
 def run_pairwise_ko_screen(
     adata: AnnData,
     pairs: List[Tuple[str, str]],
@@ -823,7 +909,7 @@ def run_pairwise_ko_screen(
     bias_dict : dict[(str, str), dict]
         ``{(geneA, geneB): {'score_A', 'score_B', 'lineage_bias'}}``
     effects_dict : dict[(str, str), pd.Series]
-        ``{(geneA, geneB): pd.Series(mean |delta_X| per cluster)}``
+        ``{(geneA, geneB): pd.Series(mean ``|delta_X|`` per cluster)}``
 
     Examples
     --------
@@ -943,13 +1029,8 @@ def compute_epistasis(
 
     records = []
     for (gA, gB), bias in pair_ko_bias.items():
-        score_A_A = _get(single_ko_bias, gA, 'score_A')
-        score_B_A = _get(single_ko_bias, gA, 'score_B')
-        bias_A    = _get(single_ko_bias, gA, 'lineage_bias')
-
-        score_A_B = _get(single_ko_bias, gB, 'score_A')
-        score_B_B = _get(single_ko_bias, gB, 'score_B')
-        bias_B    = _get(single_ko_bias, gB, 'lineage_bias')
+        bias_A = _get(single_ko_bias, gA, 'lineage_bias')
+        bias_B = _get(single_ko_bias, gB, 'lineage_bias')
 
         score_A_pair = bias.get('score_A', 0.0)
         score_B_pair = bias.get('score_B', 0.0)

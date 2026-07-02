@@ -15,7 +15,6 @@ ground-truth-anchored metric (not a scale-confounded magnitude table).
 import json
 import os
 
-import numpy as np
 import anndata as ad
 import scHopfield as sch
 
@@ -47,30 +46,21 @@ def main():
                           cluster_key=CLUSTER_KEY, store_key=WT_FLOW_KEY, verbose=False)
     print("WT flow computed", flush=True)
 
-    bias_dict, _effects = sch.dyn.run_ko_screen(
-        adata, genes=genes, lineage_A_clusters=ERY, lineage_B_clusters=MYE,
+    # Directional KO scoring promoted to the package: sch.dyn.score_ko_panel.
+    table, acc = sch.dyn.score_ko_panel(
+        adata, panel=PANEL, lineage_A_clusters=ERY, lineage_B_clusters=MYE,
         basis=BASIS, wt_flow_key=WT_FLOW_KEY, cluster_key=CLUSTER_KEY, verbose=True,
     )
-
-    rows = []
-    for g in genes:
-        bias = float(bias_dict[g]["lineage_bias"])
-        expected = PANEL[g]
-        pred_sign = int(np.sign(bias)) if bias != 0 else 0
-        correct = (pred_sign == expected)
-        rows.append({"gene": g, "lineage_bias": round(bias, 4),
-                     "expected_sign": expected, "pred_sign": pred_sign, "correct": bool(correct),
-                     "role": "erythroid-master" if expected < 0 else "myeloid-master"})
-        print(f"  {g:7s} bias={bias:+.4f} expect={'ery-block(-)' if expected<0 else 'mye-block(+)'} "
-              f"-> {'OK' if correct else 'MISS'}", flush=True)
+    rows = table.to_dict("records")
+    for r in rows:
+        r["role"] = "erythroid-master" if r["expected_sign"] < 0 else "myeloid-master"
 
     n = len(rows)
-    acc = sum(r["correct"] for r in rows) / n if n else float("nan")
     out = {"n": n, "directional_accuracy": acc, "rows": rows,
            "ery_clusters": ERY, "mye_clusters": MYE, "seed": int(adata.uns["scHopfield"].get("seed", -1))}
     os.makedirs("benchmark_results/hemato_ko", exist_ok=True)
     json.dump(out, open("benchmark_results/hemato_ko/schopfield_ko_panel.json", "w"), indent=2)
-    print(f"\nscHopfield directional accuracy: {acc:.2f} ({sum(r['correct'] for r in rows)}/{n})", flush=True)
+    print(f"\nscHopfield directional accuracy: {acc:.2f} ({int(table['correct'].sum())}/{n})", flush=True)
     print("wrote benchmark_results/hemato_ko/schopfield_ko_panel.json", flush=True)
 
 

@@ -25,7 +25,7 @@ def score_driver_tfs(
     Combines three signals averaged over the specified lineage clusters:
     - W-matrix row L2-norm (interaction strength)
     - Out-degree centrality (regulatory influence)
-    - |Energy-gene correlation| (association with energy landscape)
+    - Energy-gene correlation (association with energy landscape)
 
     Each signal is ranked across genes and summed to a composite score.
     The lineage bias = score_A - score_B; positive values indicate an
@@ -59,7 +59,7 @@ def score_driver_tfs(
         - ``rank_B``: rank by score_B (1 = highest)
         - ``wnorm_A``, ``wnorm_B``: mean W-matrix row L2-norm per lineage
         - ``deg_A``, ``deg_B``: mean out-degree centrality per lineage
-        - ``ecorr_A``, ``ecorr_B``: mean |energy-gene correlation| per lineage
+        - ``ecorr_A``, ``ecorr_B``: mean absolute energy-gene correlation per lineage
 
     Examples
     --------
@@ -222,7 +222,7 @@ def compute_cluster_effects(
     cluster_key: str = 'cell_type',
 ) -> pd.Series:
     """
-    Compute mean |delta_X| magnitude per cluster after a KO simulation.
+    Compute mean ``|delta_X|`` magnitude per cluster after a KO simulation.
 
     Parameters
     ----------
@@ -476,7 +476,7 @@ def lineage_de(
         columns:
         - ``log2fc``: log2(mean_B / mean_A)
         - ``pval``: two-sided Mann-Whitney U p-value
-        - ``abs_log2fc``: |log2fc|
+        - ``abs_log2fc``: ``|log2fc|``
         - ``rank``: 1 = most differentially expressed
 
     Examples
@@ -555,7 +555,7 @@ def grn_partner_weights(
     pd.DataFrame
         Indexed by gene name (anchor excluded) with columns:
         - ``w_{cluster}``: per-cluster w_combined value
-        - ``w_abs_all``: mean |w_combined| across all specified clusters
+        - ``w_abs_all``: mean ``|w_combined|`` across all specified clusters
 
     Examples
     --------

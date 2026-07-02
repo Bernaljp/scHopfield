@@ -42,10 +42,11 @@ from . import dynamics as dyn
 
 # Expose key classes and functions at top level
 from ._utils.seed import set_seed
-from .preprocessing import fit_all_sigmoids, compute_sigmoid
-from .inference import fit_interactions
+from .preprocessing import fit_all_sigmoids, compute_sigmoid, prepare_dataset
+from .inference import fit_interactions, build_scaffold
 from .tools import compute_energies, compute_umap, energy_embedding
 from .dynamics import ODESolver, simulate_trajectory
+from .workflows import run_pipeline
 
 __all__ = [
     'pp',
@@ -56,10 +57,13 @@ __all__ = [
     'set_seed',
     'fit_all_sigmoids',
     'compute_sigmoid',
+    'prepare_dataset',
     'fit_interactions',
+    'build_scaffold',
     'compute_energies',
     'compute_umap',
     'energy_embedding',
     'ODESolver',
     'simulate_trajectory',
+    'run_pipeline',
 ]

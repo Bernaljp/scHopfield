@@ -28,20 +28,6 @@ PANEL = {"Sox10": -1, "Erbb3": -1, "Mpz": -1, "Plp1": -1,
 N_GENES = 600
 
 
-def build_scaffold(adata, base_GRN):
-    genes = adata.var.index[adata.var["scHopfield_used"].values]
-    scaffold = pd.DataFrame(0, index=genes, columns=genes)
-    tfs = list(set(base_GRN.columns.str.lower()) & set(scaffold.index.str.lower()))
-    imap = {g.lower(): g for g in scaffold.index}
-    cmap = {g.lower(): g for g in scaffold.columns}
-    for tf in tfs:
-        col = [c for c in base_GRN.columns if c.lower() == tf][0]
-        for tgt in base_GRN[base_GRN[col] == 1]["gene_short_name"]:
-            if tgt.lower() in cmap:
-                scaffold.loc[imap[tf], cmap[tgt.lower()]] = 1
-    return scaffold, len(tfs), int(scaffold.sum().sum())
-
-
 def main():
     import torch
     dev = "cuda" if torch.cuda.is_available() else "cpu"
@@ -59,8 +45,8 @@ def main():
         sch.pp.compute_sigmoid(a)
     print(f"neural crest {a.shape}; device={dev}", flush=True)
 
-    base = pd.read_parquet("data/hematopoiesis/networks/mouse_scATAC_atlas.parquet").drop(columns=["peak_id"])
-    scaffold, ntf, nedge = build_scaffold(a, base)
+    base = pd.read_parquet("data/hematopoiesis/networks/mouse_scATAC_atlas.parquet")
+    scaffold, ntf, nedge = sch.inf.build_scaffold(a, base, return_stats=True)
     print(f"scaffold: {ntf} TFs, {nedge} edges", flush=True)
 
     sch.inf.fit_interactions(
@@ -73,24 +59,18 @@ def main():
 
     sch.tl.calculate_flow(a, source="original", basis=BASIS, method="hopfield",
                           cluster_key=CK, store_key=WT_FLOW, verbose=False)
-    genes = [g for g in PANEL if g in a.var_names]
-    bias, _ = sch.dyn.run_ko_screen(a, genes=genes, lineage_A_clusters=GLIA,
-        lineage_B_clusters=NEUR, basis=BASIS, wt_flow_key=WT_FLOW, cluster_key=CK, verbose=True)
-
-    rows = []
-    for g in genes:
-        b = float(bias[g]["lineage_bias"]); exp = PANEL[g]
-        pred = int(np.sign(b)) if b != 0 else 0
-        ok = pred == exp
-        rows.append({"gene": g, "lineage_bias": round(b, 4),
-                     "role": "glia-master" if exp < 0 else "neuronal-master",
-                     "expected_sign": exp, "correct": bool(ok)})
-        print(f"  {g:8s} bias={b:+.4f} ({'glia' if exp<0 else 'neuron'}-master) -> {'OK' if ok else 'MISS'}", flush=True)
-    acc = sum(r["correct"] for r in rows) / len(rows)
+    # Directional KO scoring promoted to the package: sch.dyn.score_ko_panel.
+    table, acc = sch.dyn.score_ko_panel(
+        a, panel=PANEL, lineage_A_clusters=GLIA, lineage_B_clusters=NEUR,
+        basis=BASIS, wt_flow_key=WT_FLOW, cluster_key=CK, verbose=True)
+    rows = table.to_dict("records")
+    for r in rows:
+        r["role"] = "glia-master" if r["expected_sign"] < 0 else "neuronal-master"
     os.makedirs("benchmark_results/nc_ko", exist_ok=True)
     json.dump({"directional_accuracy": acc, "n": len(rows), "rows": rows,
                "glia": GLIA, "neuron": NEUR}, open("benchmark_results/nc_ko/panel.json", "w"), indent=2)
-    print(f"\nneural-crest directional accuracy: {acc:.2f} ({sum(r['correct'] for r in rows)}/{len(rows)})", flush=True)
+    print(f"\nneural-crest directional accuracy: {acc:.2f} "
+          f"({int(table['correct'].sum())}/{len(rows)})", flush=True)
 
 
 if __name__ == "__main__":
