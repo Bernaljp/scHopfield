@@ -133,3 +133,6 @@ docs/api/generated/
 ManuscriptIdeaJesper/
 docs/methods/
 archive/
+
+# Fitted model checkpoints (local setup artifacts)
+*.h5sch

@@ -121,13 +121,13 @@ What you can do
    :caption: User Guide & Examples
 
    Getting Started <notebooks/01_getting_started>
-   End-to-End Pipeline <notebooks/08_end_to_end_pipeline>
    Energy Analysis <notebooks/02_energy_analysis>
    Network Analysis <notebooks/03_network_analysis>
    Stability Analysis <notebooks/04_stability_analysis>
    Perturbation Analysis <notebooks/05_perturbation_analysis>
    Lineage Drivers <notebooks/06_lineage_drivers>
    Extended Perturbation <notebooks/07_perturbation_extended_analyses>
+   End-to-End Pipeline <notebooks/08_end_to_end_pipeline>
 
 .. toctree::
    :hidden:

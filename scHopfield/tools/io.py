@@ -162,9 +162,10 @@ def load_model(
 
     Returns
     -------
-    AnnData or None
-        Returns a subsetted copy of adata when the gene sets differ, otherwise
-        returns ``None`` (parameters written in-place).
+    AnnData
+        The AnnData with the model loaded. This is the same object when the gene
+        sets match (modified in place) or a gene-subsetted copy when they differ,
+        so ``adata = load_model(adata, file)`` is always safe.
 
     Raises
     ------
@@ -175,10 +176,6 @@ def load_model(
 
     Examples
     --------
-    >>> # Gene sets match exactly — in-place, no return value needed:
-    >>> sch.tl.load_model(adata, 'model.h5sch')
-    >>>
-    >>> # adata has more genes than the model — reassign the return value:
     >>> adata = sch.tl.load_model(adata, 'model.h5sch')
     """
     import h5py
@@ -245,9 +242,10 @@ def load_model(
     n_genes = int(target.var['scHopfield_used'].sum()) if 'scHopfield_used' in target.var else '?'
     print(f"Model loaded from '{filename}'  |  clusters={clusters}  |  genes={n_genes}")
 
-    if target is not adata:
-        return target
-    return None
+    # Always return the loaded object so ``adata = load_model(adata, file)`` is
+    # safe whether the model was applied in place (gene sets match) or a
+    # gene-subsetted copy was created.
+    return target
 
 
 def save_checkpoint(
