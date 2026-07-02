@@ -1,0 +1,59 @@
+{
+  "reprogramming_l1": {
+    "auroc": 0.6345454545454545,
+    "program_mean_absI": 0.01472679751882867,
+    "rest_mean_absI": 0.010980171342389917,
+    "contrast": 1.3412173379077648,
+    "ranks": {
+      "Pou5f1": 31,
+      "Sox2": 169,
+      "Klf4": 40,
+      "Myc": 14,
+      "Nanog": 59,
+      "Zfp42": 279,
+      "Esrrb": 269,
+      "Sall4": 72,
+      "Lin28a": 145,
+      "Utf1": 22,
+      "Dppa3": 172
+    }
+  },
+  "reprogramming_l2": {
+    "auroc": 0.6345454545454545,
+    "program_mean_absI": 0.01472679751882867,
+    "rest_mean_absI": 0.010980171342389917,
+    "contrast": 1.3412173379077648,
+    "ranks": {
+      "Pou5f1": 31,
+      "Sox2": 169,
+      "Klf4": 40,
+      "Myc": 14,
+      "Nanog": 59,
+      "Zfp42": 279,
+      "Esrrb": 269,
+      "Sall4": 72,
+      "Lin28a": 145,
+      "Utf1": 22,
+      "Dppa3": 172
+    }
+  },
+  "natural_l1_randmarkers": {
+    "auroc": 0.6502044668134634,
+    "program_mean_absI": 1.1014823517570205,
+    "rest_mean_absI": 0.6766400791526108,
+    "contrast": 1.6278703908710077,
+    "ranks": {
+      "Ank": 75,
+      "Drap1": 159,
+      "Pbx1": 56,
+      "Baiap3": 212,
+      "Erdr1": 146,
+      "Glud1": 115,
+      "Shank2": 18,
+      "Actb": 5,
+      "Ptbp2": 179,
+      "Rbms3": 13,
+      "0610011F06Rik": 200
+    }
+  }
+}

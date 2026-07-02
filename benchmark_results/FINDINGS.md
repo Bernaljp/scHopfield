@@ -366,3 +366,29 @@ Spearman rank correlation trivial baseline approx 0. "Reproducible" target = 1.0
 - Disposition: model/loss improvement. Next: validate on a real forced dataset
   (reprogramming / dox-inducible OSKM), where the OSKM factors + targets should
   carry large bias vs endogenous differentiation. audit? y.
+
+## M17: real-data bias validation on reprogramming -- INCONCLUSIVE (honest)
+
+- Data: Schiebinger 2019 MEF->iPSC serum reprogramming (dox-OSKM), 165,892 cells,
+  days 0-18 (cellrank figshare). Stratified subsample 8k cells, top-300 HVG +
+  forced OSKM/pluripotency markers. No spliced/unspliced -> velocity estimated
+  from the reprogramming day axis (estimate_velocity_from_pseudotime).
+- Prediction: genes held high by exogenous OSKM (that the endogenous network can't
+  sustain) should carry large bias -> OSKM + pluripotency enriched in high |I|.
+- Result: program-vs-rest |I| AUROC = 0.63, contrast = 1.3 (program mean|I| 0.015
+  vs rest 0.011). L1 and L2 gave IDENTICAL numbers (the bias is uniformly tiny, no
+  structure for sparsity to act on). Natural pancreas control showed AUROC 0.65 for
+  RANDOM markers -> no genuine localization. INCONCLUSIVE.
+- Why it failed (honest): (1) no true RNA velocity -- day-based velocity on
+  log-normalized data across 39 discrete, asynchronous timepoints is very noisy;
+  (2) reprogramming is inefficient/asynchronous -- most cells never reprogram (or
+  go to XEN/trophoblast), diluting the forced signal; (3) a single global GRN over
+  days 0-18 averages the forcing away; (4) in stable iPSCs the endogenous
+  pluripotency network becomes self-sustaining, so the forcing bias is largest in
+  rare transitional cells, not the bulk.
+- Takeaway: the synthetic recovery (M16) strongly supports L1 and stands; the real
+  reprogramming test is not decisive with crude time-velocity. A clean real-data
+  test needs either a reprogramming dataset WITH spliced/unspliced RNA velocity, or
+  a targeted transitional-cell / stage-contrast analysis. Not a refutation, a
+  data/velocity limitation.
+- Disposition: honest limitation; keep L1 default (synthetic-validated). audit? y.
