@@ -3,6 +3,12 @@ Quick Start
 
 This guide will walk you through a basic scHopfield analysis workflow.
 
+.. tip::
+
+   In a hurry? :func:`scHopfield.run_pipeline` runs the whole sequence below in
+   one call. See :doc:`pipeline`. This page shows the individual steps for when
+   you want finer control.
+
 Basic Workflow
 --------------
 
@@ -161,35 +167,41 @@ Simulate gene expression trajectories:
 Advanced: Perturbation Experiments
 -----------------------------------
 
-Simulate gene knockouts or overexpression:
+Simulate a gene knockout across all cells with CellOracle-style GRN propagation
+(``perturb_condition`` maps a gene to its clamped value; ``0`` is a knockout):
 
 .. code-block:: python
 
-   # Simulate GATA1 knockout
-   perturbed = sch.dyn.simulate_perturbation(
+   # Simulate a Gata1 knockout (propagation-based, all cells)
+   ko = sch.dyn.simulate_perturbation(
        adata,
-       cluster='HSC',
-       cell_idx=0,
-       gene_perturbations={'GATA1': 0.0},  # knockout
-       t_span=np.linspace(0, 20, 200)
+       perturb_condition={'Gata1': 0.0},
+       cluster_key='cell_type',
+       n_propagation=3,
+   )
+   # ko.layers['delta_X'] holds the predicted expression shift per cell
+
+Score a panel of known regulators by the *direction* of the predicted lineage
+shift (a ground-truth-anchored validation):
+
+.. code-block:: python
+
+   # First compute the wild-type Hopfield velocity flow in an embedding
+   sch.tl.calculate_flow(adata, source='original', basis='umap',
+                         method='hopfield', cluster_key='cell_type',
+                         store_key='wt_flow_umap')
+
+   # +1 = KO should bias toward lineage A; -1 = toward lineage B
+   panel = {'Gata1': -1, 'Klf1': -1, 'Spi1': +1, 'Cebpa': +1}
+   table, accuracy = sch.dyn.score_ko_panel(
+       adata, panel=panel,
+       lineage_A_clusters=['Ery'], lineage_B_clusters=['Mono', 'Neu'],
+       basis='umap', wt_flow_key='wt_flow_umap', cluster_key='cell_type',
    )
 
-   # Simulate GATA1 overexpression
-   overexpressed = sch.dyn.simulate_perturbation(
-       adata,
-       cluster='HSC',
-       cell_idx=0,
-       gene_perturbations={'GATA1': 10.0},  # overexpression
-       t_span=np.linspace(0, 20, 200)
-   )
-
-   # Compare with wild-type
-   wt = sch.dyn.simulate_trajectory(
-       adata,
-       cluster='HSC',
-       cell_idx=0,
-       t_span=np.linspace(0, 20, 200)
-   )
+For continuous ODE-based trajectories under a perturbation, use
+:func:`~scHopfield.dynamics.simulate_perturbation_ode` (single cluster/cells) or
+:func:`~scHopfield.dynamics.simulate_shift_ode` (dataset-wide).
 
 Typical Workflow Summary
 ------------------------

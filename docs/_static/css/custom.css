@@ -1,0 +1,78 @@
+/* scHopfield documentation theme overrides (pydata-sphinx-theme) */
+
+:root {
+    --pst-color-primary: #2a6f97;
+    --pst-color-secondary: #d1495b;
+    --pst-color-link: #2a6f97;
+    --pst-color-link-hover: #d1495b;
+    --pst-color-inline-code: #b5495b;
+    --sch-hero-grad-a: #2a6f97;
+    --sch-hero-grad-b: #61a5c2;
+}
+
+html[data-theme="dark"] {
+    --pst-color-primary: #61a5c2;
+    --pst-color-secondary: #e07a86;
+    --pst-color-link: #89c2d9;
+    --pst-color-link-hover: #e07a86;
+}
+
+/* --- Landing page hero --- */
+.bd-main .bd-content h1:first-of-type {
+    font-size: 3rem;
+    font-weight: 800;
+    background: linear-gradient(90deg, var(--sch-hero-grad-a), var(--sch-hero-grad-b));
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    margin-bottom: 0.25rem;
+}
+
+p.lead {
+    font-size: 1.25rem;
+    color: var(--pst-color-text-muted);
+    max-width: 46rem;
+    margin-bottom: 1.5rem;
+}
+
+/* --- Cards --- */
+.sd-card {
+    border-radius: 0.6rem;
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+.sd-card:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 8px 24px rgba(42, 111, 151, 0.18);
+    border-color: var(--pst-color-primary);
+}
+.sd-card .sd-card-title {
+    font-weight: 650;
+    color: var(--pst-color-primary);
+}
+
+/* --- Code blocks --- */
+div.highlight {
+    border-radius: 0.5rem;
+}
+
+/* --- Navbar brand --- */
+.navbar-brand p {
+    font-weight: 800;
+    font-size: 1.3rem;
+    background: linear-gradient(90deg, var(--sch-hero-grad-a), var(--sch-hero-grad-b));
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+}
+
+/* --- API autosummary tables --- */
+table.autosummary td:first-child {
+    white-space: nowrap;
+}
+dl.py.function dt,
+dl.py.class dt,
+dl.py.method dt {
+    background: var(--pst-color-surface);
+    border-left: 3px solid var(--pst-color-primary);
+    padding-left: 0.6rem;
+}

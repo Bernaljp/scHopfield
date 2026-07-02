@@ -1,84 +1,125 @@
-scHopfield Documentation
-========================
+:layout: landing
 
-**Single-cell Hopfield Network Analysis**
+scHopfield
+==========
 
-Welcome to scHopfield's documentation! This package provides comprehensive tools for analyzing single-cell RNA-seq data using Hopfield network models.
+.. rst-class:: lead
 
-.. image:: https://img.shields.io/badge/python-3.8%2B-blue.svg
-   :target: https://www.python.org/downloads/
-   :alt: Python Version
+   Energy landscapes, stability, and in-silico perturbation for single-cell gene
+   regulatory dynamics.
 
-.. image:: https://img.shields.io/badge/License-MIT-yellow.svg
-   :target: https://opensource.org/licenses/MIT
-   :alt: License
-
-Overview
---------
-
-scHopfield models gene regulatory networks (GRNs) as continuous Hopfield networks, where gene expression dynamics follow:
+scHopfield models a gene regulatory network as a continuous Hopfield system whose
+state evolves as
 
 .. math::
 
-   \frac{dx}{dt} = W \cdot \sigma(x) - \gamma \cdot x + I
+   \frac{dx}{dt} = W \, \sigma(x) - \gamma \, x + I
 
-**Key components:**
+and turns that model, fit per cell type from RNA velocity, into a Lyapunov **energy
+landscape**, **Jacobian stability** analysis, and CellOracle-style **in-silico
+knockouts**, all stored back into your :class:`~anndata.AnnData`.
 
-- **W**: Interaction matrix encoding gene-gene regulatory relationships
-- **σ(x)**: Sigmoid activation function fitted to expression data
-- **γ**: Degradation rates (mRNA decay)
-- **I**: Bias vector representing external inputs/basal expression
+.. grid:: 1 2 2 2
+   :gutter: 3
+   :margin: 4 4 0 0
 
-This formulation enables:
+   .. grid-item-card:: :octicon:`download;1.5em;sd-mr-1` Installation
+      :link: installation
+      :link-type: doc
+      :class-card: sd-border-1
 
-- Energy landscapes that quantify cellular state stability
-- Jacobian analysis for local stability and bifurcation detection
-- Network topology analysis via centrality metrics and eigenanalysis
-- Trajectory simulation for perturbation experiments and cell fate prediction
+      Install scHopfield with pip and set up an environment.
 
-Key Features
-------------
+   .. grid-item-card:: :octicon:`rocket;1.5em;sd-mr-1` Quick Start
+      :link: quickstart
+      :link-type: doc
+      :class-card: sd-border-1
 
-**Core Functionality**
+      Go from an AnnData object to an energy landscape in a dozen lines.
 
-- Preprocessing: Sigmoid function fitting to gene expression distributions
-- Network Inference: Learn interaction matrices from RNA velocity
-- Energy Landscapes: Compute and decompose into interaction, degradation, and bias components
+   .. grid-item-card:: :octicon:`book;1.5em;sd-mr-1` Tutorials
+      :link: tutorial
+      :link-type: doc
+      :class-card: sd-border-1
 
-**Network Analysis**
+      Step-by-step notebooks and the reproducible end-to-end pipeline.
 
-- Topology Analysis: Centrality metrics (degree, betweenness, eigenvector)
-- Eigenanalysis: Eigenvalue decomposition of interaction matrices
-- Network Comparison: Compare GRN structures across cell types
-- GRN Visualization: Interactive network graphs
+   .. grid-item-card:: :octicon:`code-square;1.5em;sd-mr-1` API Reference
+      :link: api/index
+      :link-type: doc
+      :class-card: sd-border-1
 
-**Stability & Dynamics**
+      Every public function, grouped by preprocessing, inference, tools,
+      dynamics, and plotting.
 
-- Jacobian Analysis: Compute Jacobian matrices at each cell state
-- Stability Metrics: Eigenvalue spectra, trace, rotational components
-- Trajectory Simulation: Simulate gene expression dynamics
-- Perturbation Analysis: In-silico gene knockouts and overexpression
+The whole pipeline, one call
+----------------------------
 
-**Visualization**
+.. code-block:: python
 
-- Energy plots: Landscapes, boxplots, scatter plots
-- Network plots: Interaction matrices, GRN graphs, centrality rankings
-- Stability plots: Jacobian eigenvalue spectra, partial derivatives on UMAP
-- Dynamics plots: Trajectory visualization
+   import scHopfield as sch
 
-Contents
---------
+   adata = sch.run_pipeline(
+       adata,
+       cluster_key="cell_type",
+       prepare=True,        # velocity + sigmoid preprocessing
+       n_top_genes=250,     # keep it tractable and comparable
+       device="cuda",
+       seed=0,
+   )
+   # -> fitted GRN, energies, Jacobian stability, and drivers,
+   #    all written back into adata.
+
+Prefer full control? Every step is an ordinary call you can run on its own, see
+:doc:`quickstart`.
+
+What you can do
+---------------
+
+.. grid:: 1 2 3 3
+   :gutter: 2
+
+   .. grid-item-card:: :octicon:`git-branch;1.2em` Cell-type GRNs
+
+      Infer cluster-specific interaction matrices from RNA velocity, with an
+      optional prior-knowledge scaffold (e.g. a CellOracle base GRN).
+
+   .. grid-item-card:: :octicon:`graph;1.2em` Energy landscapes
+
+      Compute a Lyapunov energy and decompose it into interaction,
+      degradation, and bias components to quantify state stability.
+
+   .. grid-item-card:: :octicon:`pulse;1.2em` Jacobian stability
+
+      Eigenvalue spectra at every cell state: identify unstable progenitors
+      and stable terminal attractors.
+
+   .. grid-item-card:: :octicon:`beaker;1.2em` In-silico perturbation
+
+      Knock out or overexpress genes and score the predicted lineage shift
+      against known biology.
+
+   .. grid-item-card:: :octicon:`hubot;1.2em` Network drivers
+
+      Rank driver transcription factors by centrality and GRN out-strength,
+      per cell type.
+
+   .. grid-item-card:: :octicon:`verified;1.2em` Reproducible
+
+      One seed threads through every stochastic step; the same pipeline runs
+      identically across datasets.
 
 .. toctree::
-   :maxdepth: 2
+   :hidden:
    :caption: Getting Started
 
    installation
    quickstart
    tutorial
+   pipeline
 
 .. toctree::
-   :maxdepth: 2
+   :hidden:
    :caption: User Guide & Examples
 
    Getting Started <notebooks/01_getting_started>
@@ -90,27 +131,16 @@ Contents
    Extended Perturbation <notebooks/07_perturbation_extended_analyses>
 
 .. toctree::
-   :maxdepth: 2
+   :hidden:
    :caption: API Reference
 
-   api/preprocessing
-   api/inference
-   api/tools
-   api/plotting
-   api/dynamics
+   api/index
 
 .. toctree::
-   :maxdepth: 1
-   :caption: Additional Information
+   :hidden:
+   :caption: About
 
    data_conventions
    faq
    changelog
    contributing
-
-Indices and tables
-==================
-
-* :ref:`genindex`
-* :ref:`modindex`
-* :ref:`search`

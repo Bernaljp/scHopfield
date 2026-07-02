@@ -73,3 +73,40 @@ Velocity
 
    compute_reconstructed_velocity
    validate_velocity
+   compute_velocity
+   compute_velocity_delta
+
+Flow
+----
+
+.. autosummary::
+   :toctree: generated/
+
+   calculate_flow
+   calculate_grid_flow
+   calculate_inner_product
+
+Perturbation Scoring
+--------------------
+
+.. autosummary::
+   :toctree: generated/
+
+   score_driver_tfs
+   compute_lineage_bias
+   compute_cluster_effects
+   compute_perturbation_score
+   compute_perturbation_alignment
+   lineage_de
+   grn_partner_weights
+
+Model I/O
+---------
+
+.. autosummary::
+   :toctree: generated/
+
+   save_model
+   load_model
+   save_checkpoint
+   load_checkpoint
