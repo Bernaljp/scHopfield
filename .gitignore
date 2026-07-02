@@ -119,3 +119,10 @@ scratchpad_*.log
 ~$*
 benchmark_results/logs/
 benchmark_results/*_sanity/
+
+# Sphinx build + autosummary output
+docs/_build/
+docs/api/generated/
+
+# Keep the reproducible pipeline figures (small, deliverables)
+!benchmark_results/pipeline/**/*.png
