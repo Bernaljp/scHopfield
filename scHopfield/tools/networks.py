@@ -148,7 +148,9 @@ def get_network_links(
         W = adata.varp[f'W_{k}']
 
         # Convert to DataFrame and melt to long format
-        df = pd.DataFrame(W.T, index=gene_names, columns=gene_names).reset_index()
+        # rename_axis('index') guarantees the reset column is named 'index'
+        # even when gene_names is a *named* pandas Index (else melt's id_vars fails)
+        df = pd.DataFrame(W.T, index=gene_names, columns=gene_names).rename_axis('index').reset_index()
         df = df.melt(
             id_vars='index',
             value_vars=df.columns[1:],
@@ -259,7 +261,9 @@ def compute_network_centrality(
         W = adata.varp[f'W_{cluster}']
 
         # Convert to DataFrame efficiently
-        df = pd.DataFrame(W.T, index=gene_names, columns=gene_names).reset_index()
+        # rename_axis('index') guarantees the reset column is named 'index'
+        # even when gene_names is a *named* pandas Index (else melt's id_vars fails)
+        df = pd.DataFrame(W.T, index=gene_names, columns=gene_names).rename_axis('index').reset_index()
         df = df.melt(
             id_vars='index',
             value_vars=df.columns[1:],
@@ -297,7 +301,13 @@ def compute_network_centrality(
                 result_df[f"degree_centrality_{mode}"] = np.array(degrees) / (n_vertices - 1)
 
             result_df["betweenness_centrality"] = g.betweenness(directed=True, weights="weight")
-            result_df["eigenvector_centrality"] = g.eigenvector_centrality(directed=True, weights="weight")
+            # eigenvector_centrality can raise an ARPACK/LAPACK error on disconnected
+            # or degenerate graphs; fall back to zeros rather than aborting.
+            try:
+                result_df["eigenvector_centrality"] = g.eigenvector_centrality(
+                    directed=True, weights="weight")
+            except Exception:
+                result_df["eigenvector_centrality"] = 0.0
 
         else:
             # Use NetworkX (fallback)
