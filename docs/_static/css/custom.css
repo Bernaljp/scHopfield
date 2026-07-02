@@ -50,6 +50,11 @@ p.lead {
     color: var(--pst-color-primary);
 }
 
+/* --- Hide the "#" permalink anchor that appears on heading hover --- */
+a.headerlink {
+    display: none;
+}
+
 /* --- Code blocks --- */
 div.highlight {
     border-radius: 0.5rem;

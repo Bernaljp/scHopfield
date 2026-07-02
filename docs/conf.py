@@ -60,7 +60,8 @@ autodoc_mock_imports = [
 
 templates_path = ["_templates"]
 exclude_patterns = ["_build", "Thumbs.db", ".DS_Store", "README.md",
-                    "**.ipynb_checkpoints", "methods"]
+                    "**.ipynb_checkpoints", "methods", "archive",
+                    "notebooks/Paper_Figures.ipynb"]
 
 # Markdown + reStructuredText
 source_suffix = {".rst": "restructuredtext", ".md": "markdown"}
@@ -99,13 +100,17 @@ html_theme_options = {
             "icon": "fa-brands fa-python",
         },
     ],
+    # Page navigation lives in the LEFT sidebar (sidebar-nav-bs), not the top
+    # navbar. The header keeps only the logo, search, theme switch, and icons.
     "navbar_start": ["navbar-logo"],
-    "navbar_center": ["navbar-nav"],
+    "navbar_center": [],
     "navbar_end": ["theme-switcher", "navbar-icon-links"],
     "navbar_persistent": ["search-button"],
-    "header_links_before_dropdown": 6,
     "show_prev_next": True,
     "navigation_with_keys": True,
+    "navigation_depth": 3,
+    "show_nav_level": 1,
+    "collapse_navigation": False,
     "show_toc_level": 2,
     "use_edit_page_button": False,
     "footer_start": ["copyright"],
@@ -114,8 +119,11 @@ html_theme_options = {
     "pygments_dark_style": "monokai",
 }
 
+# Left sidebar = full site navigation (custom template rendering the global
+# toctree). Right sidebar ("On this page") is the in-page TOC (page-toc),
+# configured by the theme separately, so the two never mirror each other.
 html_sidebars = {
-    "index": [],  # full-width landing page, no left sidebar
+    "**": ["sidebar-main-nav.html"],
 }
 
 # -- copybutton --------------------------------------------------------------
