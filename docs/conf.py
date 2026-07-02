@@ -59,7 +59,8 @@ autodoc_mock_imports = [
 ]
 
 templates_path = ["_templates"]
-exclude_patterns = ["_build", "Thumbs.db", ".DS_Store", "README.md", "**.ipynb_checkpoints"]
+exclude_patterns = ["_build", "Thumbs.db", ".DS_Store", "README.md",
+                    "**.ipynb_checkpoints", "methods"]
 
 # Markdown + reStructuredText
 source_suffix = {".rst": "restructuredtext", ".md": "markdown"}

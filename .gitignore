@@ -126,3 +126,10 @@ docs/api/generated/
 
 # Keep the reproducible pipeline figures (small, deliverables)
 !benchmark_results/pipeline/**/*.png
+
+# Manuscript drafts and paper documents (kept locally, out of the package repo).
+# The compiled paper lives in latex/ (main.tex + main.pdf); these are its
+# draft/source materials and old review comments.
+ManuscriptIdeaJesper/
+docs/methods/
+archive/

@@ -1,90 +1,0 @@
-scHopfield
-
-Link: https://github.com/Bernaljp/scHopfield
-
-GETTING STARTED
-
-Installation 
-
-conda create -p /ibex/scratch/ruizdeam/condaenvs/celloracle_schopfield python=3.10.8 -y
-conda activate /ibex/scratch/ruizdeam/condaenvs/celloracle_schopfield  conda install "setuptools<82" -y pip install --upgrade pip wheel
-
-pip install \ numpy==1.26.4 \ pandas==1.5.3 \ scikit-learn==1.5.2 \ matplotlib==3.6.3 \ scipy \ numba \ seaborn \ h5py \ scanpy \ anndata \ networkx \ umap-learn \ tqdm \ cython
-
-
-pip uninstall -y pims omnipath xarray-dataclasses xarray-schema dask-expr ome-zarr || true
-
-# Install mamba once in this env conda install -c conda-forge "mamba>=0.27" -y  # Install GimmeMotifs with mamba, not conda mamba install -c bioconda -c conda-forge gimmemotifs -y
-
-# Install velocyto without build isolation pip install --no-build-isolation velocyto  # Install CellOracle pip install --no-build-isolation celloracle
-
-# 9) Install scHopfield LAST  cd /path/to/scHopfield pip install -e .
-
-
-
-
-EXAMPLE NOTEBOOKS
-
-Getting Started
-
-1.2- Data loading
-pip install dynamo-release -> OK
-1.3- Preprocessing -> OK
-1.4- Sigmoid Fitting -> OK
-1.5- Network Inference -> OK
-1.6- Scaffold-Constrained Inference -> OK
-	
-
-Energy Analysis
-
-2.1 Compute & Decompose Energies -> OK
-2.2 Energy Boxplots by Cell Type -> OK
-2.3 Energy on UMAP -> OK
-2.4 Energy-Gene Correlations -> OK , but last figure gene names overlapped
-2.5 Corner Gene Identification
-		File "<stdin>", line 1, in <module>
-NameError: name 'itertools' is not defined
-import itertools
-
-
-Network Analysis
-
-3.1 Network Correlation Dendrograms -> OK
-3.2 Symmetricity Analysis -> OK
-3.3 Network Centrality -> different genes in the plot (cell20 centrality.pdf)
-3.4 Eigenanalysis -> different results (eigenanalysis.pdf)
-3.5 GRN Visualisation -> OK
-
-
-Stability Analysis
-
-4.1 Compute Jacobian Matrices -> OK. Delete empty cells
-4.2 Jacobian Statistics -> OK
-4.3 Eigenvalue Spectra -> OK
-4.4 Rotational Dynamics -> OK
-4.5 Element-wise Jacobian Analysis -> different plots for GATA1 (GATA1_jacobian_elements.pdf) and for RUNX1(CEBPA_RUNX1_GATA2_jacobian_elements.pdf)
-Perturbation Analysis
-
-5.1 Setup
->>> import scvelo as scv
-Traceback (most recent call last):
-  File "<stdin>", line 1, in <module>
-ModuleNotFoundError: No module named 'scvelo'
-
-pip install scvelo --no-deps -> OK
-
-cell29 -> no output figure??
-
-5.2 ODE-based single-cell trajectories -> different output 5.2.ODE.pdf
-
-5.3 Dataset-wide ODE Perturbation
-	Figure cell31 GATA1_OE different Gata1_OE_perturbation_heatmap.pdf
-	Figure cell33 different -> Gata1_top_affected_genes_barplots.pdf
-
-5.4 GRN Propagation-based perturbation
-	Not very different heatmap figures Gata1_KO_propagation_heatmap.pdf and Gata1_OE_propagation_heatmap.pdf
-
-5.5 Perturbation flow on embedding -> OK
-
-
-
