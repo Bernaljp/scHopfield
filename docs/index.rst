@@ -121,6 +121,7 @@ What you can do
    :caption: User Guide & Examples
 
    Getting Started <notebooks/01_getting_started>
+   End-to-End Pipeline <notebooks/08_end_to_end_pipeline>
    Energy Analysis <notebooks/02_energy_analysis>
    Network Analysis <notebooks/03_network_analysis>
    Stability Analysis <notebooks/04_stability_analysis>

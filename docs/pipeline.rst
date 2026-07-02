@@ -13,6 +13,13 @@ Every step is an ordinary ``sch.*`` call, so nothing here is a black box; the
 wrapper just wires them together with sensible defaults and records what it did in
 ``adata.uns['scHopfield_pipeline']``.
 
+.. tip::
+
+   For a fully worked, executed example, from one ``run_pipeline`` call to every
+   downstream analysis (energy, stability, drivers, eigenmodes, in-silico
+   knockouts, and a 100% known-driver KO validation), see the
+   :doc:`End-to-End Pipeline notebook <notebooks/08_end_to_end_pipeline>`.
+
 One call
 --------
 

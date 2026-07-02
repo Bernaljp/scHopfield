@@ -87,7 +87,6 @@ html_context = {
 
 html_theme_options = {
     "logo": {"text": "scHopfield"},
-    "github_url": "https://github.com/Bernaljp/scHopfield",
     "icon_links": [
         {
             "name": "GitHub",
