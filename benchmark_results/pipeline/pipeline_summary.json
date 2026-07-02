@@ -1,0 +1,786 @@
+{
+  "hematopoiesis": {
+    "name": "hematopoiesis",
+    "species": "mouse",
+    "path": "data/hematopoiesis/base_preprocessed.h5ad",
+    "n_cells": 2671,
+    "n_genes": 250,
+    "cluster_key": "paul15_clusters",
+    "clusters": [
+      "14Mo",
+      "2Ery",
+      "13Baso",
+      "3Ery",
+      "15Mo",
+      "5Ery",
+      "6Ery",
+      "7MEP",
+      "16Neu",
+      "10GMP",
+      "4Ery",
+      "12Baso",
+      "8Mk",
+      "9GMP",
+      "1Ery",
+      "17Neu"
+    ],
+    "scaffold": {
+      "n_tfs": 8,
+      "n_edges": 1045
+    },
+    "seed": 0,
+    "pipeline_steps": [
+      "fit_interactions (scaffold)",
+      "compute_energies",
+      "compute_jacobians + stats",
+      "compute_network_centrality"
+    ],
+    "stability_by_cluster": {
+      "14Mo": {
+        "energy_total": 8.665209238454127,
+        "jacobian_eig1_real": -0.017072884365916252,
+        "jacobian_positive_evals": 1.0,
+        "jacobian_trace": -4.243847370147705
+      },
+      "2Ery": {
+        "energy_total": 8.363658112235584,
+        "jacobian_eig1_real": -0.05616563931107521,
+        "jacobian_positive_evals": 1.0,
+        "jacobian_trace": -7.903641223907471
+      },
+      "13Baso": {
+        "energy_total": 9.114698870227233,
+        "jacobian_eig1_real": -0.03398124501109123,
+        "jacobian_positive_evals": 1.0,
+        "jacobian_trace": -4.37337064743042
+      },
+      "3Ery": {
+        "energy_total": 8.48054988284777,
+        "jacobian_eig1_real": -0.0461898110806942,
+        "jacobian_positive_evals": 1.0,
+        "jacobian_trace": -7.811493873596191
+      },
+      "15Mo": {
+        "energy_total": 7.5294818589693,
+        "jacobian_eig1_real": -0.05091753229498863,
+        "jacobian_positive_evals": 1.0,
+        "jacobian_trace": -5.763340473175049
+      },
+      "5Ery": {
+        "energy_total": 8.39605829315682,
+        "jacobian_eig1_real": -0.05541456118226051,
+        "jacobian_positive_evals": 1.0,
+        "jacobian_trace": -8.273335456848145
+      },
+      "6Ery": {
+        "energy_total": 6.247425132034532,
+        "jacobian_eig1_real": -0.03733121231198311,
+        "jacobian_positive_evals": 1.0,
+        "jacobian_trace": -8.048460960388184
+      },
+      "7MEP": {
+        "energy_total": 2.897434011652701,
+        "jacobian_eig1_real": -0.04307101294398308,
+        "jacobian_positive_evals": 0.0,
+        "jacobian_trace": -8.33221435546875
+      },
+      "16Neu": {
+        "energy_total": 6.30702691397125,
+        "jacobian_eig1_real": -0.04383167624473572,
+        "jacobian_positive_evals": 1.0,
+        "jacobian_trace": -6.649280071258545
+      },
+      "10GMP": {
+        "energy_total": 6.597159838022409,
+        "jacobian_eig1_real": -0.03387807309627533,
+        "jacobian_positive_evals": 1.0,
+        "jacobian_trace": -5.518725872039795
+      },
+      "4Ery": {
+        "energy_total": 8.395024817392287,
+        "jacobian_eig1_real": -0.047620370984077454,
+        "jacobian_positive_evals": 1.0,
+        "jacobian_trace": -8.598976135253906
+      },
+      "12Baso": {
+        "energy_total": 4.3838073363298875,
+        "jacobian_eig1_real": -0.05777492746710777,
+        "jacobian_positive_evals": 0.0,
+        "jacobian_trace": -8.194954872131348
+      },
+      "8Mk": {
+        "energy_total": 4.826944531901902,
+        "jacobian_eig1_real": -0.05753474310040474,
+        "jacobian_positive_evals": 0.0,
+        "jacobian_trace": -12.110578536987305
+      },
+      "9GMP": {
+        "energy_total": 5.437308562837457,
+        "jacobian_eig1_real": -0.035808760672807693,
+        "jacobian_positive_evals": 1.0,
+        "jacobian_trace": -7.795281410217285
+      },
+      "1Ery": {
+        "energy_total": 5.225498703155135,
+        "jacobian_eig1_real": -0.09598500281572342,
+        "jacobian_positive_evals": 2.0,
+        "jacobian_trace": -16.788684844970703
+      },
+      "17Neu": {
+        "energy_total": 3.0055568336428813,
+        "jacobian_eig1_real": -0.06385785341262817,
+        "jacobian_positive_evals": 0.0,
+        "jacobian_trace": -15.376113891601562
+      }
+    },
+    "top_drivers": [
+      {
+        "gene": "Myc",
+        "out_strength": 3.035952091217041
+      },
+      {
+        "gene": "Ybx1",
+        "out_strength": 2.1105101108551025
+      },
+      {
+        "gene": "Nfe2",
+        "out_strength": 1.8171073198318481
+      },
+      {
+        "gene": "Myb",
+        "out_strength": 1.4986040592193604
+      },
+      {
+        "gene": "Smarcc1",
+        "out_strength": 0.9656010866165161
+      },
+      {
+        "gene": "Cux1",
+        "out_strength": 0.5341297388076782
+      },
+      {
+        "gene": "Lmo2",
+        "out_strength": 0.48571693897247314
+      },
+      {
+        "gene": "Smarcc2",
+        "out_strength": 0.4390183389186859
+      },
+      {
+        "gene": "Ucp2",
+        "out_strength": 0.0
+      },
+      {
+        "gene": "Vamp8",
+        "out_strength": 0.0
+      },
+      {
+        "gene": "Uba1",
+        "out_strength": 0.0
+      },
+      {
+        "gene": "Tubb5",
+        "out_strength": 0.0
+      }
+    ],
+    "perturbation": {
+      "target": "Myc",
+      "impact_per_cluster": {
+        "14Mo": 0.016499880701303482,
+        "2Ery": 0.02559618465602398,
+        "13Baso": 0.011435731314122677,
+        "3Ery": 0.031404461711645126,
+        "15Mo": 0.014037529937922955,
+        "5Ery": 0.0434127114713192,
+        "6Ery": 0.028971804305911064,
+        "7MEP": 0.00785543117672205,
+        "16Neu": 0.012955611571669579,
+        "10GMP": 0.01346119400113821,
+        "4Ery": 0.04098467156291008,
+        "12Baso": 0.0036409907042980194,
+        "8Mk": 0.006399752572178841,
+        "9GMP": 0.016460459679365158,
+        "1Ery": 0.053758587688207626,
+        "17Neu": 0.001366559648886323
+      }
+    }
+  },
+  "pancreas": {
+    "name": "pancreas",
+    "species": "mouse",
+    "path": "data/Pancreas/pancreas_scvelo_ready.h5ad",
+    "n_cells": 3696,
+    "n_genes": 250,
+    "cluster_key": "clusters",
+    "clusters": [
+      "Ductal",
+      "Ngn3 high EP",
+      "Pre-endocrine",
+      "Beta",
+      "Alpha",
+      "Ngn3 low EP",
+      "Epsilon",
+      "Delta"
+    ],
+    "scaffold": null,
+    "seed": 0,
+    "pipeline_steps": [
+      "fit_sigmoids",
+      "select_top_velocity_genes(n=250)",
+      "fit_interactions (pseudoinverse)",
+      "compute_energies",
+      "compute_jacobians + stats",
+      "compute_network_centrality"
+    ],
+    "stability_by_cluster": {
+      "Ductal": {
+        "energy_total": -10982.298951720997,
+        "jacobian_eig1_real": -33.770240783691406,
+        "jacobian_positive_evals": 6.0,
+        "jacobian_trace": -1400.4927978515625
+      },
+      "Ngn3 high EP": {
+        "energy_total": -7557.762443052335,
+        "jacobian_eig1_real": -44.03828048706055,
+        "jacobian_positive_evals": 6.0,
+        "jacobian_trace": -1399.8905029296875
+      },
+      "Pre-endocrine": {
+        "energy_total": -2000.8009935168598,
+        "jacobian_eig1_real": -47.33979797363281,
+        "jacobian_positive_evals": 4.0,
+        "jacobian_trace": -1394.484375
+      },
+      "Beta": {
+        "energy_total": -1873.070253831954,
+        "jacobian_eig1_real": -48.07701873779297,
+        "jacobian_positive_evals": 3.0,
+        "jacobian_trace": -1403.7698974609375
+      },
+      "Alpha": {
+        "energy_total": -3285.236605586999,
+        "jacobian_eig1_real": -47.565860748291016,
+        "jacobian_positive_evals": 3.0,
+        "jacobian_trace": -1402.56103515625
+      },
+      "Ngn3 low EP": {
+        "energy_total": -32322.503360962088,
+        "jacobian_eig1_real": -32.592376708984375,
+        "jacobian_positive_evals": 23.0,
+        "jacobian_trace": -1404.1656494140625
+      },
+      "Epsilon": {
+        "energy_total": -1030.4704989038323,
+        "jacobian_eig1_real": -47.037506103515625,
+        "jacobian_positive_evals": 3.0,
+        "jacobian_trace": -1405.453369140625
+      },
+      "Delta": {
+        "energy_total": -395.5372782752842,
+        "jacobian_eig1_real": -49.75203323364258,
+        "jacobian_positive_evals": 0.0,
+        "jacobian_trace": -1418.27099609375
+      }
+    },
+    "top_drivers": [
+      {
+        "gene": "Pam",
+        "out_strength": 12097.226445880906
+      },
+      {
+        "gene": "Rfx6",
+        "out_strength": 7527.668843446741
+      },
+      {
+        "gene": "Ptprn2",
+        "out_strength": 6432.3354661554595
+      },
+      {
+        "gene": "Kcnmb2",
+        "out_strength": 6154.54036693045
+      },
+      {
+        "gene": "Cacna2d1",
+        "out_strength": 4672.243054219542
+      },
+      {
+        "gene": "Slc7a14",
+        "out_strength": 3930.6433632085946
+      },
+      {
+        "gene": "Abcc8",
+        "out_strength": 2987.2357838602265
+      },
+      {
+        "gene": "Ank",
+        "out_strength": 2432.2465769161518
+      },
+      {
+        "gene": "Nxph1",
+        "out_strength": 2368.0461009293504
+      },
+      {
+        "gene": "Kcnb2",
+        "out_strength": 1576.8782338698152
+      },
+      {
+        "gene": "Pex5l",
+        "out_strength": 1509.4116587636595
+      },
+      {
+        "gene": "Nol4",
+        "out_strength": 1005.5611299817981
+      }
+    ],
+    "perturbation": {
+      "target": "Pam",
+      "impact_per_cluster": {
+        "Ductal": 0.056730568408966064,
+        "Ngn3 high EP": 0.004310360178351402,
+        "Pre-endocrine": 0.30314821004867554,
+        "Beta": 0.34715959429740906,
+        "Alpha": 0.5255440473556519,
+        "Ngn3 low EP": 0.18005669116973877,
+        "Epsilon": 0.33577126264572144,
+        "Delta": 0.2781761586666107
+      }
+    }
+  },
+  "murine_nc": {
+    "name": "murine_nc",
+    "species": "mouse",
+    "path": "data/generalize/murine_nc.h5ad",
+    "n_cells": 6788,
+    "n_genes": 250,
+    "cluster_key": "celltype_update",
+    "clusters": [
+      "Neural crest (PNS neurons)",
+      "Neural crest (PNS glia)",
+      "Myelinating Schwann cells",
+      "Otic sensory neurons",
+      "Myelinating Schwann cells (Tgfb2+)",
+      "Dorsal root ganglion neurons",
+      "Enteric neurons",
+      "Melanocyte cells",
+      "Olfactory ensheathing cells"
+    ],
+    "scaffold": null,
+    "seed": 0,
+    "pipeline_steps": [
+      "select_top_velocity_genes(n=250)",
+      "fit_interactions (pseudoinverse)",
+      "compute_energies",
+      "compute_jacobians + stats",
+      "compute_network_centrality FAILED: KeyError: \"The following id_vars or value_vars are not present in the DataFrame: ['index']\""
+    ],
+    "stability_by_cluster": {
+      "Neural crest (PNS neurons)": {
+        "energy_total": -129.48293309631774,
+        "jacobian_eig1_real": 0.33867207169532776,
+        "jacobian_positive_evals": 3.0,
+        "jacobian_trace": -245.71707153320312
+      },
+      "Neural crest (PNS glia)": {
+        "energy_total": -389.08867606781774,
+        "jacobian_eig1_real": 0.43880996108055115,
+        "jacobian_positive_evals": 5.0,
+        "jacobian_trace": -246.54681396484375
+      },
+      "Myelinating Schwann cells": {
+        "energy_total": -636.5739757032068,
+        "jacobian_eig1_real": 0.16277502477169037,
+        "jacobian_positive_evals": 3.0,
+        "jacobian_trace": -248.67051696777344
+      },
+      "Otic sensory neurons": {
+        "energy_total": -444.5806405817492,
+        "jacobian_eig1_real": -0.7333425283432007,
+        "jacobian_positive_evals": 12.0,
+        "jacobian_trace": -252.1942596435547
+      },
+      "Myelinating Schwann cells (Tgfb2+)": {
+        "energy_total": -1767.0310653994761,
+        "jacobian_eig1_real": -2.668771982192993,
+        "jacobian_positive_evals": 16.0,
+        "jacobian_trace": -249.8177032470703
+      },
+      "Dorsal root ganglion neurons": {
+        "energy_total": -3800.3458959648383,
+        "jacobian_eig1_real": 5.884161949157715,
+        "jacobian_positive_evals": 26.0,
+        "jacobian_trace": -245.78253173828125
+      },
+      "Enteric neurons": {
+        "energy_total": -78.92496788330936,
+        "jacobian_eig1_real": 0.01908901333808899,
+        "jacobian_positive_evals": 1.0,
+        "jacobian_trace": -256.9263916015625
+      },
+      "Melanocyte cells": {
+        "energy_total": -143.23573515510998,
+        "jacobian_eig1_real": -0.013128824532032013,
+        "jacobian_positive_evals": 0.0,
+        "jacobian_trace": -258.4354248046875
+      },
+      "Olfactory ensheathing cells": {
+        "energy_total": -165.22507933351775,
+        "jacobian_eig1_real": 0.10475966334342957,
+        "jacobian_positive_evals": 1.0,
+        "jacobian_trace": -256.2403259277344
+      }
+    },
+    "top_drivers": [
+      {
+        "gene": "Wwtr1",
+        "out_strength": 15.72865041080026
+      },
+      {
+        "gene": "Pcdh1",
+        "out_strength": 13.740781535903475
+      },
+      {
+        "gene": "Rtn1",
+        "out_strength": 11.5124067578564
+      },
+      {
+        "gene": "Filip1l",
+        "out_strength": 11.040911612315941
+      },
+      {
+        "gene": "Lamc1",
+        "out_strength": 10.995450564728088
+      },
+      {
+        "gene": "Ina",
+        "out_strength": 9.826236232115274
+      },
+      {
+        "gene": "Yap1",
+        "out_strength": 9.507222804105446
+      },
+      {
+        "gene": "Fbn1",
+        "out_strength": 9.375850240767004
+      },
+      {
+        "gene": "Stmn2",
+        "out_strength": 8.773935547247488
+      },
+      {
+        "gene": "Nedd1",
+        "out_strength": 8.318210427849454
+      },
+      {
+        "gene": "Tcf7l1",
+        "out_strength": 8.233487258100148
+      },
+      {
+        "gene": "Fbn2",
+        "out_strength": 8.113289485706286
+      }
+    ],
+    "perturbation": {
+      "target": "Wwtr1",
+      "impact_per_cluster": {
+        "Neural crest (PNS neurons)": 0.001128438743762672,
+        "Neural crest (PNS glia)": 0.028279198333621025,
+        "Myelinating Schwann cells": 0.04130106791853905,
+        "Otic sensory neurons": 0.001065631746314466,
+        "Myelinating Schwann cells (Tgfb2+)": 0.14224150776863098,
+        "Dorsal root ganglion neurons": 0.0682065561413765,
+        "Enteric neurons": 9.724991832626984e-05,
+        "Melanocyte cells": 0.0011887974105775356,
+        "Olfactory ensheathing cells": 0.030907968059182167
+      }
+    }
+  },
+  "human_limb": {
+    "name": "human_limb",
+    "species": "human",
+    "path": "data/generalize/human_limb.h5ad",
+    "n_cells": 12207,
+    "n_genes": 250,
+    "cluster_key": "leiden_R_celltype",
+    "clusters": [
+      "PAX7+MyoProg2",
+      "PAX7+MyoProg1",
+      "PAX3+PAX7+MyoProg",
+      "MyoB2",
+      "MyoB1",
+      "MyoC2",
+      "PAX3+MyoProg",
+      "MyoC1",
+      "MYL3+MyoC",
+      "MYH3+MyoC"
+    ],
+    "scaffold": null,
+    "seed": 0,
+    "pipeline_steps": [
+      "select_top_velocity_genes(n=250)",
+      "fit_interactions (pseudoinverse)",
+      "compute_energies",
+      "compute_jacobians + stats",
+      "compute_network_centrality FAILED: KeyError: \"The following id_vars or value_vars are not present in the DataFrame: ['index']\""
+    ],
+    "stability_by_cluster": {
+      "PAX7+MyoProg2": {
+        "energy_total": -187.75675626769524,
+        "jacobian_eig1_real": 0.234304279088974,
+        "jacobian_positive_evals": 9.0,
+        "jacobian_trace": -204.4449462890625
+      },
+      "PAX7+MyoProg1": {
+        "energy_total": -260.6256435756862,
+        "jacobian_eig1_real": 0.2851583957672119,
+        "jacobian_positive_evals": 10.0,
+        "jacobian_trace": -206.6361541748047
+      },
+      "PAX3+PAX7+MyoProg": {
+        "energy_total": -192.339353482307,
+        "jacobian_eig1_real": 0.26910078525543213,
+        "jacobian_positive_evals": 14.0,
+        "jacobian_trace": -203.7068328857422
+      },
+      "MyoB2": {
+        "energy_total": -209.87675432211367,
+        "jacobian_eig1_real": 0.48711317777633667,
+        "jacobian_positive_evals": 17.0,
+        "jacobian_trace": -203.90890502929688
+      },
+      "MyoB1": {
+        "energy_total": -255.72319454486393,
+        "jacobian_eig1_real": -1.0321376323699951,
+        "jacobian_positive_evals": 25.0,
+        "jacobian_trace": -206.1659393310547
+      },
+      "MyoC2": {
+        "energy_total": -709.3624007972779,
+        "jacobian_eig1_real": -0.29366421699523926,
+        "jacobian_positive_evals": 20.0,
+        "jacobian_trace": -210.09490966796875
+      },
+      "PAX3+MyoProg": {
+        "energy_total": -383.24151642108274,
+        "jacobian_eig1_real": 1.0696005821228027,
+        "jacobian_positive_evals": 25.0,
+        "jacobian_trace": -207.83615112304688
+      },
+      "MyoC1": {
+        "energy_total": -981.5712169223643,
+        "jacobian_eig1_real": -0.6380815505981445,
+        "jacobian_positive_evals": 26.0,
+        "jacobian_trace": -212.69046020507812
+      },
+      "MYL3+MyoC": {
+        "energy_total": -401.97961355009147,
+        "jacobian_eig1_real": 1.2314162254333496,
+        "jacobian_positive_evals": 15.0,
+        "jacobian_trace": -216.1435546875
+      },
+      "MYH3+MyoC": {
+        "energy_total": -884.7426504764882,
+        "jacobian_eig1_real": -1.2852426767349243,
+        "jacobian_positive_evals": 23.0,
+        "jacobian_trace": -211.08224487304688
+      }
+    },
+    "top_drivers": [
+      {
+        "gene": "COBL",
+        "out_strength": 28.770411134788997
+      },
+      {
+        "gene": "MEST",
+        "out_strength": 13.968865656634488
+      },
+      {
+        "gene": "SHD",
+        "out_strength": 13.771955519779011
+      },
+      {
+        "gene": "PTMA",
+        "out_strength": 13.234421016246674
+      },
+      {
+        "gene": "GPC3",
+        "out_strength": 11.252340634344904
+      },
+      {
+        "gene": "C1QTNF3",
+        "out_strength": 10.55954014427758
+      },
+      {
+        "gene": "RPL34",
+        "out_strength": 10.523010135576403
+      },
+      {
+        "gene": "ACTB",
+        "out_strength": 9.429324345565341
+      },
+      {
+        "gene": "IGFBP5",
+        "out_strength": 9.073693164328107
+      },
+      {
+        "gene": "SPATS2L",
+        "out_strength": 8.475697631852729
+      },
+      {
+        "gene": "MSC",
+        "out_strength": 8.143022571184467
+      },
+      {
+        "gene": "COL3A1",
+        "out_strength": 8.130326073566058
+      }
+    ],
+    "perturbation": {
+      "target": "COBL",
+      "impact_per_cluster": {
+        "PAX7+MyoProg2": 0.0021272990852594376,
+        "PAX7+MyoProg1": 0.0024541844613850117,
+        "PAX3+PAX7+MyoProg": 0.0018933999817818403,
+        "MyoB2": 0.011407144367694855,
+        "MyoB1": 0.004303878638893366,
+        "MyoC2": 0.06514464318752289,
+        "PAX3+MyoProg": 0.009422574192285538,
+        "MyoC1": 0.12927716970443726,
+        "MYL3+MyoC": 0.07797960191965103,
+        "MYH3+MyoC": 0.1896100640296936
+      }
+    }
+  },
+  "schwann": {
+    "name": "schwann",
+    "species": "mouse",
+    "path": "/home/bernaljp/Documents/DynamiSC/Data/schwann.h5ad",
+    "n_cells": 8821,
+    "n_genes": 250,
+    "cluster_key": "location",
+    "clusters": [
+      "Trunk",
+      "Sympathoadrenal system",
+      "Limb",
+      "Enteric",
+      "Cranial",
+      "DRG",
+      "Incisor"
+    ],
+    "scaffold": null,
+    "seed": 0,
+    "pipeline_steps": [
+      "prepare_dataset",
+      "select_top_velocity_genes(n=250)",
+      "fit_interactions (pseudoinverse)",
+      "compute_energies",
+      "compute_jacobians + stats",
+      "compute_network_centrality"
+    ],
+    "stability_by_cluster": {
+      "Trunk": {
+        "energy_total": -228.578152740964,
+        "jacobian_eig1_real": 1.9900233745574951,
+        "jacobian_positive_evals": 36.0,
+        "jacobian_trace": -174.75540161132812
+      },
+      "Sympathoadrenal system": {
+        "energy_total": -298.427251477474,
+        "jacobian_eig1_real": 0.9253444671630859,
+        "jacobian_positive_evals": 29.0,
+        "jacobian_trace": -186.91943359375
+      },
+      "Limb": {
+        "energy_total": -2307.4018292705014,
+        "jacobian_eig1_real": 1.7257664203643799,
+        "jacobian_positive_evals": 37.5,
+        "jacobian_trace": -189.06216430664062
+      },
+      "Enteric": {
+        "energy_total": -379.02658885612317,
+        "jacobian_eig1_real": 0.672173261642456,
+        "jacobian_positive_evals": 39.0,
+        "jacobian_trace": -186.63104248046875
+      },
+      "Cranial": {
+        "energy_total": -2255.2384631207124,
+        "jacobian_eig1_real": 5.237983703613281,
+        "jacobian_positive_evals": 48.0,
+        "jacobian_trace": -173.3738250732422
+      },
+      "DRG": {
+        "energy_total": -2138.5330922881103,
+        "jacobian_eig1_real": 2.032196044921875,
+        "jacobian_positive_evals": 39.0,
+        "jacobian_trace": -192.6646728515625
+      },
+      "Incisor": {
+        "energy_total": -1221.3266448118993,
+        "jacobian_eig1_real": 2.058547258377075,
+        "jacobian_positive_evals": 20.5,
+        "jacobian_trace": -214.2975616455078
+      }
+    },
+    "top_drivers": [
+      {
+        "gene": "Egr1",
+        "out_strength": 195.45922902309036
+      },
+      {
+        "gene": "Cd59a",
+        "out_strength": 59.15701420052142
+      },
+      {
+        "gene": "Plekhb1",
+        "out_strength": 43.878527461862866
+      },
+      {
+        "gene": "Uchl1",
+        "out_strength": 40.0507341272022
+      },
+      {
+        "gene": "Ddc",
+        "out_strength": 35.28893955445469
+      },
+      {
+        "gene": "Rab3b",
+        "out_strength": 34.12178994121155
+      },
+      {
+        "gene": "Cmtm5",
+        "out_strength": 33.44589069364298
+      },
+      {
+        "gene": "Pcsk1n",
+        "out_strength": 33.23939255932501
+      },
+      {
+        "gene": "Meg3",
+        "out_strength": 32.492670642964754
+      },
+      {
+        "gene": "Tspan15",
+        "out_strength": 32.211515501097416
+      },
+      {
+        "gene": "Fam19a5",
+        "out_strength": 32.10998645220637
+      },
+      {
+        "gene": "Prss23",
+        "out_strength": 29.541008834581955
+      }
+    ],
+    "perturbation": {
+      "target": "Egr1",
+      "impact_per_cluster": {
+        "Trunk": 0.004578816704452038,
+        "Sympathoadrenal system": 0.03463515266776085,
+        "Limb": 0.10812172293663025,
+        "Enteric": 0.05072006955742836,
+        "Cranial": 0.03567790240049362,
+        "DRG": 0.10348010063171387,
+        "Incisor": 0.20785918831825256
+      }
+    }
+  }
+}

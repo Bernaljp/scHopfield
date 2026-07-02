@@ -1,0 +1,133 @@
+{
+  "name": "schwann",
+  "species": "mouse",
+  "path": "/home/bernaljp/Documents/DynamiSC/Data/schwann.h5ad",
+  "n_cells": 8821,
+  "n_genes": 250,
+  "cluster_key": "location",
+  "clusters": [
+    "Trunk",
+    "Sympathoadrenal system",
+    "Limb",
+    "Enteric",
+    "Cranial",
+    "DRG",
+    "Incisor"
+  ],
+  "scaffold": null,
+  "seed": 0,
+  "pipeline_steps": [
+    "prepare_dataset",
+    "select_top_velocity_genes(n=250)",
+    "fit_interactions (pseudoinverse)",
+    "compute_energies",
+    "compute_jacobians + stats",
+    "compute_network_centrality"
+  ],
+  "stability_by_cluster": {
+    "Trunk": {
+      "energy_total": -228.578152740964,
+      "jacobian_eig1_real": 1.9900233745574951,
+      "jacobian_positive_evals": 36.0,
+      "jacobian_trace": -174.75540161132812
+    },
+    "Sympathoadrenal system": {
+      "energy_total": -298.427251477474,
+      "jacobian_eig1_real": 0.9253444671630859,
+      "jacobian_positive_evals": 29.0,
+      "jacobian_trace": -186.91943359375
+    },
+    "Limb": {
+      "energy_total": -2307.4018292705014,
+      "jacobian_eig1_real": 1.7257664203643799,
+      "jacobian_positive_evals": 37.5,
+      "jacobian_trace": -189.06216430664062
+    },
+    "Enteric": {
+      "energy_total": -379.02658885612317,
+      "jacobian_eig1_real": 0.672173261642456,
+      "jacobian_positive_evals": 39.0,
+      "jacobian_trace": -186.63104248046875
+    },
+    "Cranial": {
+      "energy_total": -2255.2384631207124,
+      "jacobian_eig1_real": 5.237983703613281,
+      "jacobian_positive_evals": 48.0,
+      "jacobian_trace": -173.3738250732422
+    },
+    "DRG": {
+      "energy_total": -2138.5330922881103,
+      "jacobian_eig1_real": 2.032196044921875,
+      "jacobian_positive_evals": 39.0,
+      "jacobian_trace": -192.6646728515625
+    },
+    "Incisor": {
+      "energy_total": -1221.3266448118993,
+      "jacobian_eig1_real": 2.058547258377075,
+      "jacobian_positive_evals": 20.5,
+      "jacobian_trace": -214.2975616455078
+    }
+  },
+  "top_drivers": [
+    {
+      "gene": "Egr1",
+      "out_strength": 195.45922902309036
+    },
+    {
+      "gene": "Cd59a",
+      "out_strength": 59.15701420052142
+    },
+    {
+      "gene": "Plekhb1",
+      "out_strength": 43.878527461862866
+    },
+    {
+      "gene": "Uchl1",
+      "out_strength": 40.0507341272022
+    },
+    {
+      "gene": "Ddc",
+      "out_strength": 35.28893955445469
+    },
+    {
+      "gene": "Rab3b",
+      "out_strength": 34.12178994121155
+    },
+    {
+      "gene": "Cmtm5",
+      "out_strength": 33.44589069364298
+    },
+    {
+      "gene": "Pcsk1n",
+      "out_strength": 33.23939255932501
+    },
+    {
+      "gene": "Meg3",
+      "out_strength": 32.492670642964754
+    },
+    {
+      "gene": "Tspan15",
+      "out_strength": 32.211515501097416
+    },
+    {
+      "gene": "Fam19a5",
+      "out_strength": 32.10998645220637
+    },
+    {
+      "gene": "Prss23",
+      "out_strength": 29.541008834581955
+    }
+  ],
+  "perturbation": {
+    "target": "Egr1",
+    "impact_per_cluster": {
+      "Trunk": 0.004578816704452038,
+      "Sympathoadrenal system": 0.03463515266776085,
+      "Limb": 0.10812172293663025,
+      "Enteric": 0.05072006955742836,
+      "Cranial": 0.03567790240049362,
+      "DRG": 0.10348010063171387,
+      "Incisor": 0.20785918831825256
+    }
+  }
+}

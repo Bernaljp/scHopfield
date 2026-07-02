@@ -1,0 +1,156 @@
+{
+  "name": "human_limb",
+  "species": "human",
+  "path": "data/generalize/human_limb.h5ad",
+  "n_cells": 12207,
+  "n_genes": 250,
+  "cluster_key": "leiden_R_celltype",
+  "clusters": [
+    "PAX7+MyoProg2",
+    "PAX7+MyoProg1",
+    "PAX3+PAX7+MyoProg",
+    "MyoB2",
+    "MyoB1",
+    "MyoC2",
+    "PAX3+MyoProg",
+    "MyoC1",
+    "MYL3+MyoC",
+    "MYH3+MyoC"
+  ],
+  "scaffold": null,
+  "seed": 0,
+  "pipeline_steps": [
+    "select_top_velocity_genes(n=250)",
+    "fit_interactions (pseudoinverse)",
+    "compute_energies",
+    "compute_jacobians + stats",
+    "compute_network_centrality FAILED: KeyError: \"The following id_vars or value_vars are not present in the DataFrame: ['index']\""
+  ],
+  "stability_by_cluster": {
+    "PAX7+MyoProg2": {
+      "energy_total": -187.75675626769524,
+      "jacobian_eig1_real": 0.234304279088974,
+      "jacobian_positive_evals": 9.0,
+      "jacobian_trace": -204.4449462890625
+    },
+    "PAX7+MyoProg1": {
+      "energy_total": -260.6256435756862,
+      "jacobian_eig1_real": 0.2851583957672119,
+      "jacobian_positive_evals": 10.0,
+      "jacobian_trace": -206.6361541748047
+    },
+    "PAX3+PAX7+MyoProg": {
+      "energy_total": -192.339353482307,
+      "jacobian_eig1_real": 0.26910078525543213,
+      "jacobian_positive_evals": 14.0,
+      "jacobian_trace": -203.7068328857422
+    },
+    "MyoB2": {
+      "energy_total": -209.87675432211367,
+      "jacobian_eig1_real": 0.48711317777633667,
+      "jacobian_positive_evals": 17.0,
+      "jacobian_trace": -203.90890502929688
+    },
+    "MyoB1": {
+      "energy_total": -255.72319454486393,
+      "jacobian_eig1_real": -1.0321376323699951,
+      "jacobian_positive_evals": 25.0,
+      "jacobian_trace": -206.1659393310547
+    },
+    "MyoC2": {
+      "energy_total": -709.3624007972779,
+      "jacobian_eig1_real": -0.29366421699523926,
+      "jacobian_positive_evals": 20.0,
+      "jacobian_trace": -210.09490966796875
+    },
+    "PAX3+MyoProg": {
+      "energy_total": -383.24151642108274,
+      "jacobian_eig1_real": 1.0696005821228027,
+      "jacobian_positive_evals": 25.0,
+      "jacobian_trace": -207.83615112304688
+    },
+    "MyoC1": {
+      "energy_total": -981.5712169223643,
+      "jacobian_eig1_real": -0.6380815505981445,
+      "jacobian_positive_evals": 26.0,
+      "jacobian_trace": -212.69046020507812
+    },
+    "MYL3+MyoC": {
+      "energy_total": -401.97961355009147,
+      "jacobian_eig1_real": 1.2314162254333496,
+      "jacobian_positive_evals": 15.0,
+      "jacobian_trace": -216.1435546875
+    },
+    "MYH3+MyoC": {
+      "energy_total": -884.7426504764882,
+      "jacobian_eig1_real": -1.2852426767349243,
+      "jacobian_positive_evals": 23.0,
+      "jacobian_trace": -211.08224487304688
+    }
+  },
+  "top_drivers": [
+    {
+      "gene": "COBL",
+      "out_strength": 28.770411134788997
+    },
+    {
+      "gene": "MEST",
+      "out_strength": 13.968865656634488
+    },
+    {
+      "gene": "SHD",
+      "out_strength": 13.771955519779011
+    },
+    {
+      "gene": "PTMA",
+      "out_strength": 13.234421016246674
+    },
+    {
+      "gene": "GPC3",
+      "out_strength": 11.252340634344904
+    },
+    {
+      "gene": "C1QTNF3",
+      "out_strength": 10.55954014427758
+    },
+    {
+      "gene": "RPL34",
+      "out_strength": 10.523010135576403
+    },
+    {
+      "gene": "ACTB",
+      "out_strength": 9.429324345565341
+    },
+    {
+      "gene": "IGFBP5",
+      "out_strength": 9.073693164328107
+    },
+    {
+      "gene": "SPATS2L",
+      "out_strength": 8.475697631852729
+    },
+    {
+      "gene": "MSC",
+      "out_strength": 8.143022571184467
+    },
+    {
+      "gene": "COL3A1",
+      "out_strength": 8.130326073566058
+    }
+  ],
+  "perturbation": {
+    "target": "COBL",
+    "impact_per_cluster": {
+      "PAX7+MyoProg2": 0.0021272990852594376,
+      "PAX7+MyoProg1": 0.0024541844613850117,
+      "PAX3+PAX7+MyoProg": 0.0018933999817818403,
+      "MyoB2": 0.011407144367694855,
+      "MyoB1": 0.004303878638893366,
+      "MyoC2": 0.06514464318752289,
+      "PAX3+MyoProg": 0.009422574192285538,
+      "MyoC1": 0.12927716970443726,
+      "MYL3+MyoC": 0.07797960191965103,
+      "MYH3+MyoC": 0.1896100640296936
+    }
+  }
+}

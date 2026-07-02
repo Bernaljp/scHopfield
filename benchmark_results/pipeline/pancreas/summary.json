@@ -1,0 +1,141 @@
+{
+  "name": "pancreas",
+  "species": "mouse",
+  "path": "data/Pancreas/pancreas_scvelo_ready.h5ad",
+  "n_cells": 3696,
+  "n_genes": 250,
+  "cluster_key": "clusters",
+  "clusters": [
+    "Ductal",
+    "Ngn3 high EP",
+    "Pre-endocrine",
+    "Beta",
+    "Alpha",
+    "Ngn3 low EP",
+    "Epsilon",
+    "Delta"
+  ],
+  "scaffold": null,
+  "seed": 0,
+  "pipeline_steps": [
+    "fit_sigmoids",
+    "select_top_velocity_genes(n=250)",
+    "fit_interactions (pseudoinverse)",
+    "compute_energies",
+    "compute_jacobians + stats",
+    "compute_network_centrality"
+  ],
+  "stability_by_cluster": {
+    "Ductal": {
+      "energy_total": -10982.298951720997,
+      "jacobian_eig1_real": -33.770240783691406,
+      "jacobian_positive_evals": 6.0,
+      "jacobian_trace": -1400.4927978515625
+    },
+    "Ngn3 high EP": {
+      "energy_total": -7557.762443052335,
+      "jacobian_eig1_real": -44.03828048706055,
+      "jacobian_positive_evals": 6.0,
+      "jacobian_trace": -1399.8905029296875
+    },
+    "Pre-endocrine": {
+      "energy_total": -2000.8009935168598,
+      "jacobian_eig1_real": -47.33979797363281,
+      "jacobian_positive_evals": 4.0,
+      "jacobian_trace": -1394.484375
+    },
+    "Beta": {
+      "energy_total": -1873.070253831954,
+      "jacobian_eig1_real": -48.07701873779297,
+      "jacobian_positive_evals": 3.0,
+      "jacobian_trace": -1403.7698974609375
+    },
+    "Alpha": {
+      "energy_total": -3285.236605586999,
+      "jacobian_eig1_real": -47.565860748291016,
+      "jacobian_positive_evals": 3.0,
+      "jacobian_trace": -1402.56103515625
+    },
+    "Ngn3 low EP": {
+      "energy_total": -32322.503360962088,
+      "jacobian_eig1_real": -32.592376708984375,
+      "jacobian_positive_evals": 23.0,
+      "jacobian_trace": -1404.1656494140625
+    },
+    "Epsilon": {
+      "energy_total": -1030.4704989038323,
+      "jacobian_eig1_real": -47.037506103515625,
+      "jacobian_positive_evals": 3.0,
+      "jacobian_trace": -1405.453369140625
+    },
+    "Delta": {
+      "energy_total": -395.5372782752842,
+      "jacobian_eig1_real": -49.75203323364258,
+      "jacobian_positive_evals": 0.0,
+      "jacobian_trace": -1418.27099609375
+    }
+  },
+  "top_drivers": [
+    {
+      "gene": "Pam",
+      "out_strength": 12097.226445880906
+    },
+    {
+      "gene": "Rfx6",
+      "out_strength": 7527.668843446741
+    },
+    {
+      "gene": "Ptprn2",
+      "out_strength": 6432.3354661554595
+    },
+    {
+      "gene": "Kcnmb2",
+      "out_strength": 6154.54036693045
+    },
+    {
+      "gene": "Cacna2d1",
+      "out_strength": 4672.243054219542
+    },
+    {
+      "gene": "Slc7a14",
+      "out_strength": 3930.6433632085946
+    },
+    {
+      "gene": "Abcc8",
+      "out_strength": 2987.2357838602265
+    },
+    {
+      "gene": "Ank",
+      "out_strength": 2432.2465769161518
+    },
+    {
+      "gene": "Nxph1",
+      "out_strength": 2368.0461009293504
+    },
+    {
+      "gene": "Kcnb2",
+      "out_strength": 1576.8782338698152
+    },
+    {
+      "gene": "Pex5l",
+      "out_strength": 1509.4116587636595
+    },
+    {
+      "gene": "Nol4",
+      "out_strength": 1005.5611299817981
+    }
+  ],
+  "perturbation": {
+    "target": "Pam",
+    "impact_per_cluster": {
+      "Ductal": 0.056730568408966064,
+      "Ngn3 high EP": 0.004310360178351402,
+      "Pre-endocrine": 0.30314821004867554,
+      "Beta": 0.34715959429740906,
+      "Alpha": 0.5255440473556519,
+      "Ngn3 low EP": 0.18005669116973877,
+      "Epsilon": 0.33577126264572144,
+      "Delta": 0.2781761586666107
+    }
+  }
+}
