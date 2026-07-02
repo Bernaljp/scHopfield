@@ -415,3 +415,19 @@ Spearman rank correlation trivial baseline approx 0. "Reproducible" target = 1.0
   localization, and the sharp contrast with the negative control all match the
   prediction: the L1 bias captures the exogenous forcing, and only when it exists.
 - Disposition: real-data support for the bias interpretation + L1 default. audit? y.
+
+## M19: bias takeover is visible across datasets (energy composition)
+
+- Reading the fitted pipeline outputs (5 systems): in the pseudoinverse fits (no
+  bias penalty) the BIAS term dominates the Hopfield energy -- pancreas 92%, murine
+  NC 90%, human limb 94%, Schwann 99% of |energy|. In the penalized scaffold fit
+  (hematopoiesis) the bias is ~0% and degradation carries the energy. Real,
+  cross-dataset confirmation of the "bias takes over" pathology (M16).
+- Fix demonstrated (pancreas): re-fitting with the penalized torch optimizer + L1
+  bias drops the bias energy fraction from 95% to 12% while reconstruction is kept.
+- Caveat: pseudoinverse vs scaffold are different estimators, so absolute
+  energy/eigenvalue magnitudes are not comparable across systems (only signs,
+  within-dataset orderings, and fractions are). A clean cross-system magnitude
+  comparison needs one estimator (L1) throughout -- a GPU job, deferred.
+- See benchmark_results/cross_dataset/CROSS_DATASET_FIGURE_GUIDE.md (9 figures).
+  audit? y.

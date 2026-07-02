@@ -18,6 +18,7 @@ detailed guides, linked below.
 | S. Identifiability | `supp_identifiability`, `supp_multi_ident` | `real_identifiability/` | — |
 | S. Cross-dataset generalization | `supp_murine_energy` | `energy_stability/`, `nc_ko/` | — |
 | Model: bias term (L1) | — | `bias_penalty/` | [guide](bias_penalty/BIAS_FIGURE_GUIDE.md) |
+| Cross-dataset results (5 systems) | — | `cross_dataset/` | [guide](cross_dataset/CROSS_DATASET_FIGURE_GUIDE.md) |
 | End-to-end pipeline | — | `pipeline/` | [guide](pipeline/README.md) |
 | Honest negative: Jacobian reg | — | `jacobian_reg/` | — |
 
