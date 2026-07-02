@@ -26,7 +26,8 @@ from sklearn.metrics import roc_auc_score
 
 import scHopfield as sch
 
-DEV = "cuda"
+import torch
+DEV = "cuda" if torch.cuda.is_available() else "cpu"
 N_CELLS = 9000
 N_GENES = 300
 OUT = "benchmark_results/bias_penalty"
@@ -200,8 +201,12 @@ def main():
                  "downstream pluripotency genes do not (network-explained)", fontweight="bold")
     fig.tight_layout()
     fig.savefig(f"{OUT}/reprogramming_staged_bias.png", dpi=140, bbox_inches="tight")
+    np.savez(f"{OUT}/reprogramming_staged_arrays.npz",
+             genes=Ivecs["1_MEF"][1],
+             I_MEF=Ivecs["1_MEF"][0], I_transitional=Ivecs["2_transitional"][0],
+             I_iPSC=Ivecs["3_iPSC"][0], nat_I=natI, nat_genes=natgenes)
     json.dump(results, open(f"{OUT}/reprogramming_staged.json", "w"), indent=2)
-    print(f"\nwrote {OUT}/reprogramming_staged.json + reprogramming_staged_bias.png", flush=True)
+    print(f"\nwrote {OUT}/reprogramming_staged.json + arrays.npz + bias.png", flush=True)
 
 
 if __name__ == "__main__":
