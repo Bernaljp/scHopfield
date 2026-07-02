@@ -38,8 +38,10 @@ def collect():
         lab = a.obs[ck].astype(str)
         keep = [c for c in lab.value_counts().index if (lab == c).sum() >= MINCELLS]
         df = a.obs[["energy_total", "energy_interaction", "energy_degradation",
-                    "energy_bias", "jacobian_eig1_real", "jacobian_positive_evals",
-                    "jacobian_trace"]].copy()
+                    "energy_bias", "jacobian_positive_evals", "jacobian_trace"]].copy()
+        # TRUE leading eigenvalue (max real part) -- the stored eig1 is an arbitrary
+        # eigenvalue, not the leading one, so recompute it from the full spectrum.
+        df["leading_eig"] = np.asarray(a.obsm["jacobian_eigenvalues"]).real.max(axis=1)
         df["cluster"] = lab.values
         df = df[df["cluster"].isin(keep)]
         percell[name] = df
@@ -51,7 +53,7 @@ def collect():
             summary.append({
                 "dataset": name, "species": species, "cluster": c, "n": int(m.sum()),
                 "energy": float(df.loc[m, "energy_total"].median()),
-                "eig": float(df.loc[m, "jacobian_eig1_real"].median()),
+                "eig": float(df.loc[m, "leading_eig"].median()),
                 "frac_unstable": float((df.loc[m, "jacobian_positive_evals"] > 0).mean()),
                 "spectral_radius": spec, "W_symmetry": sym,
                 "e_int": float(df.loc[m, "energy_interaction"].abs().median()),
@@ -91,9 +93,9 @@ def main():
     percell, S = collect()
 
     # 1. stability structure (heterogeneous; magnitudes not comparable across fits)
-    facet_box(percell, "jacobian_eig1_real",
-              "Local stability (leading Jacobian eigenvalue, Re) per cell type. Sign = stable(-)/unstable(+); "
-              "magnitudes are NOT comparable across systems (fit-scale dependent)",
+    facet_box(percell, "leading_eig",
+              "True leading Jacobian eigenvalue (max real part) per cell type. Sign = stable(-)/unstable(+). "
+              "All datasets now use the same scaffold+L1 estimator",
               "1_stability_by_cluster.png", hline=0.0)
     # 2. energy landscape
     facet_box(percell, "energy_total",
@@ -127,8 +129,8 @@ def main():
         ax.bar(comp.index, comp[lab], bottom=bottom, label={"e_int": "interaction", "e_deg": "degradation", "e_bias": "bias"}[lab], color=c)
         bottom += comp[lab].values
     ax.set_ylabel("fraction of |energy| (median per cluster)")
-    ax.set_title("The bias term dominates the energy in the UNPENALIZED (pseudoinverse) fits -- the\n"
-                 "'bias takeover' problem, cross-dataset. Only the penalized scaffold fit (hematopoiesis) controls it")
+    ax.set_title("Energy composition (scaffold + L1 fits): the bias term is controlled (~0%) across all\n"
+                 "systems; the energy is carried by the interaction and degradation terms")
     ax.legend(); fig.tight_layout(); fig.savefig(f"{OUT}/4_energy_composition.png", dpi=140, bbox_inches="tight"); plt.close(fig)
 
     # 5. GRN spectral radius per cluster
@@ -159,7 +161,7 @@ def main():
 
     # 8. leading-eigenvalue distribution per dataset
     fig, ax = plt.subplots(figsize=(9, 5))
-    data = [percell[n]["jacobian_eig1_real"].clip(-50, 50).values for n in percell]
+    data = [percell[n]["leading_eig"].clip(-50, 50).values for n in percell]
     parts = ax.violinplot(data, showmedians=True)
     for pc, n in zip(parts["bodies"], percell):
         pc.set_facecolor(COL[n]); pc.set_alpha(0.6)
@@ -169,8 +171,25 @@ def main():
     ax.set_title("Distribution of local stability across cells, per system")
     fig.tight_layout(); fig.savefig(f"{OUT}/8_eig_distribution.png", dpi=140, bbox_inches="tight"); plt.close(fig)
 
+    # 10. bias-takeover fixed across datasets: pseudoinverse (old) vs scaffold+L1 (new)
+    old_bias = {"pancreas": 0.92, "murine_nc": 0.90, "human_limb": 0.94, "schwann": 0.99}
+    order = [d for d in ["pancreas", "murine_nc", "human_limb", "schwann"] if d in S["dataset"].values]
+    new_bias = {}
+    for d in order:
+        g = S[S["dataset"] == d]
+        new_bias[d] = float(g["e_bias"].median() / (g["e_int"].median() + g["e_deg"].median() + g["e_bias"].median() + 1e-12))
+    fig, ax = plt.subplots(figsize=(8, 5))
+    x = np.arange(len(order)); w = 0.38
+    ax.bar(x - w / 2, [old_bias[d] for d in order], w, label="pseudoinverse (no penalty)", color="#d1495b")
+    ax.bar(x + w / 2, [new_bias[d] for d in order], w, label="scaffold + L1 bias", color="#2a9d8f")
+    ax.set_xticks(x); ax.set_xticklabels(order, rotation=15, ha="right")
+    ax.set_ylabel("bias energy fraction (median per cluster)"); ax.set_ylim(0, 1.05)
+    ax.set_title("The bias takeover is fixed across datasets: scaffold + L1 collapses the bias energy from ~90-99% to ~0%")
+    ax.legend()
+    fig.tight_layout(); fig.savefig(f"{OUT}/10_takeover_fixed_all.png", dpi=140, bbox_inches="tight"); plt.close(fig)
+
     S.to_csv(f"{OUT}/../cross_dataset_summary.csv", index=False)
-    print(f"wrote 8 cross-dataset figures to {OUT}/", flush=True)
+    print(f"wrote 9 cross-dataset figures to {OUT}/", flush=True)
 
 
 def facet_box_summary(S, col, title, fname):

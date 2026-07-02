@@ -17,140 +17,142 @@
     "MYL3+MyoC",
     "MYH3+MyoC"
   ],
-  "scaffold": null,
+  "scaffold": {
+    "n_tfs": 47,
+    "n_edges": 3771
+  },
   "seed": 0,
   "pipeline_steps": [
-    "select_top_velocity_genes(n=250)",
-    "fit_interactions (pseudoinverse)",
+    "fit_interactions (scaffold)",
     "compute_energies",
     "compute_jacobians + stats",
-    "compute_network_centrality FAILED: KeyError: \"The following id_vars or value_vars are not present in the DataFrame: ['index']\""
+    "compute_network_centrality"
   ],
   "stability_by_cluster": {
     "PAX7+MyoProg2": {
-      "energy_total": -187.75675626769524,
-      "jacobian_eig1_real": 0.234304279088974,
-      "jacobian_positive_evals": 9.0,
-      "jacobian_trace": -204.4449462890625
+      "energy_total": 6.8869720427719034,
+      "jacobian_eig1_real": -0.033772096037864685,
+      "jacobian_positive_evals": 1.0,
+      "jacobian_trace": -126.03317260742188
     },
     "PAX7+MyoProg1": {
-      "energy_total": -260.6256435756862,
-      "jacobian_eig1_real": 0.2851583957672119,
-      "jacobian_positive_evals": 10.0,
-      "jacobian_trace": -206.6361541748047
+      "energy_total": 7.165271162598841,
+      "jacobian_eig1_real": -0.1069754809141159,
+      "jacobian_positive_evals": 1.0,
+      "jacobian_trace": -126.75615692138672
     },
     "PAX3+PAX7+MyoProg": {
-      "energy_total": -192.339353482307,
-      "jacobian_eig1_real": 0.26910078525543213,
-      "jacobian_positive_evals": 14.0,
-      "jacobian_trace": -203.7068328857422
+      "energy_total": 6.781947768442354,
+      "jacobian_eig1_real": -0.002838495885953307,
+      "jacobian_positive_evals": 3.0,
+      "jacobian_trace": -116.66893005371094
     },
     "MyoB2": {
-      "energy_total": -209.87675432211367,
-      "jacobian_eig1_real": 0.48711317777633667,
-      "jacobian_positive_evals": 17.0,
-      "jacobian_trace": -203.90890502929688
+      "energy_total": 6.606463682173561,
+      "jacobian_eig1_real": -0.006736285984516144,
+      "jacobian_positive_evals": 4.0,
+      "jacobian_trace": -114.53271484375
     },
     "MyoB1": {
-      "energy_total": -255.72319454486393,
-      "jacobian_eig1_real": -1.0321376323699951,
-      "jacobian_positive_evals": 25.0,
-      "jacobian_trace": -206.1659393310547
+      "energy_total": 5.827518790581888,
+      "jacobian_eig1_real": -0.016834478825330734,
+      "jacobian_positive_evals": 3.0,
+      "jacobian_trace": -118.84679412841797
     },
     "MyoC2": {
-      "energy_total": -709.3624007972779,
-      "jacobian_eig1_real": -0.29366421699523926,
-      "jacobian_positive_evals": 20.0,
-      "jacobian_trace": -210.09490966796875
+      "energy_total": 2.5830546206256217,
+      "jacobian_eig1_real": -0.14023666083812714,
+      "jacobian_positive_evals": 1.0,
+      "jacobian_trace": -141.40371704101562
     },
     "PAX3+MyoProg": {
-      "energy_total": -383.24151642108274,
-      "jacobian_eig1_real": 1.0696005821228027,
-      "jacobian_positive_evals": 25.0,
-      "jacobian_trace": -207.83615112304688
+      "energy_total": 5.782274408151618,
+      "jacobian_eig1_real": -0.05025578290224075,
+      "jacobian_positive_evals": 3.0,
+      "jacobian_trace": -126.83883666992188
     },
     "MyoC1": {
-      "energy_total": -981.5712169223643,
-      "jacobian_eig1_real": -0.6380815505981445,
-      "jacobian_positive_evals": 26.0,
-      "jacobian_trace": -212.69046020507812
+      "energy_total": 3.9320113434400135,
+      "jacobian_eig1_real": -0.05918367579579353,
+      "jacobian_positive_evals": 4.0,
+      "jacobian_trace": -139.0751953125
     },
     "MYL3+MyoC": {
-      "energy_total": -401.97961355009147,
-      "jacobian_eig1_real": 1.2314162254333496,
-      "jacobian_positive_evals": 15.0,
-      "jacobian_trace": -216.1435546875
+      "energy_total": 2.57057784621251,
+      "jacobian_eig1_real": -0.016190631315112114,
+      "jacobian_positive_evals": 2.0,
+      "jacobian_trace": -152.36770629882812
     },
     "MYH3+MyoC": {
-      "energy_total": -884.7426504764882,
-      "jacobian_eig1_real": -1.2852426767349243,
-      "jacobian_positive_evals": 23.0,
-      "jacobian_trace": -211.08224487304688
+      "energy_total": 2.7398335623489016,
+      "jacobian_eig1_real": -0.22257240116596222,
+      "jacobian_positive_evals": 3.0,
+      "jacobian_trace": -159.80780029296875
     }
   },
   "top_drivers": [
     {
-      "gene": "COBL",
-      "out_strength": 28.770411134788997
+      "gene": "EGR1",
+      "out_strength": 9.135987281799316
     },
     {
-      "gene": "MEST",
-      "out_strength": 13.968865656634488
+      "gene": "FOS",
+      "out_strength": 8.218358993530273
     },
     {
-      "gene": "SHD",
-      "out_strength": 13.771955519779011
+      "gene": "ATF3",
+      "out_strength": 8.086766242980957
     },
     {
-      "gene": "PTMA",
-      "out_strength": 13.234421016246674
+      "gene": "MYC",
+      "out_strength": 7.652154922485352
     },
     {
-      "gene": "GPC3",
-      "out_strength": 11.252340634344904
+      "gene": "HES1",
+      "out_strength": 6.945234775543213
     },
     {
-      "gene": "C1QTNF3",
-      "out_strength": 10.55954014427758
+      "gene": "KLF4",
+      "out_strength": 6.332613945007324
     },
     {
-      "gene": "RPL34",
-      "out_strength": 10.523010135576403
+      "gene": "PLAGL1",
+      "out_strength": 6.237279891967773
     },
     {
-      "gene": "ACTB",
-      "out_strength": 9.429324345565341
+      "gene": "POU2F2",
+      "out_strength": 6.054564952850342
     },
     {
-      "gene": "IGFBP5",
-      "out_strength": 9.073693164328107
+      "gene": "NR3C1",
+      "out_strength": 5.490403175354004
     },
     {
-      "gene": "SPATS2L",
-      "out_strength": 8.475697631852729
+      "gene": "E2F1",
+      "out_strength": 5.437173366546631
     },
     {
-      "gene": "MSC",
-      "out_strength": 8.143022571184467
+      "gene": "HES4",
+      "out_strength": 5.43257474899292
     },
     {
-      "gene": "COL3A1",
-      "out_strength": 8.130326073566058
+      "gene": "KLF5",
+      "out_strength": 4.217637062072754
     }
   ],
   "perturbation": {
-    "target": "COBL",
+    "target": "EGR1",
     "impact_per_cluster": {
-      "PAX7+MyoProg2": 0.0021272990852594376,
-      "PAX7+MyoProg1": 0.0024541844613850117,
-      "PAX3+PAX7+MyoProg": 0.0018933999817818403,
-      "MyoB2": 0.011407144367694855,
-      "MyoB1": 0.004303878638893366,
-      "MyoC2": 0.06514464318752289,
-      "PAX3+MyoProg": 0.009422574192285538,
-      "MyoC1": 0.12927716970443726,
-      "MYL3+MyoC": 0.07797960191965103,
-      "MYH3+MyoC": 0.1896100640296936
+      "PAX7+MyoProg2": 0.0695994570851326,
+      "PAX7+MyoProg1": 0.09229519963264465,
+      "PAX3+PAX7+MyoProg": 0.05642743781208992,
+      "MyoB2": 0.0709584578871727,
+      "MyoB1": 0.0912642553448677,
+      "MyoC2": 0.09068521857261658,
+      "PAX3+MyoProg": 0.05007210373878479,
+      "MyoC1": 0.1397814005613327,
+      "MYL3+MyoC": 0.02391701377928257,
+      "MYH3+MyoC": 0.23766493797302246
     }
   }
 }

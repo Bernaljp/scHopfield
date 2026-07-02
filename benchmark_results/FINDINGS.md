@@ -431,3 +431,22 @@ Spearman rank correlation trivial baseline approx 0. "Reproducible" target = 1.0
   comparison needs one estimator (L1) throughout -- a GPU job, deferred.
 - See benchmark_results/cross_dataset/CROSS_DATASET_FIGURE_GUIDE.md (9 figures).
   audit? y.
+
+## M20: all datasets re-fit with species-appropriate scaffolds (bias fixed cross-dataset)
+
+- Re-ran the full pipeline (analyses/run_full_pipeline.py) with a prior-knowledge
+  scaffold per dataset: CellOracle mouse scATAC atlas for the 4 mouse systems
+  (hematopoiesis, pancreas, murine NC, Schwann) and the human promoter base GRN for
+  human limb (fetched from CellOracle). Scaffold edge counts: hemato 8 TFs/1045,
+  pancreas 18/1655, murine NC 33/4478, human limb 47/3771, Schwann 19/2206.
+- All 5 fit cleanly on GPU, including Schwann (raw counts -> prepare -> scaffold ->
+  fit; fixed an ordering bug in the driver script where the scaffold was built
+  before prepare).
+- Effect: with the scaffold + L1-bias (torch) estimator, the bias energy fraction is
+  ~0% in EVERY dataset (was 90-99% in the pseudoinverse fits, M19). One estimator
+  across all systems -> clean cross-dataset comparison.
+- Also fixed a reporting bug: jacobian_eig1_real is the index-0 eigenvalue, not the
+  leading one. Added jacobian_leading_real (max real part) to compute_jacobian_stats;
+  the cross-dataset stability figures use it. Most cells carry a positive leading
+  eigenvalue (trajectory/unstable direction), consistent with the positive-eigenvalue
+  count. See cross_dataset/CROSS_DATASET_FIGURE_GUIDE.md. audit? y.

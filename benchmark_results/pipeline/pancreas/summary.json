@@ -15,127 +15,129 @@
     "Epsilon",
     "Delta"
   ],
-  "scaffold": null,
+  "scaffold": {
+    "n_tfs": 18,
+    "n_edges": 1655
+  },
   "seed": 0,
   "pipeline_steps": [
     "fit_sigmoids",
-    "select_top_velocity_genes(n=250)",
-    "fit_interactions (pseudoinverse)",
+    "fit_interactions (scaffold)",
     "compute_energies",
     "compute_jacobians + stats",
     "compute_network_centrality"
   ],
   "stability_by_cluster": {
     "Ductal": {
-      "energy_total": -10982.298951720997,
-      "jacobian_eig1_real": -33.770240783691406,
-      "jacobian_positive_evals": 6.0,
-      "jacobian_trace": -1400.4927978515625
+      "energy_total": 16.134027556662733,
+      "jacobian_eig1_real": -1.5384663343429565,
+      "jacobian_positive_evals": 0.0,
+      "jacobian_trace": -1091.74072265625
     },
     "Ngn3 high EP": {
-      "energy_total": -7557.762443052335,
-      "jacobian_eig1_real": -44.03828048706055,
-      "jacobian_positive_evals": 6.0,
-      "jacobian_trace": -1399.8905029296875
+      "energy_total": 48.146928294343724,
+      "jacobian_eig1_real": -1.423957109451294,
+      "jacobian_positive_evals": 3.0,
+      "jacobian_trace": -844.1908569335938
     },
     "Pre-endocrine": {
-      "energy_total": -2000.8009935168598,
-      "jacobian_eig1_real": -47.33979797363281,
-      "jacobian_positive_evals": 4.0,
-      "jacobian_trace": -1394.484375
+      "energy_total": 83.43763187625251,
+      "jacobian_eig1_real": -1.3487954139709473,
+      "jacobian_positive_evals": 0.0,
+      "jacobian_trace": -929.7630004882812
     },
     "Beta": {
-      "energy_total": -1873.070253831954,
-      "jacobian_eig1_real": -48.07701873779297,
-      "jacobian_positive_evals": 3.0,
-      "jacobian_trace": -1403.7698974609375
+      "energy_total": 82.70785974558451,
+      "jacobian_eig1_real": -7.633109092712402,
+      "jacobian_positive_evals": 1.0,
+      "jacobian_trace": -982.1455078125
     },
     "Alpha": {
-      "energy_total": -3285.236605586999,
-      "jacobian_eig1_real": -47.565860748291016,
-      "jacobian_positive_evals": 3.0,
-      "jacobian_trace": -1402.56103515625
+      "energy_total": 79.56370897965701,
+      "jacobian_eig1_real": -0.9666488170623779,
+      "jacobian_positive_evals": 1.0,
+      "jacobian_trace": -1004.2335815429688
     },
     "Ngn3 low EP": {
-      "energy_total": -32322.503360962088,
-      "jacobian_eig1_real": -32.592376708984375,
-      "jacobian_positive_evals": 23.0,
-      "jacobian_trace": -1404.1656494140625
+      "energy_total": 21.333853542099753,
+      "jacobian_eig1_real": -1.5806982517242432,
+      "jacobian_positive_evals": 2.0,
+      "jacobian_trace": -981.516357421875
     },
     "Epsilon": {
-      "energy_total": -1030.4704989038323,
-      "jacobian_eig1_real": -47.037506103515625,
-      "jacobian_positive_evals": 3.0,
-      "jacobian_trace": -1405.453369140625
+      "energy_total": 70.26948084280662,
+      "jacobian_eig1_real": -0.7672291398048401,
+      "jacobian_positive_evals": 1.0,
+      "jacobian_trace": -922.6856689453125
     },
     "Delta": {
-      "energy_total": -395.5372782752842,
-      "jacobian_eig1_real": -49.75203323364258,
-      "jacobian_positive_evals": 0.0,
-      "jacobian_trace": -1418.27099609375
+      "energy_total": 80.17976389065774,
+      "jacobian_eig1_real": -0.9261820316314697,
+      "jacobian_positive_evals": 1.0,
+      "jacobian_trace": -991.64453125
     }
   },
   "top_drivers": [
     {
-      "gene": "Pam",
-      "out_strength": 12097.226445880906
+      "gene": "Pax6",
+      "out_strength": 7318.38916015625
     },
     {
       "gene": "Rfx6",
-      "out_strength": 7527.668843446741
+      "out_strength": 516.87109375
     },
     {
-      "gene": "Ptprn2",
-      "out_strength": 6432.3354661554595
+      "gene": "Tcf7l2",
+      "out_strength": 112.5454330444336
     },
     {
-      "gene": "Kcnmb2",
-      "out_strength": 6154.54036693045
+      "gene": "Stat3",
+      "out_strength": 52.14942169189453
     },
     {
-      "gene": "Cacna2d1",
-      "out_strength": 4672.243054219542
+      "gene": "Nkx2-2",
+      "out_strength": 45.35416793823242
     },
     {
-      "gene": "Slc7a14",
-      "out_strength": 3930.6433632085946
+      "gene": "Nfib",
+      "out_strength": 36.863197326660156
     },
     {
-      "gene": "Abcc8",
-      "out_strength": 2987.2357838602265
+      "gene": "Rfx3",
+      "out_strength": 28.288471221923828
     },
     {
-      "gene": "Ank",
-      "out_strength": 2432.2465769161518
+      "gene": "Plag1",
+      "out_strength": 28.030109405517578
     },
     {
-      "gene": "Nxph1",
-      "out_strength": 2368.0461009293504
+      "gene": "Meis2",
+      "out_strength": 18.2570743560791
     },
     {
-      "gene": "Kcnb2",
-      "out_strength": 1576.8782338698152
+      "gene": "Rora",
+      "out_strength": 15.308805465698242
     },
     {
-      "gene": "Pex5l",
-      "out_strength": 1509.4116587636595
+      "gene": "Nr2f6",
+      "out_strength": 14.252135276794434
     },
     {
-      "gene": "Nol4",
-      "out_strength": 1005.5611299817981
+      "gene": "Prdm16",
+      "out_strength": 13.853720664978027
     }
   ],
   "perturbation": {
-    "target": "Pam",
+    "target": "Pax6",
     "impact_per_cluster": {
-      "Ductal": 0.056730568408966064,
-      "Ngn3 high EP": 0.004310360178351402,
-      "Pre-endocrine": 0.30314821004867554,
-      "Beta": 0.34715959429740906,
-      "Alpha": 0.5255440473556519,
-      "Ngn3 low EP": 0.18005669116973877,
-      "Epsilon": 0.33577126264572144,
-      "Delta": 0.2781761586666107
+      "Ductal": 0.00017355431918986142,
+      "Ngn3 high EP": 0.015690544620156288,
+      "Pre-endocrine": 0.22215864062309265,
+      "Beta": 0.3156963586807251,
+      "Alpha": 0.29265373945236206,
+      "Ngn3 low EP": 0.0004160291573498398,
+      "Epsilon": 0.24638839066028595,
+      "Delta": 0.07994900643825531
     }
   }
 }

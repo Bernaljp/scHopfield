@@ -14,120 +14,121 @@
     "DRG",
     "Incisor"
   ],
-  "scaffold": null,
+  "scaffold": {
+    "n_tfs": 19,
+    "n_edges": 2206
+  },
   "seed": 0,
   "pipeline_steps": [
-    "prepare_dataset",
-    "select_top_velocity_genes(n=250)",
-    "fit_interactions (pseudoinverse)",
+    "fit_interactions (scaffold)",
     "compute_energies",
     "compute_jacobians + stats",
     "compute_network_centrality"
   ],
   "stability_by_cluster": {
     "Trunk": {
-      "energy_total": -228.578152740964,
-      "jacobian_eig1_real": 1.9900233745574951,
-      "jacobian_positive_evals": 36.0,
-      "jacobian_trace": -174.75540161132812
+      "energy_total": 1.5812991034531074,
+      "jacobian_eig1_real": -7.034207374090329e-05,
+      "jacobian_positive_evals": 8.0,
+      "jacobian_trace": -12.318507194519043
     },
     "Sympathoadrenal system": {
-      "energy_total": -298.427251477474,
-      "jacobian_eig1_real": 0.9253444671630859,
-      "jacobian_positive_evals": 29.0,
-      "jacobian_trace": -186.91943359375
+      "energy_total": 5.013169507395701,
+      "jacobian_eig1_real": -0.20537734031677246,
+      "jacobian_positive_evals": 1.0,
+      "jacobian_trace": -68.80044555664062
     },
     "Limb": {
-      "energy_total": -2307.4018292705014,
-      "jacobian_eig1_real": 1.7257664203643799,
-      "jacobian_positive_evals": 37.5,
-      "jacobian_trace": -189.06216430664062
+      "energy_total": 7.494739588195303,
+      "jacobian_eig1_real": -0.014368139207363129,
+      "jacobian_positive_evals": 1.0,
+      "jacobian_trace": -59.63702392578125
     },
     "Enteric": {
-      "energy_total": -379.02658885612317,
-      "jacobian_eig1_real": 0.672173261642456,
-      "jacobian_positive_evals": 39.0,
-      "jacobian_trace": -186.63104248046875
+      "energy_total": 4.253117923675655,
+      "jacobian_eig1_real": -0.1373918354511261,
+      "jacobian_positive_evals": 2.0,
+      "jacobian_trace": -47.688026428222656
     },
     "Cranial": {
-      "energy_total": -2255.2384631207124,
-      "jacobian_eig1_real": 5.237983703613281,
-      "jacobian_positive_evals": 48.0,
-      "jacobian_trace": -173.3738250732422
+      "energy_total": 1.0223764717350161,
+      "jacobian_eig1_real": -0.005197362508624792,
+      "jacobian_positive_evals": 5.0,
+      "jacobian_trace": -26.716533660888672
     },
     "DRG": {
-      "energy_total": -2138.5330922881103,
-      "jacobian_eig1_real": 2.032196044921875,
-      "jacobian_positive_evals": 39.0,
-      "jacobian_trace": -192.6646728515625
+      "energy_total": 4.844550843997923,
+      "jacobian_eig1_real": -0.013477924279868603,
+      "jacobian_positive_evals": 2.0,
+      "jacobian_trace": -48.36155319213867
     },
     "Incisor": {
-      "energy_total": -1221.3266448118993,
-      "jacobian_eig1_real": 2.058547258377075,
-      "jacobian_positive_evals": 20.5,
-      "jacobian_trace": -214.2975616455078
+      "energy_total": 6.465171358804437,
+      "jacobian_eig1_real": -0.23424993455410004,
+      "jacobian_positive_evals": 1.0,
+      "jacobian_trace": -122.90214538574219
     }
   },
   "top_drivers": [
     {
       "gene": "Egr1",
-      "out_strength": 195.45922902309036
+      "out_strength": 27.588207244873047
     },
     {
-      "gene": "Cd59a",
-      "out_strength": 59.15701420052142
+      "gene": "Mef2c",
+      "out_strength": 13.753155708312988
     },
     {
-      "gene": "Plekhb1",
-      "out_strength": 43.878527461862866
+      "gene": "Nr3c1",
+      "out_strength": 11.802032470703125
     },
     {
-      "gene": "Uchl1",
-      "out_strength": 40.0507341272022
+      "gene": "Tfap2b",
+      "out_strength": 8.876015663146973
     },
     {
-      "gene": "Ddc",
-      "out_strength": 35.28893955445469
+      "gene": "Tfap2a",
+      "out_strength": 6.47724723815918
     },
     {
-      "gene": "Rab3b",
-      "out_strength": 34.12178994121155
+      "gene": "Plagl1",
+      "out_strength": 6.415630340576172
     },
     {
-      "gene": "Cmtm5",
-      "out_strength": 33.44589069364298
+      "gene": "Nr4a2",
+      "out_strength": 6.320089340209961
     },
     {
-      "gene": "Pcsk1n",
-      "out_strength": 33.23939255932501
+      "gene": "Heyl",
+      "out_strength": 5.288026332855225
     },
     {
-      "gene": "Meg3",
-      "out_strength": 32.492670642964754
+      "gene": "Foxo1",
+      "out_strength": 4.587657928466797
     },
     {
-      "gene": "Tspan15",
-      "out_strength": 32.211515501097416
+      "gene": "Id2",
+      "out_strength": 4.098663330078125
     },
     {
-      "gene": "Fam19a5",
-      "out_strength": 32.10998645220637
+      "gene": "Nfia",
+      "out_strength": 3.7165939807891846
     },
     {
-      "gene": "Prss23",
-      "out_strength": 29.541008834581955
+      "gene": "Nfib",
+      "out_strength": 3.331496477127075
     }
   ],
   "perturbation": {
     "target": "Egr1",
     "impact_per_cluster": {
-      "Trunk": 0.004578816704452038,
-      "Sympathoadrenal system": 0.03463515266776085,
-      "Limb": 0.10812172293663025,
-      "Enteric": 0.05072006955742836,
-      "Cranial": 0.03567790240049362,
-      "DRG": 0.10348010063171387,
-      "Incisor": 0.20785918831825256
+      "Trunk": 0.00029207573970779777,
+      "Sympathoadrenal system": 0.01952098309993744,
+      "Limb": 0.03995960205793381,
+      "Enteric": 0.05939258635044098,
+      "Cranial": 0.001454182667657733,
+      "DRG": 0.01796404831111431,
+      "Incisor": 0.13145315647125244
     }
   }
 }

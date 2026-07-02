@@ -37,20 +37,25 @@ import scHopfield as sch
 OUT_ROOT = "benchmark_results/pipeline"
 DYN = "/home/bernaljp/Documents/DynamiSC/Data"
 
+# CellOracle base GRNs used as prior-knowledge scaffolds (species-appropriate).
+MOUSE_GRN = "data/hematopoiesis/networks/mouse_scATAC_atlas.parquet"
+HUMAN_GRN = "data/human_promoter_base_GRN.parquet"
+
 # name -> config. `prepare` = run velocity/sigmoid preprocessing first;
-# `base_grn` = CellOracle-style parquet to build a scaffold from (else pseudoinverse).
+# `base_grn` = species-appropriate base GRN to build the scaffold from. Every
+# dataset is scaffold-guided so all fits use the same (penalized, L1-bias) estimator.
 DATASETS = [
     dict(name="hematopoiesis", path="data/hematopoiesis/base_preprocessed.h5ad",
          cluster_key="paul15_clusters", species="mouse", prepare=False,
          base_grn="data/hematopoiesis/base_GRN.parquet"),
     dict(name="pancreas", path="data/Pancreas/pancreas_scvelo_ready.h5ad",
-         cluster_key="clusters", species="mouse", prepare=False, base_grn=None),
+         cluster_key="clusters", species="mouse", prepare=False, base_grn=MOUSE_GRN),
     dict(name="murine_nc", path="data/generalize/murine_nc.h5ad",
-         cluster_key="celltype_update", species="mouse", prepare=False, base_grn=None),
+         cluster_key="celltype_update", species="mouse", prepare=False, base_grn=MOUSE_GRN),
     dict(name="human_limb", path="data/generalize/human_limb.h5ad",
-         cluster_key="leiden_R_celltype", species="human", prepare=False, base_grn=None),
+         cluster_key="leiden_R_celltype", species="human", prepare=False, base_grn=HUMAN_GRN),
     dict(name="schwann", path=f"{DYN}/schwann.h5ad",
-         cluster_key="location", species="mouse", prepare=True, base_grn=None),
+         cluster_key="location", species="mouse", prepare=True, base_grn=MOUSE_GRN),
 ]
 
 MODEL_UNS_KEYS = ("models", "jacobian_eigenvectors_temp")
@@ -136,12 +141,19 @@ def run_one(cfg, device, n_genes, seed):
     adata = ad.read_h5ad(cfg["path"])
     cluster_key = cfg["cluster_key"]
 
-    # optional prior-knowledge scaffold from a CellOracle base GRN
+    # velocity/sigmoid preprocessing first, so the scaffold can be built over the
+    # top-velocity genes (needed for datasets fit from raw counts, e.g. schwann).
+    prepared = False
+    if cfg["prepare"]:
+        sch.pp.prepare_dataset(adata)
+        prepared = True
+        print(f"prepared: {adata.shape}", flush=True)
+
+    # prior-knowledge scaffold from a species-appropriate base GRN
     scaffold_arg = None
     scaffold_info = None
     if cfg.get("base_grn") and os.path.exists(cfg["base_grn"]):
-        # subset first so scaffold spans exactly the modelled genes
-        if not cfg["prepare"] and "sigmoid" not in adata.layers:
+        if "sigmoid" not in adata.layers:
             adata.var["scHopfield_used"] = True
         adata_sub = sch.workflows.select_top_velocity_genes(adata, n_genes) \
             if n_genes and n_genes < adata.n_vars else adata
@@ -154,7 +166,7 @@ def run_one(cfg, device, n_genes, seed):
         print(f"scaffold: {ntf} TFs, {nedge} edges", flush=True)
 
     adata = sch.run_pipeline(
-        adata, cluster_key=cluster_key, prepare=cfg["prepare"],
+        adata, cluster_key=cluster_key, prepare=cfg["prepare"] and not prepared,
         n_top_genes=n_genes, scaffold=scaffold_arg,
         fit_kwargs=(dict(n_epochs=600, batch_size=128, learning_rate=0.1,
                          reconstruction_regularization=100, bias_regularization=1,

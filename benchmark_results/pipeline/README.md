@@ -7,10 +7,10 @@ network drivers -> in-silico perturbation via `sch.run_pipeline`.
 | Dataset | Species | Cells | Genes | Clusters | Fit | Top driver |
 |---|---|---|---|---|---|---|
 | hematopoiesis | mouse | 2671 | 250 | 16 | scaffold (1045 edges) | Myc |
-| pancreas | mouse | 3696 | 250 | 8 | pseudoinverse | Pam |
-| murine_nc | mouse | 6788 | 250 | 9 | pseudoinverse | Wwtr1 |
-| human_limb | human | 12207 | 250 | 10 | pseudoinverse | COBL |
-| schwann | mouse | 8821 | 250 | 7 | pseudoinverse | Egr1 |
+| pancreas | mouse | 3696 | 250 | 8 | scaffold (1655 edges) | Pax6 |
+| murine_nc | mouse | 6788 | 250 | 9 | scaffold (4478 edges) | Rest |
+| human_limb | human | 12207 | 250 | 10 | scaffold (3771 edges) | EGR1 |
+| schwann | mouse | 8821 | 250 | 7 | scaffold (2206 edges) | Egr1 |
 
 ## Per-dataset outputs
 

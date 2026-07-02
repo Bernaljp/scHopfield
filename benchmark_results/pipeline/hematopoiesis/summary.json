@@ -36,134 +36,134 @@
   ],
   "stability_by_cluster": {
     "14Mo": {
-      "energy_total": 8.665209238454127,
-      "jacobian_eig1_real": -0.017072884365916252,
+      "energy_total": 8.757781020691237,
+      "jacobian_eig1_real": -0.01152392104268074,
       "jacobian_positive_evals": 1.0,
-      "jacobian_trace": -4.243847370147705
+      "jacobian_trace": -3.8141002655029297
     },
     "2Ery": {
-      "energy_total": 8.363658112235584,
-      "jacobian_eig1_real": -0.05616563931107521,
+      "energy_total": 8.574878474060677,
+      "jacobian_eig1_real": -0.04826447367668152,
       "jacobian_positive_evals": 1.0,
-      "jacobian_trace": -7.903641223907471
+      "jacobian_trace": -7.040564060211182
     },
     "13Baso": {
-      "energy_total": 9.114698870227233,
-      "jacobian_eig1_real": -0.03398124501109123,
+      "energy_total": 9.328111141231101,
+      "jacobian_eig1_real": -0.02778952196240425,
       "jacobian_positive_evals": 1.0,
-      "jacobian_trace": -4.37337064743042
+      "jacobian_trace": -3.302454948425293
     },
     "3Ery": {
-      "energy_total": 8.48054988284777,
-      "jacobian_eig1_real": -0.0461898110806942,
+      "energy_total": 9.519071429149992,
+      "jacobian_eig1_real": -0.02726013772189617,
       "jacobian_positive_evals": 1.0,
-      "jacobian_trace": -7.811493873596191
+      "jacobian_trace": -4.327598571777344
     },
     "15Mo": {
-      "energy_total": 7.5294818589693,
-      "jacobian_eig1_real": -0.05091753229498863,
+      "energy_total": 7.58672451852186,
+      "jacobian_eig1_real": -0.048660773783922195,
       "jacobian_positive_evals": 1.0,
-      "jacobian_trace": -5.763340473175049
+      "jacobian_trace": -5.471956253051758
     },
     "5Ery": {
-      "energy_total": 8.39605829315682,
-      "jacobian_eig1_real": -0.05541456118226051,
+      "energy_total": 9.119936322768552,
+      "jacobian_eig1_real": -0.04003816097974777,
       "jacobian_positive_evals": 1.0,
-      "jacobian_trace": -8.273335456848145
+      "jacobian_trace": -5.786130905151367
     },
     "6Ery": {
-      "energy_total": 6.247425132034532,
-      "jacobian_eig1_real": -0.03733121231198311,
+      "energy_total": 6.7063621279969565,
+      "jacobian_eig1_real": -0.026205815374851227,
       "jacobian_positive_evals": 1.0,
-      "jacobian_trace": -8.048460960388184
+      "jacobian_trace": -5.846078395843506
     },
     "7MEP": {
-      "energy_total": 2.897434011652701,
-      "jacobian_eig1_real": -0.04307101294398308,
+      "energy_total": 3.0635573964888354,
+      "jacobian_eig1_real": -0.03417971730232239,
       "jacobian_positive_evals": 0.0,
-      "jacobian_trace": -8.33221435546875
+      "jacobian_trace": -6.585553169250488
     },
     "16Neu": {
-      "energy_total": 6.30702691397125,
-      "jacobian_eig1_real": -0.04383167624473572,
+      "energy_total": 6.532378477806894,
+      "jacobian_eig1_real": -0.03419440984725952,
       "jacobian_positive_evals": 1.0,
-      "jacobian_trace": -6.649280071258545
+      "jacobian_trace": -5.268442630767822
     },
     "10GMP": {
-      "energy_total": 6.597159838022409,
-      "jacobian_eig1_real": -0.03387807309627533,
+      "energy_total": 6.78135904632417,
+      "jacobian_eig1_real": -0.029022840782999992,
       "jacobian_positive_evals": 1.0,
-      "jacobian_trace": -5.518725872039795
+      "jacobian_trace": -4.440103054046631
     },
     "4Ery": {
-      "energy_total": 8.395024817392287,
-      "jacobian_eig1_real": -0.047620370984077454,
+      "energy_total": 9.157721748528676,
+      "jacobian_eig1_real": -0.029337292537093163,
       "jacobian_positive_evals": 1.0,
-      "jacobian_trace": -8.598976135253906
+      "jacobian_trace": -5.910545825958252
     },
     "12Baso": {
-      "energy_total": 4.3838073363298875,
-      "jacobian_eig1_real": -0.05777492746710777,
+      "energy_total": 4.567960517323471,
+      "jacobian_eig1_real": -0.0494706928730011,
       "jacobian_positive_evals": 0.0,
-      "jacobian_trace": -8.194954872131348
+      "jacobian_trace": -6.845433235168457
     },
     "8Mk": {
-      "energy_total": 4.826944531901902,
-      "jacobian_eig1_real": -0.05753474310040474,
+      "energy_total": 5.399024808266007,
+      "jacobian_eig1_real": -0.03917042911052704,
       "jacobian_positive_evals": 0.0,
-      "jacobian_trace": -12.110578536987305
+      "jacobian_trace": -9.271446228027344
     },
     "9GMP": {
-      "energy_total": 5.437308562837457,
-      "jacobian_eig1_real": -0.035808760672807693,
+      "energy_total": 5.675554359068111,
+      "jacobian_eig1_real": -0.03228847682476044,
       "jacobian_positive_evals": 1.0,
-      "jacobian_trace": -7.795281410217285
+      "jacobian_trace": -6.613801002502441
     },
     "1Ery": {
-      "energy_total": 5.225498703155135,
-      "jacobian_eig1_real": -0.09598500281572342,
+      "energy_total": 5.739862074207131,
+      "jacobian_eig1_real": -0.09062395244836807,
       "jacobian_positive_evals": 2.0,
-      "jacobian_trace": -16.788684844970703
+      "jacobian_trace": -14.80259895324707
     },
     "17Neu": {
-      "energy_total": 3.0055568336428813,
-      "jacobian_eig1_real": -0.06385785341262817,
+      "energy_total": 3.215077872493779,
+      "jacobian_eig1_real": -0.05532713979482651,
       "jacobian_positive_evals": 0.0,
-      "jacobian_trace": -15.376113891601562
+      "jacobian_trace": -13.654044151306152
     }
   },
   "top_drivers": [
     {
       "gene": "Myc",
-      "out_strength": 3.035952091217041
+      "out_strength": 2.9372715950012207
     },
     {
       "gene": "Ybx1",
-      "out_strength": 2.1105101108551025
+      "out_strength": 1.9027481079101562
     },
     {
       "gene": "Nfe2",
-      "out_strength": 1.8171073198318481
+      "out_strength": 1.6998459100723267
     },
     {
       "gene": "Myb",
-      "out_strength": 1.4986040592193604
+      "out_strength": 1.500076174736023
     },
     {
       "gene": "Smarcc1",
-      "out_strength": 0.9656010866165161
+      "out_strength": 0.9654099941253662
     },
     {
       "gene": "Cux1",
-      "out_strength": 0.5341297388076782
+      "out_strength": 0.5320572257041931
     },
     {
       "gene": "Lmo2",
-      "out_strength": 0.48571693897247314
+      "out_strength": 0.5012967586517334
     },
     {
       "gene": "Smarcc2",
-      "out_strength": 0.4390183389186859
+      "out_strength": 0.41389015316963196
     },
     {
       "gene": "Ucp2",
@@ -185,22 +185,22 @@
   "perturbation": {
     "target": "Myc",
     "impact_per_cluster": {
-      "14Mo": 0.016499880701303482,
-      "2Ery": 0.02559618465602398,
-      "13Baso": 0.011435731314122677,
-      "3Ery": 0.031404461711645126,
-      "15Mo": 0.014037529937922955,
-      "5Ery": 0.0434127114713192,
-      "6Ery": 0.028971804305911064,
-      "7MEP": 0.00785543117672205,
-      "16Neu": 0.012955611571669579,
-      "10GMP": 0.01346119400113821,
-      "4Ery": 0.04098467156291008,
-      "12Baso": 0.0036409907042980194,
-      "8Mk": 0.006399752572178841,
-      "9GMP": 0.016460459679365158,
-      "1Ery": 0.053758587688207626,
-      "17Neu": 0.001366559648886323
+      "14Mo": 0.01597852259874344,
+      "2Ery": 0.023447446525096893,
+      "13Baso": 0.009147102944552898,
+      "3Ery": 0.01779300533235073,
+      "15Mo": 0.013420946896076202,
+      "5Ery": 0.03100259229540825,
+      "6Ery": 0.021806424483656883,
+      "7MEP": 0.006757065188139677,
+      "16Neu": 0.011309183202683926,
+      "10GMP": 0.011361159384250641,
+      "4Ery": 0.02841036580502987,
+      "12Baso": 0.003309438703581691,
+      "8Mk": 0.005440439097583294,
+      "9GMP": 0.014663197100162506,
+      "1Ery": 0.047432079911231995,
+      "17Neu": 0.0013223449932411313
     }
   }
 }

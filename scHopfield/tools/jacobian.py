@@ -267,9 +267,13 @@ def compute_jacobian_stats(
         )
 
     if store_in_obs:
-        # First eigenvalue
+        # First stored eigenvalue (arbitrary order -- NOT the leading one)
         adata.obs['jacobian_eig1_real'] = eigenvalues[:, 0].real
         adata.obs['jacobian_eig1_imag'] = eigenvalues[:, 0].imag
+
+        # Leading eigenvalue: the largest real part governs local stability
+        # (positive => at least one unstable mode). Use this, not eig1, for stability.
+        adata.obs['jacobian_leading_real'] = eigenvalues.real.max(axis=1)
 
         # Count positive and negative eigenvalues
         adata.obs['jacobian_positive_evals'] = np.sum(eigenvalues.real > 0, axis=1)

@@ -16,133 +16,135 @@
     "Melanocyte cells",
     "Olfactory ensheathing cells"
   ],
-  "scaffold": null,
+  "scaffold": {
+    "n_tfs": 33,
+    "n_edges": 4478
+  },
   "seed": 0,
   "pipeline_steps": [
-    "select_top_velocity_genes(n=250)",
-    "fit_interactions (pseudoinverse)",
+    "fit_interactions (scaffold)",
     "compute_energies",
     "compute_jacobians + stats",
-    "compute_network_centrality FAILED: KeyError: \"The following id_vars or value_vars are not present in the DataFrame: ['index']\""
+    "compute_network_centrality"
   ],
   "stability_by_cluster": {
     "Neural crest (PNS neurons)": {
-      "energy_total": -129.48293309631774,
-      "jacobian_eig1_real": 0.33867207169532776,
-      "jacobian_positive_evals": 3.0,
-      "jacobian_trace": -245.71707153320312
+      "energy_total": 6.688956516852453,
+      "jacobian_eig1_real": -0.9195894002914429,
+      "jacobian_positive_evals": 1.0,
+      "jacobian_trace": -155.56121826171875
     },
     "Neural crest (PNS glia)": {
-      "energy_total": -389.08867606781774,
-      "jacobian_eig1_real": 0.43880996108055115,
-      "jacobian_positive_evals": 5.0,
-      "jacobian_trace": -246.54681396484375
+      "energy_total": 7.266052083125355,
+      "jacobian_eig1_real": -0.5789294838905334,
+      "jacobian_positive_evals": 1.0,
+      "jacobian_trace": -159.17703247070312
     },
     "Myelinating Schwann cells": {
-      "energy_total": -636.5739757032068,
-      "jacobian_eig1_real": 0.16277502477169037,
-      "jacobian_positive_evals": 3.0,
-      "jacobian_trace": -248.67051696777344
+      "energy_total": 6.661060342603204,
+      "jacobian_eig1_real": -0.6817406415939331,
+      "jacobian_positive_evals": 1.0,
+      "jacobian_trace": -174.92794799804688
     },
     "Otic sensory neurons": {
-      "energy_total": -444.5806405817492,
-      "jacobian_eig1_real": -0.7333425283432007,
-      "jacobian_positive_evals": 12.0,
-      "jacobian_trace": -252.1942596435547
+      "energy_total": 7.344029478488549,
+      "jacobian_eig1_real": -0.786419153213501,
+      "jacobian_positive_evals": 1.0,
+      "jacobian_trace": -164.69802856445312
     },
     "Myelinating Schwann cells (Tgfb2+)": {
-      "energy_total": -1767.0310653994761,
-      "jacobian_eig1_real": -2.668771982192993,
-      "jacobian_positive_evals": 16.0,
-      "jacobian_trace": -249.8177032470703
+      "energy_total": 4.511468079948943,
+      "jacobian_eig1_real": -0.8710862994194031,
+      "jacobian_positive_evals": 1.0,
+      "jacobian_trace": -181.92318725585938
     },
     "Dorsal root ganglion neurons": {
-      "energy_total": -3800.3458959648383,
-      "jacobian_eig1_real": 5.884161949157715,
-      "jacobian_positive_evals": 26.0,
-      "jacobian_trace": -245.78253173828125
+      "energy_total": 5.608330186780532,
+      "jacobian_eig1_real": -0.8365475535392761,
+      "jacobian_positive_evals": 1.0,
+      "jacobian_trace": -178.16168212890625
     },
     "Enteric neurons": {
-      "energy_total": -78.92496788330936,
-      "jacobian_eig1_real": 0.01908901333808899,
+      "energy_total": 5.866819970503267,
+      "jacobian_eig1_real": -0.9408762454986572,
       "jacobian_positive_evals": 1.0,
-      "jacobian_trace": -256.9263916015625
+      "jacobian_trace": -183.41928100585938
     },
     "Melanocyte cells": {
-      "energy_total": -143.23573515510998,
-      "jacobian_eig1_real": -0.013128824532032013,
+      "energy_total": 2.7797335953688194,
+      "jacobian_eig1_real": -0.8068873882293701,
       "jacobian_positive_evals": 0.0,
-      "jacobian_trace": -258.4354248046875
+      "jacobian_trace": -192.35943603515625
     },
     "Olfactory ensheathing cells": {
-      "energy_total": -165.22507933351775,
-      "jacobian_eig1_real": 0.10475966334342957,
+      "energy_total": 6.025362232458417,
+      "jacobian_eig1_real": -0.770717203617096,
       "jacobian_positive_evals": 1.0,
-      "jacobian_trace": -256.2403259277344
+      "jacobian_trace": -188.65298461914062
     }
   },
   "top_drivers": [
     {
-      "gene": "Wwtr1",
-      "out_strength": 15.72865041080026
+      "gene": "Rest",
+      "out_strength": 24.033540725708008
     },
     {
-      "gene": "Pcdh1",
-      "out_strength": 13.740781535903475
+      "gene": "Klf3",
+      "out_strength": 12.913890838623047
     },
     {
-      "gene": "Rtn1",
-      "out_strength": 11.5124067578564
+      "gene": "Chd2",
+      "out_strength": 12.421212196350098
     },
     {
-      "gene": "Filip1l",
-      "out_strength": 11.040911612315941
+      "gene": "Rad21",
+      "out_strength": 10.648585319519043
     },
     {
-      "gene": "Lamc1",
-      "out_strength": 10.995450564728088
+      "gene": "Tfdp1",
+      "out_strength": 7.481553554534912
     },
     {
-      "gene": "Ina",
-      "out_strength": 9.826236232115274
+      "gene": "Zbtb1",
+      "out_strength": 6.950973033905029
     },
     {
-      "gene": "Yap1",
-      "out_strength": 9.507222804105446
+      "gene": "E2f3",
+      "out_strength": 6.598892688751221
     },
     {
-      "gene": "Fbn1",
-      "out_strength": 9.375850240767004
+      "gene": "Nrf1",
+      "out_strength": 6.041686058044434
     },
     {
-      "gene": "Stmn2",
-      "out_strength": 8.773935547247488
+      "gene": "Klf9",
+      "out_strength": 5.628262519836426
     },
     {
-      "gene": "Nedd1",
-      "out_strength": 8.318210427849454
+      "gene": "Gabpa",
+      "out_strength": 5.4606804847717285
     },
     {
-      "gene": "Tcf7l1",
-      "out_strength": 8.233487258100148
+      "gene": "Smad4",
+      "out_strength": 5.3477277755737305
     },
     {
-      "gene": "Fbn2",
-      "out_strength": 8.113289485706286
+      "gene": "Setdb1",
+      "out_strength": 5.267284393310547
     }
   ],
   "perturbation": {
-    "target": "Wwtr1",
+    "target": "Rest",
     "impact_per_cluster": {
-      "Neural crest (PNS neurons)": 0.001128438743762672,
-      "Neural crest (PNS glia)": 0.028279198333621025,
-      "Myelinating Schwann cells": 0.04130106791853905,
-      "Otic sensory neurons": 0.001065631746314466,
-      "Myelinating Schwann cells (Tgfb2+)": 0.14224150776863098,
-      "Dorsal root ganglion neurons": 0.0682065561413765,
-      "Enteric neurons": 9.724991832626984e-05,
-      "Melanocyte cells": 0.0011887974105775356,
-      "Olfactory ensheathing cells": 0.030907968059182167
+      "Neural crest (PNS neurons)": 0.020023874938488007,
+      "Neural crest (PNS glia)": 0.11826030164957047,
+      "Myelinating Schwann cells": 0.14078038930892944,
+      "Otic sensory neurons": 0.023782776668667793,
+      "Myelinating Schwann cells (Tgfb2+)": 0.0721166580915451,
+      "Dorsal root ganglion neurons": 0.01514289528131485,
+      "Enteric neurons": 0.0009614275186322629,
+      "Melanocyte cells": 0.10080555081367493,
+      "Olfactory ensheathing cells": 0.15284374356269836
     }
   }
 }
