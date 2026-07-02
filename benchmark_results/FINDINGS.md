@@ -332,3 +332,37 @@ Spearman rank correlation trivial baseline approx 0. "Reproducible" target = 1.0
   scaffold is a coarse prior for this specific system. Honest caveat: the model's
   perturbation predictions apply to transcription factors, not structural/receptor genes.
 - Disposition: generalizes M4; fold into a cross-dataset note. audit? y.
+
+## M16: bias-term penalty -- L1 (lasso) fixes the "bias takes over" problem
+
+- Question (user): the model fits v = W.sigma(x) + I - gamma.x. The bias I is a
+  free per-gene intercept, confounded with W.sigma (sigma is near-constant within
+  a cluster), so without a strong penalty I absorbs the mean velocity and its
+  energy blows up. The current penalty is the L2 norm ||I||_2 (regvelo-style),
+  which keeps I small but uniformly, flattening genuine external inputs too. The
+  desired behaviour: I ~ 0 under natural GRN control, large only on genes under a
+  real external forcing (a sparsity requirement).
+- Setup: controlled recovery on real pancreas sigma(x), x (one cluster, N=60
+  genes, realistic confounding). Ground-truth W, gamma, and a SPARSE I_true (6
+  forced genes, rest 0); v = W_true.sigma + I_true - gamma.x + noise. Refit (W, I)
+  with bias_penalty in {l2, l1, elastic} x bias_lambda in {0.1, 1, 10}, 2 GT seeds.
+  Two scenarios: natural (I_true=0) and forced.
+- Result (mean over seeds, best bias_lambda per penalty):
+  - FORCED contrast (|I| forced / |I| non-forced):  L2 = 4.8,  elastic = 16,  L1 = 81.
+    (illustrative fit: L2 = 4.5, L1 = 78.) L1 recovers a genuinely sparse bias;
+    L2 smears it across all genes (non-forced reach ~half the forced magnitude).
+  - Magnitude/sign recovery (corr with I_true): L2 = 0.76, L1 = 0.82, elastic = 0.89.
+  - Gene-identification AUROC: L2 = 0.99, elastic = 0.99, L1 = 0.88.
+  - NATURAL residual bias (mean|I|, want ~0): at the SAME low lambda that L2 needs
+    to recover the forced bias (0.1), L2 lets the bias take over (mean|I| = 0.53);
+    L1 stays tiny (0.013) at every lambda. L2 has NO single lambda that both
+    recovers a forced bias and keeps the natural bias at zero; L1 does both.
+- Takeaway: switch the bias penalty to L1. It is lambda-robust (never lets the
+  bias take over) and produces the desired sparse bias (small under natural
+  differentiation, large and localized on externally forced genes). Elastic-net
+  is a good middle ground (best magnitude fidelity, ~16x contrast). Implemented
+  as a `bias_penalty` option ('l2' legacy default, 'l1', 'elastic') on
+  ScaffoldOptimizer and fit_interactions.
+- Disposition: model/loss improvement. Next: validate on a real forced dataset
+  (reprogramming / dox-inducible OSKM), where the OSKM factors + targets should
+  carry large bias vs endogenous differentiation. audit? y.

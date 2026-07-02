@@ -53,6 +53,8 @@ class ScaffoldOptimizer(nn.Module):
         reconstruction_regularization: float = 1.0,
         bias_regularization: float = 1.0,
         bias_bias: float = 0.0,
+        bias_penalty: str = 'l2',
+        elastic_ratio: float = 0.5,
         use_masked_linear: bool = False,
         pre_initialized_W: torch.Tensor = None,
         pre_initialized_I: torch.Tensor = None,
@@ -76,6 +78,8 @@ class ScaffoldOptimizer(nn.Module):
         self.reconstruction_lambda = reconstruction_regularization
         self.bias_lambda = bias_regularization
         self.bias_bias = bias_bias
+        self.bias_penalty = bias_penalty
+        self.elastic_ratio = elastic_ratio
         self.normalize_regularization = normalize_regularization
 
         n = g.shape[0]
@@ -134,6 +138,29 @@ class ScaffoldOptimizer(nn.Module):
         Jmodel = self.W.weight[None, :, :] * sp[:, None, :]    # W[i,j]*sigma'_j: (b, i, j)
         diff = (Jmodel - j["data"][idx]) * j["offmask"][None]
         return diff.pow(2).sum() / idx.shape[0]
+
+    def _bias_loss(self, batch_size=None):
+        """Penalty on the bias vector I.
+
+        - ``'l2'`` (default, legacy): ``lambda * ||I + bias_bias||_2`` (group shrinkage;
+          drives the whole vector uniformly small, so a genuine per-gene input is
+          flattened together with the noise).
+        - ``'l1'``: ``lambda * ||I + bias_bias||_1`` (lasso; sparse -- most genes get
+          exactly zero bias, a few can grow. Matches "small under natural GRN control,
+          large only on externally forced genes").
+        - ``'elastic'``: ``lambda * (r*||.||_1 + (1-r)*||.||_2^2)`` (sparse but stable).
+        """
+        Ib = self.I + self.bias_bias
+        if self.bias_penalty == 'l1':
+            val = Ib.abs().sum()
+        elif self.bias_penalty == 'elastic':
+            val = self.elastic_ratio * Ib.abs().sum() + (1.0 - self.elastic_ratio) * Ib.pow(2).sum()
+        else:  # 'l2' (legacy default)
+            val = Ib.norm(2)
+        val = self.bias_lambda * val
+        if self.normalize_regularization and batch_size:
+            val = val / batch_size
+        return val
 
     def forward(self, inputs):
         """
@@ -257,13 +284,12 @@ class ScaffoldOptimizer(nn.Module):
                 reconstruction_loss = self.reconstruction_lambda * loss_fn(output, target)
 
                 # Normalize regularization losses by batch size if requested
+                batch_size = s_batch.shape[0]
                 if self.normalize_regularization:
-                    batch_size = s_batch.shape[0]
                     graph_constr_loss = self.scaffold_lambda * ((self.W.weight * mask_m).norm(2) + (self.W.weight * mask_m).norm(1)) / batch_size
-                    bias_loss = self.bias_lambda * torch.abs(self.I+self.bias_bias).norm(2) / batch_size
                 else:
                     graph_constr_loss = self.scaffold_lambda * ((self.W.weight * mask_m).norm(2) + (self.W.weight * mask_m).norm(1))
-                    bias_loss = self.bias_lambda * torch.abs(self.I+self.bias_bias).norm(2)
+                bias_loss = self._bias_loss(batch_size)
 
                 total_loss = reconstruction_loss + graph_constr_loss + bias_loss
                 if jacobian_lambda > 0 and self._jac is not None:
@@ -431,13 +457,12 @@ class HillScaffoldOptimizer(ScaffoldOptimizer):
                 optimizer.zero_grad()
                 output = self((s_batch, x_batch))
                 reconstruction_loss = self.reconstruction_lambda * loss_fn(output, target)
+                bs = s_batch.shape[0]
                 if self.normalize_regularization:
-                    bs = s_batch.shape[0]
                     graph_constr_loss = self.scaffold_lambda * ((self.W.weight * mask_m).norm(2) + (self.W.weight * mask_m).norm(1)) / bs
-                    bias_loss = self.bias_lambda * torch.abs(self.I + self.bias_bias).norm(2) / bs
                 else:
                     graph_constr_loss = self.scaffold_lambda * ((self.W.weight * mask_m).norm(2) + (self.W.weight * mask_m).norm(1))
-                    bias_loss = self.bias_lambda * torch.abs(self.I + self.bias_bias).norm(2)
+                bias_loss = self._bias_loss(bs)
                 total_loss = reconstruction_loss + graph_constr_loss + bias_loss + self.hill_anchor_loss()
                 total_loss.backward()
                 optimizer.step()
