@@ -392,3 +392,26 @@ Spearman rank correlation trivial baseline approx 0. "Reproducible" target = 1.0
   a targeted transitional-cell / stage-contrast analysis. Not a refutation, a
   data/velocity limitation.
 - Disposition: honest limitation; keep L1 default (synthetic-validated). audit? y.
+
+## M18: refined reprogramming bias validation (Option A) -- qualitatively SUPPORTED
+
+- Fix over M17: velocity direction from a DPT pseudotime rooted at a day-0 MEF cell
+  (instead of the discrete day axis), and the bias fit PER STAGE (MEF ->
+  transitional -> iPSC, DPT terciles). Schiebinger serum data, 9k-cell subsample,
+  300 genes, L1 bias.
+- Result: the exogenous OSKM factors carry outsized bias in every stage.
+  OSKM mean|I| vs rest: MEF 8.6/3.2, transitional 12.6/6.3, iPSC 10.8/3.7 (~2-3x).
+  Against random 4-gene sets (n=5000), OSKM sits at the 91 / 87 / 90th percentile
+  (p = 0.09 / 0.13 / 0.10). Myc is strongest (rank 10-15 of 311), Pou5f1 and Klf4
+  elevated; Sox2 is the outlier (rank ~150) -- consistent with Sox2 being the most
+  dispensable/variable reprogramming factor. The downstream pluripotency program
+  (Nanog, Esrrb, Zfp42, ...) does NOT carry bias -- correct: it turns on THROUGH the
+  network, so W explains it, not the bias.
+- Negative control: natural pancreas (no forcing) -- a random 4-gene set sits at the
+  6th percentile of its own null (p = 0.94). No spurious localization.
+- Honest caveats: per-gene significance is p ~ 0.1 (only 4 forced factors, and
+  time-axis velocity is noisy), so this is a supportive trend, not p<0.05. But the
+  direction, its consistency across 3 stages, the OSKM-specific (not program-wide)
+  localization, and the sharp contrast with the negative control all match the
+  prediction: the L1 bias captures the exogenous forcing, and only when it exists.
+- Disposition: real-data support for the bias interpretation + L1 default. audit? y.
