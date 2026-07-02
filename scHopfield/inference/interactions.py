@@ -218,7 +218,7 @@ def fit_interactions(
     reconstruction_regularization: float = 1.0,
     bias_regularization: float = 1.0,
     bias_bias: float = 0.0,
-    bias_penalty: str = 'l2',
+    bias_penalty: str = 'l1',
     elastic_ratio: float = 0.5,
     only_TFs: bool = False,
     infer_I: bool = False,

@@ -53,7 +53,7 @@ class ScaffoldOptimizer(nn.Module):
         reconstruction_regularization: float = 1.0,
         bias_regularization: float = 1.0,
         bias_bias: float = 0.0,
-        bias_penalty: str = 'l2',
+        bias_penalty: str = 'l1',
         elastic_ratio: float = 0.5,
         use_masked_linear: bool = False,
         pre_initialized_W: torch.Tensor = None,
@@ -142,12 +142,12 @@ class ScaffoldOptimizer(nn.Module):
     def _bias_loss(self, batch_size=None):
         """Penalty on the bias vector I.
 
-        - ``'l2'`` (default, legacy): ``lambda * ||I + bias_bias||_2`` (group shrinkage;
-          drives the whole vector uniformly small, so a genuine per-gene input is
-          flattened together with the noise).
-        - ``'l1'``: ``lambda * ||I + bias_bias||_1`` (lasso; sparse -- most genes get
-          exactly zero bias, a few can grow. Matches "small under natural GRN control,
-          large only on externally forced genes").
+        - ``'l1'`` (default): ``lambda * ||I + bias_bias||_1`` (lasso; sparse -- most
+          genes get exactly zero bias, a few can grow. Matches "small under natural
+          GRN control, large only on externally forced genes"; see FINDINGS M16).
+        - ``'l2'`` (legacy): ``lambda * ||I + bias_bias||_2`` (group shrinkage; drives
+          the whole vector uniformly small, so a genuine per-gene input is flattened
+          together with the noise).
         - ``'elastic'``: ``lambda * (r*||.||_1 + (1-r)*||.||_2^2)`` (sparse but stable).
         """
         Ib = self.I + self.bias_bias
