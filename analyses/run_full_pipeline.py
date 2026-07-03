@@ -263,7 +263,13 @@ def main():
     ap.add_argument("--device", default=None, help="cpu or cuda (default: auto)")
     ap.add_argument("--n-genes", type=int, default=250)
     ap.add_argument("--seed", type=int, default=0)
+    ap.add_argument("--out-root", default=None,
+                    help="output root (default: benchmark_results/pipeline)")
     args = ap.parse_args()
+
+    if args.out_root:
+        global OUT_ROOT
+        OUT_ROOT = args.out_root
 
     if args.device is None:
         import torch

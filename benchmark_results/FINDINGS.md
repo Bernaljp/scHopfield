@@ -450,3 +450,12 @@ Spearman rank correlation trivial baseline approx 0. "Reproducible" target = 1.0
   the cross-dataset stability figures use it. Most cells carry a positive leading
   eigenvalue (trajectory/unstable direction), consistent with the positive-eigenvalue
   count. See cross_dataset/CROSS_DATASET_FIGURE_GUIDE.md. audit? y.
+
+## M21 -- Ablation: is a single global GRN enough? (pancreas)
+Per-cluster baseline reconstruction cosine 0.853 vs a single global GRN 0.723. Cell-type-specific GRNs improve the velocity fit, supporting per-cluster inference.
+
+## M22 -- Ablation: neighbors and hierarchical pretraining (pancreas)
+Reconstruction cosine: baseline (neighbors 0.2) 0.853, no neighbors 0.858, neighbor_fraction 0.4 0.844, hierarchical pretrain 0.853. See figure_packs/pack8_ablations.
+
+## M23 -- Ablation: Hill fit and bias penalty (pancreas)
+Jointly-fit Hill cosine 0.739 vs heuristic 0.853. Bias energy fraction: L1 0.0%, L2 0.3%, no penalty 42.3%, no scaffold 94.8%. The scaffold + L1 penalty are what keep the bias term from taking over.

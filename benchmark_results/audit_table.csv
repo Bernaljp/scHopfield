@@ -14,3 +14,15 @@ analyses/no_scaffold_compare.py,No-scaffold pseudoinverse vs 6 scaffold settings
 analyses/grn_baseline_genie3.py,scHopfield vs GENIE3 GRN recovery on synthetic ground truth,synthetic,current,KEEP,Fig2-baseline,M8 AUROC 0.98 vs 0.70
 analyses/(inline biophysical audit),DissOsc corr 1.0 harness fix; Novak/Adlung velocity-R2 1.0,synthetic,current,KEEP,Discussion-limitation,M9
 (inline biophysical identifiability audit),effective-GRN recovery: trajectory 0.48 -> broad-sampling 0.85/0.98,synthetic,current,KEEP,Discussion,M10
+scHopfield/inference/optimizer.py,A1 gamma clamp fix + A4 scaffold-mode docs + seeded Jacobian loss,-,current,KEEP,code-fix,exp(clamp(log_gamma)) -> exp(gamma).clamp(gamma_max=10)
+scHopfield/_utils/math.py,A2 bounded+refined Hill fit (fit_sigmoid) + degenerate-gene guards,-,current,KEEP,code-fix,"n in [1,8], k>0, nonlinear refine; fit_k divide-by-zero guard"
+scHopfield/inference/interactions.py,A2 wire HillScaffoldOptimizer (fit_hill/hill_kwargs),-,current,KEEP,code-fix,jointly-fit per-gene Hill option
+scHopfield/tools/perturbation_analysis.py,A3 standardized score_driver_tfs; rename flow-bias; new compute_perturbation_commitment_change,-,current,KEEP,code-fix,well-defined pre/post lineage-commitment score
+scHopfield/dynamics/perturbation.py,"A5 fractional dosing (dose_levels_from_fractions, fractions kwarg)",-,current,KEEP,code-fix,dose as fraction of natural max
+analyses/figure_packs/pack1_small_circuits.py,Pack1: circuit dynamics/recovery/bifurcation/Hill/Jacobian,synthetic,current,KEEP,Fig2-3,13 figs; toggle+osc recovery edge-sign 1.0
+analyses/figure_packs/pack2_networks.py,Pack2: centrality per cell type + network similarity,all5,current,KEEP,Fig5,30 figs across 5 datasets
+analyses/figure_packs/pack3_perturbation.py,"Pack3: pre/post commitment, dose-response, KO sims","hemato,pancreas",current,KEEP,Fig4,12 figs; improved bias scores
+analyses/figure_packs/pack4_double_ko.py,Pack4: double-KO screen + epistasis,"hemato,pancreas",current,KEEP,Fig4,8 figs; synergy/antagonism
+analyses/figure_packs/pack5_energy_stability.py,"Pack5: energy landscape, Jacobians, stability",all5,current,KEEP,Fig6,40 figs
+analyses/figure_packs/pack6_overview_crossdataset.py,Pack6/7: reconstruction quality + cross-dataset generalization,all5,current,KEEP,Fig1,9 figs; bias 0% everywhere
+analyses/figure_packs/pack_ablations.py,Pack8: single-GRN/neighbors/hierarchical/Hill/bias/scaffold ablations,pancreas,current,KEEP,R1/R4,M21-M23; no-scaffold->95% bias takeover

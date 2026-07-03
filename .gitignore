@@ -136,3 +136,7 @@ archive/
 
 # Fitted model checkpoints (local setup artifacts)
 *.h5sch
+
+# Comprehensive figure packs + their re-fits (local-only, heavy; not tracked).
+# Anchored to repo root so analyses/figure_packs/ (the tracked scripts) is unaffected.
+/figure_packs/
