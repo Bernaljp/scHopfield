@@ -4,6 +4,7 @@ import numpy as np
 from scipy.interpolate import griddata
 from scipy.special import hyp2f1 as hyper
 from scipy.signal import convolve2d
+from scipy.optimize import least_squares
 
 
 def sigmoid(x, s, n):
@@ -73,12 +74,21 @@ def fit_k(g):
 
     # Sort g to compute the ECDF
     sorted_g = np.sort(g)
+    if sorted_g.size == 0:
+        return 0.0
+    if sorted_g.size < 2 or np.ptp(sorted_g) == 0:
+        # Degenerate (single/constant value): the "threshold" is that value.
+        return float(sorted_g[0])
 
     # Compute ECDF - each point in sorted_g corresponds to a step in the ECDF
     ecdf = np.arange(1, len(sorted_g) + 1) / len(sorted_g)
 
-    # Compute the gradient of the ECDF to find the most rapid increase
-    gradient_ecdf = np.gradient(ecdf, sorted_g)
+    # Compute the gradient of the ECDF to find the most rapid increase. Ties in
+    # sorted_g give zero spacing (divide-by-zero); those become non-finite and are
+    # ignored so the argmax lands on a real, finite maximum.
+    with np.errstate(divide="ignore", invalid="ignore"):
+        gradient_ecdf = np.gradient(ecdf, sorted_g)
+    gradient_ecdf = np.where(np.isfinite(gradient_ecdf), gradient_ecdf, -np.inf)
 
     # Find the index of the maximum gradient, which corresponds to the optimal k
     max_gradient_index = np.argmax(gradient_ecdf)
@@ -89,33 +99,104 @@ def fit_k(g):
     return k
 
 
-def fit_sigmoid(g, min_th=0.05):
+def fit_sigmoid(g, min_th=0.05, n_min=1.0, n_max=8.0, refine=True):
     """
-    Fit a sigmoid curve to the given data using a fast fitting method with a fallback to a more accurate method if needed.
-    """
-    length = len(g)
-    min_th *= max(g)
-    offset = np.sum(g < min_th) / length
-    valid_data = g[g > min_th]
+    Fit a Hill/sigmoid CDF ``phi(x) = x^n / (x^n + k^n)`` to a gene's expression.
 
-    # Fast fit
-    x = np.sort(valid_data)
-    y = np.linspace(0, 1, len(valid_data))
-    # y spans [0, 1] inclusive, so the endpoints give log(0) / divide-by-zero;
-    # these are dropped by the isfinite mask below. Silence the expected warnings.
+    A fast closed-form estimate (linear regression of the log-logit ECDF) initializes
+    ``(k, n)``; it is then constrained to biologically plausible bounds
+    (``n in [n_min, n_max]``, ``0 < k <= max(x)``) and, if ``refine``, polished by a
+    bounded nonlinear least-squares fit to the ECDF (kept only when it lowers the MSE).
+    Degenerate genes (all-zero, constant, or too few expressed cells) are handled
+    explicitly instead of returning NaN or out-of-range parameters, which the raw
+    closed-form fit could previously do (negative ``n``, ``k`` exploding via
+    ``exp(-b/n)`` when ``n -> 0``).
+
+    Parameters
+    ----------
+    g : np.ndarray
+        Expression values of one gene across cells.
+    min_th : float, optional (default: 0.05)
+        Cells below ``min_th * max(g)`` are treated as "off" and excluded from the CDF
+        fit; their fraction is returned as ``offset``.
+    n_min, n_max : float, optional (default: 1.0, 8.0)
+        Bounds on the Hill exponent (matches ``HillScaffoldOptimizer``). ``n >= 1`` keeps
+        the activation monotone-sigmoidal; the upper cap avoids near-step fits to noise.
+    refine : bool, optional (default: True)
+        Refine the clamped closed-form estimate with a bounded nonlinear least-squares
+        fit; the refined ``(k, n)`` is kept only when it does not worsen the MSE.
+
+    Returns
+    -------
+    (k, n, offset, mse) : tuple of float
+        Half-max threshold ``k``, Hill exponent ``n``, off-fraction, and CDF-fit MSE.
+    """
+    g = np.asarray(g, dtype=float)
+    g = g[np.isfinite(g)]
+    n_default = float(np.clip(2.0, n_min, n_max))
+
+    # Degenerate: no data or non-positive dynamic range -> gene is effectively "off".
+    if g.size == 0 or not (np.max(g) > 0):
+        return 1.0, n_default, 1.0, 0.0
+
+    gmax = float(np.max(g))
+    thr = min_th * gmax
+    offset = float(np.mean(g < thr))
+    valid = np.sort(g[g > thr])
+
+    # Too few expressed cells for a shape fit -> robust threshold, default exponent.
+    if valid.size < 5:
+        k = float(np.clip(np.median(valid) if valid.size else gmax, 1e-6, gmax))
+        x_cdf = valid if valid.size else np.array([gmax])
+        y_cdf = np.linspace(0.0, 1.0, x_cdf.size)
+        mse = float(np.mean((sigmoid(x_cdf, k, n_default) - y_cdf) ** 2))
+        return k, n_default, offset, mse
+
+    x_cdf = valid
+    y_cdf = np.linspace(0.0, 1.0, valid.size)
+
+    def _mse(k, n):
+        return float(np.mean((sigmoid(x_cdf, k, n) - y_cdf) ** 2))
+
+    # Fast closed-form estimate: regress logit(y) on log(x). Endpoints y in {0,1} give
+    # +/-inf and are dropped by the finite mask (expected; warnings silenced).
     with np.errstate(divide="ignore", invalid="ignore"):
-        tx = np.log(x)
-        ty = np.log(y / (1 - y))
+        tx = np.log(x_cdf)
+        ty = np.log(y_cdf / (1.0 - y_cdf))
+    m = np.isfinite(tx) & np.isfinite(ty)
+    n_hat, b_hat = np.nan, np.nan
+    if m.sum() >= 2:
+        A = np.vstack([tx[m], np.ones(int(m.sum()))]).T
+        n_hat, b_hat = np.linalg.lstsq(A, ty[m], rcond=None)[0]
 
-    valid = np.isfinite(tx) & np.isfinite(ty)
-    tx, ty = tx[valid], ty[valid]
+    # Derive (k, n) from the closed-form fit, clamped to valid ranges.
+    if np.isfinite(n_hat) and n_hat > 0:
+        n0 = float(np.clip(n_hat, n_min, n_max))
+        k0 = float(np.exp(-b_hat / n_hat)) if np.isfinite(b_hat) else fit_k(valid)
+    else:
+        n0 = n_default
+        k0 = fit_k(valid)
+    k0 = float(np.clip(k0, 1e-6, gmax))
 
-    A = np.vstack([tx, np.ones(len(tx))]).T
-    n, b = np.linalg.lstsq(A, ty, rcond=None)[0]
-    m1 = np.exp(-b / n)
-    mse = np.mean((sigmoid(x, m1, n) - y) ** 2)
+    k_best, n_best, mse_best = k0, n0, _mse(k0, n0)
 
-    return m1, n, offset, mse
+    # Bounded nonlinear refinement on the ECDF.
+    if refine:
+        try:
+            res = least_squares(
+                lambda p: sigmoid(x_cdf, p[0], p[1]) - y_cdf,
+                x0=[k0, n0],
+                bounds=([1e-6, n_min], [gmax, n_max]),
+                max_nfev=200,
+            )
+            k_r, n_r = float(res.x[0]), float(res.x[1])
+            mse_r = _mse(k_r, n_r)
+            if np.isfinite(mse_r) and mse_r <= mse_best:
+                k_best, n_best, mse_best = k_r, n_r, mse_r
+        except Exception:
+            pass
+
+    return k_best, n_best, offset, mse_best
 
 
 def int_sig_act_inv(x, s, n, verbose=False):

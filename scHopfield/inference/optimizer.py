@@ -40,8 +40,24 @@ class MaskedLinearLayer(nn.Module):
 
 class ScaffoldOptimizer(nn.Module):
     """
-    A model that learns:  output = W(s) + I - clamp(gamma, 0) * x
-    with a scaffold-based regularization on W.
+    A model that learns:  output = W(s) + I - gamma * x
+    with a scaffold-based regularization on W. ``gamma`` is stored in log-space and
+    exponentiated to a strictly positive degradation rate, then capped at ``gamma_max``
+    (default 10.0). The cap prevents a runaway rate when ``refit_gamma=True`` and leaves
+    ordinary fixed-gamma fits untouched (data rates are well below the cap).
+
+    Two distinct ways the scaffold constrains W (chosen by ``use_masked_linear``):
+
+    - ``use_masked_linear=False`` (default): W is a free ``nn.Linear`` and off-scaffold
+      weights are **softly** penalized in the loss (``scaffold_regularization`` times the
+      L1+L2 norm of ``W * (1 - scaffold_raw)``). Edges outside the prior can survive if the
+      data demands them.
+    - ``use_masked_linear=True`` (set by ``only_TFs``): W is a ``MaskedLinearLayer`` whose
+      off-mask entries are zeroed at init and kept at zero by a gradient hook (a **hard**
+      constraint). Note the mask here is the set of TF *columns* (any regulator that has at
+      least one outgoing scaffold edge), so this restricts *which genes may regulate*,
+      which is coarser than the per-edge soft penalty. The soft penalty term is still
+      computed but is ~0 for the hard-masked weights.
     """
     def __init__(
         self,
@@ -65,6 +81,7 @@ class ScaffoldOptimizer(nn.Module):
 
         g = torch.log(torch.tensor(g, dtype=torch.float32, device=device)+1e-8)
         self.gamma = nn.Parameter(g) if refit_gamma else g
+        self.gamma_max = 10.0  # cap on the linear degradation rate (see forward)
 
         scaffold = torch.tensor(scaffold, dtype=torch.float32, device=device)
         self.register_buffer("scaffold_raw", scaffold)
@@ -100,7 +117,7 @@ class ScaffoldOptimizer(nn.Module):
         self._jac = None
         self._jac_nsub = 512
 
-    def configure_jacobian_consistency(self, x, sig, exponent, jac_data, n_sub=512):
+    def configure_jacobian_consistency(self, x, sig, exponent, jac_data, n_sub=512, seed=0):
         """Store a per-cell data-estimated Jacobian target for the consistency loss.
 
         The model's local sensitivity is J_model[i,j] = W_ij * sigma'_j(x) (off-diagonal).
@@ -116,6 +133,8 @@ class ScaffoldOptimizer(nn.Module):
         exponent : (N,) per-gene Hill exponents n_j (for sigma'(x) = n*sigma(1-sigma)/x).
         jac_data : (n_cells, N, N) target Jacobian per cell (only off-diagonal is used).
         n_sub : max cells subsampled per optimization step (bounds memory).
+        seed : seed for the per-step cell subsampling, so the Jacobian regularizer is
+            reproducible independent of the global RNG consumption order.
         """
         dev = self.device
         n = self.W.weight.shape[0]
@@ -127,11 +146,18 @@ class ScaffoldOptimizer(nn.Module):
             "offmask": (~torch.eye(n, dtype=torch.bool, device=dev)),
         }
         self._jac_nsub = int(n_sub)
+        try:
+            self._jac_gen = torch.Generator(device=dev).manual_seed(int(seed))
+        except (RuntimeError, TypeError):
+            # Some backends (e.g. MPS) don't support device generators; fall back to
+            # the global RNG (still seeded by sch.set_seed).
+            self._jac_gen = None
 
     def _jacobian_loss(self):
         j = self._jac
         m = j["x"].shape[0]
-        idx = torch.randint(0, m, (min(self._jac_nsub, m),), device=self.device)
+        gen = getattr(self, "_jac_gen", None)
+        idx = torch.randint(0, m, (min(self._jac_nsub, m),), device=self.device, generator=gen)
         x = j["x"][idx]
         sig = j["sig"][idx]
         sp = j["n"][None, :] * sig * (1.0 - sig) / x          # sigma'(x): (b, N)
@@ -170,7 +196,7 @@ class ScaffoldOptimizer(nn.Module):
             torch.Tensor: Output of shape (batch_size, n)
         """
         s, x = inputs
-        gamma_clamped = torch.exp(torch.clamp(self.gamma, max=10.0))
+        gamma_clamped = torch.exp(self.gamma).clamp(max=self.gamma_max)
         # I_clamped = torch.exp(torch.clamp(self.I, max=10.0))
         I_clamped = self.I
         return self.W(s) + I_clamped - gamma_clamped * x
@@ -405,7 +431,7 @@ class HillScaffoldOptimizer(ScaffoldOptimizer):
     def forward(self, inputs):
         _, x = inputs  # precomputed sigma is ignored
         sig = self.hill(x)
-        gamma_clamped = torch.exp(torch.clamp(self.gamma, max=10.0))
+        gamma_clamped = torch.exp(self.gamma).clamp(max=self.gamma_max)
         return self.W(sig) + self.I - gamma_clamped * x
 
     def hill_anchor_loss(self):

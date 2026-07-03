@@ -21,7 +21,7 @@ from tqdm.auto import tqdm
 from .._utils.math import sigmoid
 from .._utils.io import get_matrix, to_numpy, get_genes_used
 from ._utils import _parse_perturb_genes, _get_W_matrix, _compute_x_bounds, _update_scHopfield_uns
-from ..tools.perturbation_analysis import compute_lineage_bias, compute_cluster_effects
+from ..tools.perturbation_analysis import compute_perturbation_flow_bias, compute_cluster_effects
 
 
 def _propagate_signal(
@@ -762,7 +762,7 @@ def run_ko_screen(
             perturb_condition={gene: 0.0},
             **sim_kw,
         )
-        bias_dict[gene]    = compute_lineage_bias(
+        bias_dict[gene]    = compute_perturbation_flow_bias(
             adata_ko, adata,
             lineage_A_clusters, lineage_B_clusters,
             basis, wt_flow_key,
@@ -955,7 +955,7 @@ def run_pairwise_ko_screen(
             perturb_condition={geneA: 0.0, geneB: 0.0},
             **sim_kw,
         )
-        bias_dict[(geneA, geneB)]    = compute_lineage_bias(
+        bias_dict[(geneA, geneB)]    = compute_perturbation_flow_bias(
             adata_pair, adata,
             lineage_A_clusters, lineage_B_clusters,
             basis, wt_flow_key,
@@ -1077,15 +1077,64 @@ def compute_epistasis(
     )
 
 
+def dose_levels_from_fractions(
+    adata: AnnData,
+    gene: str,
+    fractions,
+    spliced_key: str = 'Ms',
+    percentile: float = 99.0,
+    natural_max: Optional[float] = None,
+) -> Tuple[np.ndarray, float]:
+    """
+    Convert fractions of a gene's natural expression maximum to absolute levels.
+
+    ``fractions`` are multiples of the gene's natural maximum, so the dose is expressed
+    in interpretable units rather than raw expression: ``0`` = full knockout, ``0.5`` =
+    knock down to 50%, ``1.0`` = natural level, ``2.0`` = strong overexpression.
+
+    Parameters
+    ----------
+    adata : AnnData
+        AnnData with the gene's expression in ``adata.layers[spliced_key]``.
+    gene : str
+        Gene to dose.
+    fractions : array-like
+        Fractions of the natural max to convert to absolute levels.
+    spliced_key : str, optional (default: 'Ms')
+        Layer used to estimate the natural maximum.
+    percentile : float, optional (default: 99.0)
+        Percentile of the gene's expression taken as the natural maximum (robust to
+        outliers vs the raw max).
+    natural_max : float, optional
+        If given, used directly instead of estimating from the data.
+
+    Returns
+    -------
+    (levels, natural_max) : (np.ndarray, float)
+        Absolute expression levels and the natural maximum used.
+    """
+    if gene not in adata.var_names:
+        raise ValueError(f"Gene '{gene}' not found in adata.var_names")
+    if natural_max is None:
+        idx = int(adata.var_names.get_loc(gene))
+        expr = to_numpy(get_matrix(adata, spliced_key, genes=[idx])).ravel()
+        natural_max = float(np.percentile(expr, percentile))
+    fractions = np.asarray(fractions, dtype=float)
+    return fractions * natural_max, float(natural_max)
+
+
 def run_dose_response(
     adata: AnnData,
     gene: str,
-    levels,
-    lineage_A_clusters: List[str],
-    lineage_B_clusters: List[str],
-    basis: str,
-    wt_flow_key: str,
+    levels=None,
+    lineage_A_clusters: List[str] = None,
+    lineage_B_clusters: List[str] = None,
+    basis: str = 'umap',
+    wt_flow_key: str = None,
     natural_max: Optional[float] = None,
+    fractions=None,
+    spliced_key: str = 'Ms',
+    percentile: float = 99.0,
     cluster_key: str = 'cell_type',
     simulate_kwargs: Optional[Dict] = None,
     verbose: bool = True,
@@ -1097,14 +1146,26 @@ def run_dose_response(
     (strong OE).  Returns lineage bias at each level, revealing whether the
     erythroid/myeloid switch is graded or threshold-like.
 
+    The dose can be given either as absolute ``levels`` or as ``fractions`` of the
+    gene's natural maximum (0 = KO, 0.5 = 50% knockdown, 1 = natural, 2 = strong OE);
+    when neither is given, a default fraction sweep is used.
+
     Parameters
     ----------
     adata : AnnData
         Base (WT) AnnData with fitted model.
     gene : str
         Gene name to perturb.
-    levels : array-like
-        Absolute expression levels to test (e.g. ``np.linspace(0, max*2, 10)``).
+    levels : array-like, optional
+        Absolute expression levels to test (e.g. ``np.linspace(0, max*2, 10)``). If
+        None, computed from ``fractions`` via :func:`dose_levels_from_fractions`.
+    fractions : array-like, optional
+        Fractions of the gene's natural maximum to test (used when ``levels`` is None).
+        Defaults to ``[0, 0.25, 0.5, 0.75, 1.0, 1.5, 2.0]``.
+    spliced_key : str, optional (default: 'Ms')
+        Layer used to estimate the natural maximum when converting fractions.
+    percentile : float, optional (default: 99.0)
+        Percentile taken as the gene's natural maximum for the fraction conversion.
     lineage_A_clusters : list of str
         Cluster names for lineage A (e.g. erythroid).
     lineage_B_clusters : list of str
@@ -1157,6 +1218,14 @@ def run_dose_response(
     )
     sim_kw.update(simulate_kwargs)
 
+    # Resolve dose levels: explicit absolute levels, else fractions of the natural max.
+    if levels is None:
+        if fractions is None:
+            fractions = [0.0, 0.25, 0.5, 0.75, 1.0, 1.5, 2.0]
+        levels, natural_max = dose_levels_from_fractions(
+            adata, gene, fractions, spliced_key=spliced_key,
+            percentile=percentile, natural_max=natural_max,
+        )
     levels = np.asarray(levels, dtype=float)
     records = []
 
@@ -1175,7 +1244,7 @@ def run_dose_response(
             store_key=f'perturbation_flow_{basis}',
             verbose=False,
         )
-        bias = compute_lineage_bias(
+        bias = compute_perturbation_flow_bias(
             adata_t, adata,
             lineage_A_clusters, lineage_B_clusters,
             basis, wt_flow_key,

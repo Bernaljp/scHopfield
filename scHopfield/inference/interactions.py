@@ -7,7 +7,7 @@ from torch.utils.data import WeightedRandomSampler
 from typing import Optional, List, Dict, Tuple
 from anndata import AnnData
 
-from .optimizer import ScaffoldOptimizer
+from .optimizer import ScaffoldOptimizer, HillScaffoldOptimizer
 from .datasets import CustomDataset
 from .._utils.io import get_matrix, to_numpy, get_genes_used
 
@@ -247,6 +247,8 @@ def fit_interactions(
     neighbors_key: str = 'connectivities',
     neighbor_fraction: float = 0.0,
     hierarchical_scaling: bool = False,
+    fit_hill: bool = False,
+    hill_kwargs: Optional[Dict] = None,
     seed: Optional[int] = None,
     copy: bool = False
 ) -> Optional[AnnData]:
@@ -356,6 +358,16 @@ def fit_interactions(
         based on parent's final learning rate. Child levels start with LR
         exponent = parent_final_lr_exponent / 2 (e.g., parent ends at 1e-8,
         child starts at 1e-4).
+    fit_hill : bool, optional (default: False)
+        If True (and a scaffold is provided), jointly fit per-gene Hill parameters
+        (k, n) together with W and I using ``HillScaffoldOptimizer`` instead of the
+        precomputed sigmoid layer. The learned per-cluster (k, n) are stored in
+        ``adata.uns['scHopfield']['hill_params'][cluster]``.
+    hill_kwargs : dict, optional (default: None)
+        Extra options for the jointly-fit Hill model when ``fit_hill=True``:
+        ``k_init`` (per-gene, defaults to the fitted thresholds/medians),
+        ``n_init`` (2.0), ``n_min`` (1.0), ``n_max`` (8.0),
+        ``hill_anchor_lambda`` (1e-2), ``warmup_epochs``, ``hill_lr_factor`` (0.1).
     seed : int, optional (default: None)
         If set, seed Python/NumPy/PyTorch RNGs before fitting so that weight
         initialization and DataLoader shuffling are reproducible. The value is
@@ -501,6 +513,8 @@ def fit_interactions(
                     normalize_regularization=normalize_regularization,
                     is_neighbor=is_neighbor,
                     neighbor_fraction=neighbor_fraction,
+                    fit_hill=fit_hill,
+                    hill_kwargs=hill_kwargs,
                 )
 
                 # Store final learning rate if using scaffold (for hierarchical_scaling)
@@ -568,6 +582,8 @@ def fit_interactions(
                 normalize_regularization=normalize_regularization,
                 is_neighbor=is_neighbor,
                 neighbor_fraction=neighbor_fraction,
+                fit_hill=fit_hill,
+                hill_kwargs=hill_kwargs,
             )
 
     return adata if copy else None
@@ -611,6 +627,8 @@ def _fit_interactions_for_cluster(
     normalize_regularization: bool = False,
     is_neighbor: Optional[np.ndarray] = None,
     neighbor_fraction: float = 0.0,
+    fit_hill: bool = False,
+    hill_kwargs: Optional[Dict] = None,
 ):
     """
     Fit interaction matrix W and bias I for a single cluster.
@@ -648,19 +666,6 @@ def _fit_interactions_for_cluster(
 
     # Use ScaffoldOptimizer if scaffold provided
     if w_scaffold is not None:
-        model = ScaffoldOptimizer(
-            g, w_scaffold, device, refit_gamma,
-            scaffold_regularization=scaffold_regularization,
-            reconstruction_regularization=reconstruction_regularization,
-            bias_regularization=bias_regularization,
-            bias_bias=bias_bias,
-            bias_penalty=bias_penalty,
-            elastic_ratio=elastic_ratio,
-            use_masked_linear=only_TFs,
-            pre_initialized_W=W,
-            pre_initialized_I=bias_vector,
-            normalize_regularization=normalize_regularization
-        )
         train_loader = _create_train_loader(
             sig, v, x, device, batch_size,
             sample_weights=sample_weights,
@@ -669,29 +674,94 @@ def _fit_interactions_for_cluster(
             neighbor_fraction=neighbor_fraction,
         )
 
-        # Set up scheduler - plateau scheduler takes precedence
-        if use_plateau_scheduler:
-            scheduler_fn = None  # Will use built-in plateau scheduler
-            scheduler_kwargs = {}
-        elif use_scheduler:
-            scheduler_fn = torch.optim.lr_scheduler.StepLR
-            scheduler_kwargs = {"step_size": 100, "gamma": 0.4} if scheduler_kws is None or scheduler_kws == {} else scheduler_kws
-        else:
-            scheduler_fn = None
-            scheduler_kwargs = {}
+        if fit_hill:
+            # Jointly fit the per-gene Hill parameters (k, n) with W and I, instead of
+            # relying on the precomputed sigmoid layer (see HillScaffoldOptimizer).
+            hk = dict(hill_kwargs or {})
+            # Initialize k from the per-gene fitted thresholds when the shapes match,
+            # otherwise from the per-gene median expression (guaranteed shape match).
+            k_init = hk.pop('k_init', None)
+            if k_init is None and 'sigmoid_threshold' in adata.var.columns \
+                    and 'scHopfield_used' in adata.var.columns:
+                used = adata.var['scHopfield_used'].values.astype(bool)
+                if used.sum() == x.shape[1]:
+                    k_init = adata.var['sigmoid_threshold'].values[used].astype(np.float32)
+            if k_init is None or np.asarray(k_init).shape[0] != x.shape[1]:
+                k_init = np.clip(np.median(x, axis=0), 1e-3, None).astype(np.float32)
+            n_min_h = hk.pop('n_min', 1.0)
+            n_max_h = hk.pop('n_max', 8.0)
+            n_init = hk.pop('n_init', 2.0)
+            hill_anchor_lambda = hk.pop('hill_anchor_lambda', 1e-2)
+            warmup_epochs = hk.pop('warmup_epochs', min(200, max(1, n_epochs // 3)))
+            hill_lr_factor = hk.pop('hill_lr_factor', 0.1)
 
-        model.train_model(
-            train_loader, n_epochs,
-            learning_rate=learning_rate,
-            criterion=criterion,
-            scheduler_fn=scheduler_fn,
-            scheduler_kwargs=scheduler_kwargs,
-            use_plateau_scheduler=use_plateau_scheduler,
-            plateau_patience=plateau_patience,
-            plateau_factor=plateau_factor,
-            plateau_min_lr=plateau_min_lr,
-            get_plots=get_plots
-        )
+            model = HillScaffoldOptimizer(
+                g, w_scaffold, device, refit_gamma,
+                scaffold_regularization=scaffold_regularization,
+                reconstruction_regularization=reconstruction_regularization,
+                bias_regularization=bias_regularization,
+                bias_bias=bias_bias,
+                bias_penalty=bias_penalty,
+                elastic_ratio=elastic_ratio,
+                use_masked_linear=only_TFs,
+                pre_initialized_W=W,
+                pre_initialized_I=bias_vector,
+                normalize_regularization=normalize_regularization,
+                k_init=k_init, n_init=n_init, n_min=n_min_h, n_max=n_max_h,
+                hill_anchor_lambda=hill_anchor_lambda,
+            )
+            model.train_model(
+                train_loader, n_epochs,
+                learning_rate=learning_rate,
+                hill_lr_factor=hill_lr_factor,
+                warmup_epochs=warmup_epochs,
+                criterion=criterion,
+                get_plots=get_plots,
+            )
+            # Record the learned per-gene Hill parameters for inspection.
+            k_learned = np.exp(model.log_k.detach().cpu().numpy())
+            n_learned = np.clip(np.exp(model.log_n.detach().cpu().numpy()), n_min_h, n_max_h)
+            adata.uns['scHopfield'].setdefault('hill_params', {})[cluster] = {
+                'k': k_learned, 'n': n_learned,
+            }
+        else:
+            model = ScaffoldOptimizer(
+                g, w_scaffold, device, refit_gamma,
+                scaffold_regularization=scaffold_regularization,
+                reconstruction_regularization=reconstruction_regularization,
+                bias_regularization=bias_regularization,
+                bias_bias=bias_bias,
+                bias_penalty=bias_penalty,
+                elastic_ratio=elastic_ratio,
+                use_masked_linear=only_TFs,
+                pre_initialized_W=W,
+                pre_initialized_I=bias_vector,
+                normalize_regularization=normalize_regularization
+            )
+
+            # Set up scheduler - plateau scheduler takes precedence
+            if use_plateau_scheduler:
+                scheduler_fn = None  # Will use built-in plateau scheduler
+                scheduler_kwargs = {}
+            elif use_scheduler:
+                scheduler_fn = torch.optim.lr_scheduler.StepLR
+                scheduler_kwargs = {"step_size": 100, "gamma": 0.4} if scheduler_kws is None or scheduler_kws == {} else scheduler_kws
+            else:
+                scheduler_fn = None
+                scheduler_kwargs = {}
+
+            model.train_model(
+                train_loader, n_epochs,
+                learning_rate=learning_rate,
+                criterion=criterion,
+                scheduler_fn=scheduler_fn,
+                scheduler_kwargs=scheduler_kwargs,
+                use_plateau_scheduler=use_plateau_scheduler,
+                plateau_patience=plateau_patience,
+                plateau_factor=plateau_factor,
+                plateau_min_lr=plateau_min_lr,
+                get_plots=get_plots
+            )
         W = model.W.weight.detach().cpu().numpy()
         bias_vector = model.I.detach().cpu().numpy()
         g = np.exp(model.gamma.detach().cpu().numpy())

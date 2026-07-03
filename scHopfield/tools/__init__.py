@@ -55,7 +55,11 @@ from .io import (
 )
 from .perturbation_analysis import (
     score_driver_tfs,
+    compute_perturbation_flow_bias,
     compute_lineage_bias,
+    lineage_axis_from_embedding,
+    compute_lineage_commitment,
+    compute_perturbation_commitment_change,
     compute_cluster_effects,
     compute_perturbation_score,
     lineage_de,
@@ -111,7 +115,11 @@ __all__ = [
     'load_checkpoint',
     # Perturbation analysis
     'score_driver_tfs',
+    'compute_perturbation_flow_bias',
     'compute_lineage_bias',
+    'lineage_axis_from_embedding',
+    'compute_lineage_commitment',
+    'compute_perturbation_commitment_change',
     'compute_cluster_effects',
     'compute_perturbation_score',
     'lineage_de',

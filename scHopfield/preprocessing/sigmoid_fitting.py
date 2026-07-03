@@ -13,6 +13,9 @@ def fit_all_sigmoids(
     genes: Union[None, List[str], List[bool], List[int]] = None,
     spliced_key: str = 'Ms',
     min_th: float = 0.05,
+    n_min: float = 1.0,
+    n_max: float = 8.0,
+    refine: bool = True,
     copy: bool = False
 ) -> Optional[AnnData]:
     """
@@ -31,6 +34,10 @@ def fit_all_sigmoids(
         Key in adata.layers for spliced counts
     min_th : float, optional (default: 0.05)
         Minimum threshold as fraction of max expression
+    n_min, n_max : float, optional (default: 1.0, 8.0)
+        Bounds on the fitted Hill exponent (passed to ``fit_sigmoid``).
+    refine : bool, optional (default: True)
+        Refine each closed-form fit with a bounded nonlinear least-squares step.
     copy : bool, optional (default: False)
         If True, return a copy instead of modifying in-place
 
@@ -68,7 +75,10 @@ def fit_all_sigmoids(
     x = to_numpy(get_matrix(adata, spliced_key, genes=gene_indices).T)
 
     # Fit sigmoid to each gene
-    results = np.array([fit_sigmoid(g, min_th=min_th) for g in x])
+    results = np.array([
+        fit_sigmoid(g, min_th=min_th, n_min=n_min, n_max=n_max, refine=refine)
+        for g in x
+    ])
 
     # Store results in adata.var (initialize with zeros for all genes)
     adata.var['sigmoid_threshold'] = 0.0

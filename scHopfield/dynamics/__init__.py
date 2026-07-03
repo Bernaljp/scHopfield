@@ -20,6 +20,7 @@ from .perturbation import (
     run_pairwise_ko_screen,
     compute_epistasis,
     run_dose_response,
+    dose_levels_from_fractions,
 )
 
 # Deprecated alias, kept for backward compatibility. `simulate_perturbation` is
@@ -59,4 +60,5 @@ __all__ = [
     'run_pairwise_ko_screen',
     'compute_epistasis',
     'run_dose_response',
+    'dose_levels_from_fractions',
 ]

@@ -4,6 +4,8 @@ Functions for scoring TF drivers from GRN structure, computing lineage bias
 from KO perturbation flow, and CellOracle-compatible perturbation scores.
 """
 
+import warnings
+
 import numpy as np
 import pandas as pd
 from typing import Dict, List, Optional
@@ -27,10 +29,12 @@ def score_driver_tfs(
     - Out-degree centrality (regulatory influence)
     - Energy-gene correlation (association with energy landscape)
 
-    Each signal is ranked across genes and summed to a composite score.
-    The lineage bias = score_A - score_B; positive values indicate an
-    erythroid-biased gene (if A is erythroid), negative values indicate
-    a myeloid-biased gene.
+    Each signal is standardized (z-scored across genes) and averaged into a
+    composite score on a comparable scale. The lineage bias = score_A - score_B;
+    positive values indicate an erythroid-biased gene (if A is erythroid), negative
+    values indicate a myeloid-biased gene. This is a *structural, pre-perturbation*
+    prior from the fitted GRN; for the effect of an actual perturbation on lineage
+    choice use ``compute_perturbation_commitment_change``.
 
     Parameters
     ----------
@@ -52,8 +56,8 @@ def score_driver_tfs(
     -------
     pd.DataFrame
         DataFrame indexed by gene name with columns:
-        - ``score_A``: composite rank-sum score for lineage A
-        - ``score_B``: composite rank-sum score for lineage B
+        - ``score_A``: standardized composite score for lineage A
+        - ``score_B``: standardized composite score for lineage B
         - ``lineage_bias``: score_A - score_B
         - ``rank_A``: rank by score_A (1 = highest)
         - ``rank_B``: rank by score_B (1 = highest)
@@ -69,8 +73,10 @@ def score_driver_tfs(
     >>> tf_df = sch.tl.score_driver_tfs(adata, ERYTHROID, MYELOID, cluster_key='paul15_clusters')
     >>> top_ery = tf_df.nlargest(10, 'score_A')
     """
-    def _rank(s: pd.Series) -> pd.Series:
-        return s.fillna(0).rank(method='average')
+    def _z(s: pd.Series) -> pd.Series:
+        s = s.fillna(0.0).astype(float)
+        sd = s.std(ddof=0)
+        return (s - s.mean()) / sd if sd > 0 else s * 0.0
 
     def _mean_var_col(col_prefix: str, cluster_list: List[str]) -> pd.Series:
         cols = [
@@ -103,9 +109,11 @@ def score_driver_tfs(
     ecorr_A  = _mean_var_col('correlation_total', lineage_A_clusters).abs()
     ecorr_B  = _mean_var_col('correlation_total', lineage_B_clusters).abs()
 
-    # Composite rank-sum scores
-    score_A = _rank(wnorm_A) + _rank(deg_A) + _rank(ecorr_A)
-    score_B = _rank(wnorm_B) + _rank(deg_B) + _rank(ecorr_B)
+    # Standardized composite: mean of z-scored signals so the three heterogeneous
+    # signals (W-norm, out-degree, energy correlation) share a comparable scale and
+    # contribute equally, instead of an unnormalized rank-sum.
+    score_A = (_z(wnorm_A) + _z(deg_A) + _z(ecorr_A)) / 3.0
+    score_B = (_z(wnorm_B) + _z(deg_B) + _z(ecorr_B)) / 3.0
     lineage_bias = score_A - score_B
 
     df = pd.DataFrame({
@@ -131,7 +139,7 @@ def score_driver_tfs(
     return df
 
 
-def compute_lineage_bias(
+def compute_perturbation_flow_bias(
     adata_ko: AnnData,
     adata_wt: AnnData,
     lineage_A_clusters: List[str],
@@ -142,7 +150,7 @@ def compute_lineage_bias(
     n_neighbors: int = 30,
 ) -> Dict[str, float]:
     """
-    Compute lineage bias for a KO simulation using flow alignment.
+    Post-perturbation flow-alignment bias for a KO simulation.
 
     Projects the perturbation delta_X to the embedding space (dot-product
     KNN projection) and computes the mean cosine similarity with the
@@ -151,6 +159,13 @@ def compute_lineage_bias(
     Positive score  → KO aligns with that lineage's differentiation direction.
     Negative score  → KO opposes that lineage's direction (blocks/redirects).
     lineage_bias = score_A − score_B: positive = lineage-A-biasing.
+
+    Notes
+    -----
+    This measures how the *perturbation-induced* flow aligns with the unperturbed
+    developmental flow; it is relative to the WT flow but is not a matched pre/post
+    difference. For an explicit, model-independent pre-vs-post comparison use
+    ``compute_perturbation_commitment_change``. (Formerly ``compute_lineage_bias``.)
 
     Parameters
     ----------
@@ -214,6 +229,158 @@ def compute_lineage_bias(
     )
 
     return {'score_A': score_A, 'score_B': score_B, 'lineage_bias': lineage_bias}
+
+
+def compute_lineage_bias(*args, **kwargs) -> Dict[str, float]:
+    """Deprecated alias for :func:`compute_perturbation_flow_bias`.
+
+    Renamed to disambiguate it from :func:`score_driver_tfs` (a structural,
+    pre-perturbation score that also returned ``score_A/score_B/lineage_bias``).
+    For an explicit pre/post comparison use
+    :func:`compute_perturbation_commitment_change`.
+    """
+    warnings.warn(
+        "compute_lineage_bias is deprecated; use compute_perturbation_flow_bias, or "
+        "compute_perturbation_commitment_change for a matched pre/post comparison.",
+        DeprecationWarning, stacklevel=2,
+    )
+    return compute_perturbation_flow_bias(*args, **kwargs)
+
+
+def lineage_axis_from_embedding(
+    adata: AnnData,
+    basis: str,
+    lineage_A_clusters: List[str],
+    lineage_B_clusters: List[str],
+    cluster_key: str = 'cell_type',
+) -> np.ndarray:
+    """
+    Unit vector pointing from lineage B toward lineage A in the embedding.
+
+    Defined as ``centroid(A) - centroid(B)`` over the cells of the given lineage
+    clusters in ``adata.obsm['X_{basis}']``, normalized to unit length. The axis is
+    derived purely from the data embedding (model-independent), giving a fair
+    reference direction for scoring how a flow field commits toward lineage A vs B.
+    """
+    emb = np.asarray(adata.obsm[f'X_{basis}'])[:, :2]
+    obs = adata.obs[cluster_key]
+    mask_A = obs.isin(lineage_A_clusters).values
+    mask_B = obs.isin(lineage_B_clusters).values
+    if mask_A.sum() == 0 or mask_B.sum() == 0:
+        raise ValueError("Both lineage_A_clusters and lineage_B_clusters must match cells.")
+    axis = emb[mask_A].mean(0) - emb[mask_B].mean(0)
+    nrm = np.linalg.norm(axis)
+    return axis / nrm if nrm > 0 else axis
+
+
+def compute_lineage_commitment(
+    adata: AnnData,
+    flow_key: str,
+    lineage_axis: np.ndarray,
+) -> np.ndarray:
+    """
+    Per-cell lineage commitment: cosine of the flow direction with ``lineage_axis``.
+
+    Returns a value in [-1, 1] per cell: +1 = flow points fully toward lineage A,
+    -1 = fully toward lineage B. Cells with (near-)zero flow return ~0.
+    """
+    F = np.asarray(adata.obsm[flow_key])[:, :2].astype(float)
+    nrm = np.linalg.norm(F, axis=1, keepdims=True)
+    Fu = np.divide(F, nrm, out=np.zeros_like(F), where=nrm > 0)
+    axis = np.asarray(lineage_axis, dtype=float)[:2]
+    return Fu @ axis
+
+
+def compute_perturbation_commitment_change(
+    adata_ko: AnnData,
+    adata_wt: AnnData,
+    lineage_A_clusters: List[str],
+    lineage_B_clusters: List[str],
+    basis: str,
+    wt_flow_key: Optional[str] = None,
+    ko_flow_key: Optional[str] = None,
+    cluster_key: str = 'cell_type',
+) -> Dict[str, object]:
+    """
+    Change in lineage commitment caused by a perturbation (pre vs post).
+
+    A well-defined, model-independent pre/post score. Builds a data-derived lineage
+    axis (``centroid(A) - centroid(B)`` in the embedding) and measures the per-cell
+    cosine alignment of the developmental flow with that axis, for both the wild-type
+    flow (pre) and the perturbed flow (post)::
+
+        C_pre[c]  = cos( WT_flow[c], axis )
+        C_post[c] = cos( KO_flow[c], axis )
+        delta[c]  = C_post[c] - C_pre[c]
+
+    A positive ``delta`` means the perturbation steers cells *toward* lineage A;
+    negative means toward lineage B. Because both terms are cosines against the same
+    fixed axis, the comparison is normalized and directly interpretable, unlike the
+    ``score_A/score_B`` fields that ``score_driver_tfs`` and
+    ``compute_perturbation_flow_bias`` share but define differently.
+
+    Parameters
+    ----------
+    adata_ko, adata_wt : AnnData
+        Perturbed and wild-type objects, each with its embedding flow already computed
+        (see ``sch.tl.calculate_flow``).
+    lineage_A_clusters, lineage_B_clusters : list of str
+        Clusters defining the two competing lineages.
+    basis : str
+        Embedding basis (e.g. ``'draw_graph_fa'`` or ``'umap'``).
+    wt_flow_key : str, optional
+        Key in ``adata_wt.obsm`` for the WT velocity flow. Defaults to
+        ``f'original_velocity_flow_{basis}'``.
+    ko_flow_key : str, optional
+        Key in ``adata_ko.obsm`` for the perturbed velocity flow. Defaults to
+        ``f'perturbed_velocity_flow_{basis}'``.
+    cluster_key : str, optional (default: 'cell_type')
+        Key in ``adata.obs`` for cluster labels.
+
+    Returns
+    -------
+    dict
+        ``axis``; per-cell ``commitment_pre``, ``commitment_post``,
+        ``delta_commitment``; per-lineage means ``pre_A/pre_B/post_A/post_B`` and
+        ``delta_A/delta_B``; and the overall ``delta_mean``.
+    """
+    if wt_flow_key is None:
+        wt_flow_key = f'original_velocity_flow_{basis}'
+    if ko_flow_key is None:
+        ko_flow_key = f'perturbed_velocity_flow_{basis}'
+    for a, k, nm in [(adata_wt, wt_flow_key, 'wt'), (adata_ko, ko_flow_key, 'ko')]:
+        if k not in a.obsm:
+            raise ValueError(
+                f"Flow key '{k}' not found in adata_{nm}.obsm. Compute it with "
+                f"sch.tl.calculate_flow(adata_{nm}, source=..., basis='{basis}')."
+            )
+
+    axis = lineage_axis_from_embedding(
+        adata_wt, basis, lineage_A_clusters, lineage_B_clusters, cluster_key
+    )
+    c_pre = compute_lineage_commitment(adata_wt, wt_flow_key, axis)
+    c_post = compute_lineage_commitment(adata_ko, ko_flow_key, axis)
+    n = min(c_pre.shape[0], c_post.shape[0])
+    c_pre, c_post = c_pre[:n], c_post[:n]
+    delta = c_post - c_pre
+
+    obs = adata_wt.obs[cluster_key].iloc[:n]
+    mA = obs.isin(lineage_A_clusters).values
+    mB = obs.isin(lineage_B_clusters).values
+
+    def _m(x, m):
+        return float(np.mean(x[m])) if m.sum() > 0 else float('nan')
+
+    return {
+        'axis': axis,
+        'commitment_pre': c_pre,
+        'commitment_post': c_post,
+        'delta_commitment': delta,
+        'pre_A': _m(c_pre, mA), 'pre_B': _m(c_pre, mB),
+        'post_A': _m(c_post, mA), 'post_B': _m(c_post, mB),
+        'delta_A': _m(delta, mA), 'delta_B': _m(delta, mB),
+        'delta_mean': float(np.mean(delta)) if n > 0 else float('nan'),
+    }
 
 
 def compute_cluster_effects(
