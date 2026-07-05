@@ -56,8 +56,10 @@ def network_correlations(
     mean_col = pd.DataFrame(index=keys, columns=keys, data=1.0)
     singular = pd.DataFrame(index=keys, columns=keys, data=0.0)
 
-    # Compute singular values for each network
-    svs = {k: np.linalg.svd(adata.varp[f'W_{k}'], compute_uv=False) for k in keys}
+    # Compute singular values for each network. Guard against non-finite weights
+    # (e.g. datasets with NaN velocities can yield NaN W) so the SVD does not crash.
+    svs = {k: np.linalg.svd(np.nan_to_num(np.asarray(adata.varp[f'W_{k}'], dtype=float)),
+                            compute_uv=False) for k in keys}
 
     # Compute pairwise metrics
     for k1, k2 in itertools.combinations(keys, 2):
