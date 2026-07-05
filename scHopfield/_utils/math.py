@@ -180,21 +180,28 @@ def fit_sigmoid(g, min_th=0.05, n_min=1.0, n_max=8.0, refine=True):
 
     k_best, n_best, mse_best = k0, n0, _mse(k0, n0)
 
-    # Bounded nonlinear refinement on the ECDF.
+    # Bounded nonlinear refinement on the ECDF, from multiple starts. Genes whose CDF is
+    # a "double sigmoid" (two expression regimes with different k/n) have a poor single
+    # optimum near the closed-form init; also starting from ~2x the closed-form (k,n)
+    # lets the optimizer settle on the steeper/higher regime. Keep whichever start gives
+    # the lowest MSE.
     if refine:
-        try:
-            res = least_squares(
-                lambda p: sigmoid(x_cdf, p[0], p[1]) - y_cdf,
-                x0=[k0, n0],
-                bounds=([1e-6, n_min], [gmax, n_max]),
-                max_nfev=200,
-            )
-            k_r, n_r = float(res.x[0]), float(res.x[1])
-            mse_r = _mse(k_r, n_r)
-            if np.isfinite(mse_r) and mse_r <= mse_best:
-                k_best, n_best, mse_best = k_r, n_r, mse_r
-        except Exception:
-            pass
+        starts = [(k0, n0),
+                  (float(np.clip(2.0 * k0, 1e-6, gmax)), float(np.clip(2.0 * n0, n_min, n_max)))]
+        for x0k, x0n in starts:
+            try:
+                res = least_squares(
+                    lambda p: sigmoid(x_cdf, p[0], p[1]) - y_cdf,
+                    x0=[x0k, x0n],
+                    bounds=([1e-6, n_min], [gmax, n_max]),
+                    max_nfev=300,
+                )
+                k_r, n_r = float(res.x[0]), float(res.x[1])
+                mse_r = _mse(k_r, n_r)
+                if np.isfinite(mse_r) and mse_r <= mse_best:
+                    k_best, n_best, mse_best = k_r, n_r, mse_r
+            except Exception:
+                pass
 
     return k_best, n_best, offset, mse_best
 

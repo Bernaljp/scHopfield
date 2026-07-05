@@ -71,6 +71,11 @@ DATASETS = {
 }
 
 N_GENES = 200
+# Hill exponent ceiling for the CDF fit. Raised well above the package default (8)
+# because some datasets (e.g. paul15) have sharply switching genes whose exponent was
+# being clipped at 8, worsening the fit. Multi-start refinement (in fit_sigmoid) handles
+# double-sigmoid genes.
+HILL_N_MAX = 20.0
 FIT_KWARGS = dict(
     n_epochs=600, batch_size=128, learning_rate=0.1,
     reconstruction_regularization=100, bias_regularization=1, bias_penalty="l1",

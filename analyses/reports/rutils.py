@@ -19,7 +19,7 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
 import scHopfield as sch
-from config import DATASETS, N_GENES, FIT_KWARGS
+from config import DATASETS, N_GENES, FIT_KWARGS, HILL_N_MAX
 
 ROOT = "figure_packs/reports"
 
@@ -127,8 +127,9 @@ def prepare_and_fit(name, device="cuda", force=False, mode=None, tag=""):
         if L in sub.layers:
             sub.layers[L] = np.nan_to_num(np.asarray(sub.layers[L]), nan=0.0, posinf=0.0, neginf=0.0)
 
-    # ---- sigmoids ----
-    sch.pp.fit_all_sigmoids(sub, spliced_key="Ms")
+    # ---- sigmoids (raised exponent ceiling + multi-start refine handle sharp/double
+    #      sigmoid genes) ----
+    sch.pp.fit_all_sigmoids(sub, spliced_key="Ms", n_max=HILL_N_MAX)
     sch.pp.compute_sigmoid(sub, spliced_key="Ms")
 
     # ---- scaffold + GRN fit ----
