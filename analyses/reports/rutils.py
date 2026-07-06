@@ -126,7 +126,8 @@ def prepare_and_fit(name, device="cuda", force=False, mode=None, tag=""):
 
     # ---- sigmoids (raised exponent ceiling + multi-start refine handle sharp/double
     #      sigmoid genes) ----
-    sch.pp.fit_all_sigmoids(sub, spliced_key="Ms", n_max=HILL_N_MAX)
+    sch.pp.fit_all_sigmoids(sub, spliced_key="Ms", n_max=HILL_N_MAX,
+                            bimodal=cfg.get("bimodal_hill", False))
     sch.pp.compute_sigmoid(sub, spliced_key="Ms")
 
     # ---- scaffold + GRN fit ----

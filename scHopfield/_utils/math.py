@@ -206,13 +206,15 @@ def fit_sigmoid(g, min_th=0.05, n_min=1.0, n_max=8.0, refine=True):
     return k_best, n_best, offset, mse_best
 
 
-def fit_sigmoid_bimodal(g, min_th=0.05, n_min=1.0, n_max=20.0, margin=0.85):
+def fit_sigmoid_bimodal(g, min_th=0.05, n_min=1.0, n_max=20.0, margin=0.6,
+                        min_single_mse=1e-4):
     """Fit a two-component Hill CDF ``a*H(x;k1,n1) + (1-a)*H(x;k2,n2)`` to a gene.
 
     Genes with two expression regimes (a "double sigmoid" CDF) are poorly captured by a
-    single Hill; this fits a bimodal mixture. It is accepted over the single fit only when
-    it improves the MSE by at least ``(1 - margin)`` (default 15%), so the extra
-    parameters do not just overfit noise.
+    single Hill; this fits a bimodal mixture. To avoid overfitting well-behaved genes, the
+    bimodal fit is only attempted when the single fit is genuinely poor
+    (``mse_single > min_single_mse``) and is only accepted when it improves the MSE by at
+    least ``(1 - margin)`` (default 30%).
 
     Returns
     -------
@@ -222,12 +224,24 @@ def fit_sigmoid_bimodal(g, min_th=0.05, n_min=1.0, n_max=20.0, margin=0.85):
         equal the single fit and ``a = 1``.
     """
     k1, n1, offset, mse1 = fit_sigmoid(g, min_th=min_th, n_min=n_min, n_max=n_max)
+    if mse1 < min_single_mse:                     # single Hill already fits well
+        return k1, n1, k1, n1, 1.0, offset, mse1, False
     g = np.asarray(g, dtype=float); g = g[np.isfinite(g)]
     if g.size == 0 or not (np.max(g) > 0):
         return k1, n1, k1, n1, 1.0, offset, mse1, False
     gmax = float(np.max(g)); thr = min_th * gmax
     valid = np.sort(g[g > thr])
     if valid.size < 8:
+        return k1, n1, k1, n1, 1.0, offset, mse1, False
+    # Only pursue a two-component fit when the expression distribution is genuinely
+    # bimodal (Sarle's bimodality coefficient above the 0.555 uniform threshold), not
+    # merely a spread unimodal gene that a single Hill fits imperfectly.
+    from scipy.stats import skew, kurtosis
+    nn = valid.size
+    sk = float(skew(valid, bias=False))
+    ku = float(kurtosis(valid, fisher=True, bias=False))
+    bc = (sk ** 2 + 1.0) / (ku + 3.0 * (nn - 1) ** 2 / ((nn - 2) * (nn - 3)))
+    if bc < 0.6:
         return k1, n1, k1, n1, 1.0, offset, mse1, False
     x = valid; y = np.linspace(0.0, 1.0, valid.size)
 
@@ -243,11 +257,26 @@ def fit_sigmoid_bimodal(g, min_th=0.05, n_min=1.0, n_max=20.0, margin=0.85):
         )
         k1b, n1b, k2b, n2b, ab = [float(v) for v in res.x]
         mse2 = float(np.mean((_mix(k1b, n1b, k2b, n2b, ab) - y) ** 2))
-        if np.isfinite(mse2) and mse2 < margin * mse1:
+        # Accept only a genuine double sigmoid: a large MSE gain AND two well-separated
+        # thresholds AND both components carrying meaningful weight -- otherwise the extra
+        # parameters just fit the non-Hill shape of an ordinary gene.
+        separation = max(k1b, k2b) / (min(k1b, k2b) + 1e-9)
+        minor_weight = min(ab, 1.0 - ab)
+        if np.isfinite(mse2) and mse2 < margin * mse1 and separation >= 2.0 and minor_weight >= 0.1:
             return k1b, n1b, k2b, n2b, ab, offset, mse2, True
     except Exception:
         pass
     return k1, n1, k1, n1, 1.0, offset, mse1, False
+
+
+def hill_regime(x, k1, k2):
+    """Assign each expression value to the closer Hill component (0 = component 1 with
+    threshold k1, 1 = component 2 with threshold k2), for the bimodal (double-sigmoid)
+    activation. Cells near a component's half-max threshold are switching in that regime.
+    Broadcasts over (cells, genes) with per-gene k1, k2.
+    """
+    x = np.asarray(x, dtype=float)
+    return (np.abs(x - k2) < np.abs(x - k1)).astype(np.int8)
 
 
 def int_sig_act_inv(x, s, n, verbose=False):

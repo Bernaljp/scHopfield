@@ -4,8 +4,8 @@ import numpy as np
 from typing import Optional
 from anndata import AnnData
 
-from .._utils.math import sigmoid, int_sig_act_inv
-from .._utils.io import get_matrix, get_genes_used, ensure_sigmoid_layer
+from .._utils.math import sigmoid, int_sig_act_inv, hill_regime
+from .._utils.io import get_matrix, get_genes_used, ensure_sigmoid_layer, to_numpy
 
 
 def compute_energies(
@@ -176,17 +176,33 @@ def _degradation_energy(
     # Get sigmoid parameters
     threshold = adata.var['sigmoid_threshold'].values[genes]
     exponent = adata.var['sigmoid_exponent'].values[genes]
+    bimodal = ('sigmoid_mix' in adata.var.columns
+               and bool((adata.var['sigmoid_mix'].values[genes] < 1 - 1e-9).any()))
 
-    # Get sigmoid activations
+    # Get sigmoid activations (and, for bimodal genes, the raw expression to assign the
+    # per-cell Hill regime).
     if x is not None:
-        sig = np.nan_to_num(sigmoid(x, threshold[None, :], exponent[None, :]))
+        xg = np.asarray(x)
+        sig = np.nan_to_num(sigmoid(xg, threshold[None, :], exponent[None, :]))
     else:
         idx = (adata.obs[cluster_key] == cluster).values
         sig = get_matrix(adata, 'sigmoid', genes=genes)[idx]
+        xg = to_numpy(get_matrix(adata, spliced_key, genes=genes))[idx] if bimodal else None
 
-    
-    # Compute integral
-    integral = int_sig_act_inv(sig, threshold, exponent)
+    # Compute the inverse-sigmoid integral. For bimodal (double-sigmoid) genes each cell
+    # uses the Hill of its own regime, so the activation and its integral are consistent.
+    if bimodal:
+        k2 = adata.var['sigmoid_threshold2'].values[genes]
+        n2 = adata.var['sigmoid_exponent2'].values[genes]
+        reg = hill_regime(xg, threshold[None, :], k2[None, :])
+        if x is not None:
+            sig = np.nan_to_num(np.where(
+                reg == 1, sigmoid(xg, k2[None, :], n2[None, :]),
+                sigmoid(xg, threshold[None, :], exponent[None, :])))
+        integral = np.where(reg == 1, int_sig_act_inv(sig, k2, n2),
+                            int_sig_act_inv(sig, threshold, exponent))
+    else:
+        integral = int_sig_act_inv(sig, threshold, exponent)
     degradation_energy = np.sum(g[None, :] * integral, axis=1)
 
     return degradation_energy
