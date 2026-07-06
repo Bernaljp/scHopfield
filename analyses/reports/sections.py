@@ -722,7 +722,7 @@ def _perturb_section(adata, name, ck, report, cfg, A, B, An, Bn, tag):
         print(f"  [E{tag}.2] {exc}", flush=True)
 
     # ---- KO vs OE grid (nb05 style) for the strongest candidate ----
-    g0 = (featured[:1] or A_cand[:1] or candidates[:1])[0]
+    g0 = ((featured or [])[:1] or A_cand[:1] or candidates[:1])[0]
     report.sub(f"5.{tag}.3 KO vs OE flows and velocity alignment ({g0})",
                "Cell types, reference velocity, KO and OE perturbation flows (streamlines), and "
                "their inner product with the developmental velocity (nb05-style panel).")
