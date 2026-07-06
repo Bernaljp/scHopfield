@@ -112,11 +112,8 @@ def prepare_and_fit(name, device="cuda", force=False, mode=None, tag=""):
 
     adata.var["scHopfield_used"] = True
 
-    # ---- top-velocity genes, keeping lineage + anchor genes ----
-    keep = []
-    lin = cfg.get("lineages")
-    for g in (cfg.get("anchors") or []):
-        keep.append(g)
+    # ---- top-velocity genes, keeping lineage + anchor + featured perturbation genes ----
+    keep = list(dict.fromkeys(list(cfg.get("anchors") or []) + list(cfg.get("perturb_genes") or [])))
     sub = sch.workflows.select_top_velocity_genes(
         adata, N_GENES, keep_genes=[g for g in keep if g in adata.var_names]) \
         if N_GENES < adata.n_vars else adata

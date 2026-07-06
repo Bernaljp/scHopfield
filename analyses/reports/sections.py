@@ -151,6 +151,61 @@ def _stream(ax, adata, ck, colors, basis, velocity, title=None, color_key=None):
     return ax
 
 
+DYN_PY = "/home/bernaljp/Documents/SCH/.venv-dyn/bin/python"
+
+
+def _dyn_stream(name, fname, adata, ck, colors, basis, velocity, title=""):
+    """Render a velocity field with dynamo's streamline_plot via the isolated .venv-dyn.
+    Projects in the main env (scVelo velocity_embedding), hands a clean minimal AnnData to
+    the dynamo subprocess. Returns the plots-relative path, or None (caller falls back)."""
+    import subprocess
+    import anndata as ad
+    import scvelo as scv
+    rel = f"plots/{fname}"; path = f"{ROOT_}/{name}/{rel}"
+    if not FORCE_FIGS and os.path.exists(path):
+        return rel
+    if not os.path.exists(DYN_PY):
+        return None
+    try:
+        adata.layers["velocity"] = np.asarray(velocity, dtype=np.float32)
+        scv.tl.velocity_graph(adata, n_jobs=4, sqrt_transform=False)
+        scv.tl.velocity_embedding(adata, basis=basis)
+        m = ad.AnnData(X=np.asarray(adata.layers["Ms"]),
+                       obs=adata.obs[[ck]].astype(str).astype("category"))
+        m.obsm["X_umap"] = np.asarray(adata.obsm[f"X_{basis}"])[:, :2]
+        m.obsm["velocity_umap"] = np.asarray(adata.obsm[f"velocity_{basis}"])[:, :2]
+        cats = list(m.obs[ck].cat.categories)
+        m.uns[f"{ck}_colors"] = [colors.get(str(c), "#888888") for c in cats]
+        hp = f"{ROOT_}/{name}/data/_handoff_{fname}.h5ad"
+        m.write(hp)
+        r = subprocess.run([DYN_PY, "analyses/reports/dyn_streamline.py", "--input", hp,
+                            "--cluster", ck, "--out", path, "--title", title, "--basis", "umap"],
+                           capture_output=True, text=True, timeout=400)
+        try:
+            os.remove(hp)
+        except OSError:
+            pass
+        if r.returncode == 0 and os.path.exists(path):
+            return rel
+        print(f"  [dyn_stream {fname}] rc={r.returncode}: {r.stderr[-300:]}", flush=True)
+    except Exception as exc:
+        print(f"  [dyn_stream {fname}] {type(exc).__name__}: {exc}", flush=True)
+    return None
+
+
+def _flow_panel(report, name, fname, adata, ck, colors, basis, velocity, title, caption):
+    """Embed a velocity field: dynamo streamlines if available, else a scVelo stream."""
+    rel = _dyn_stream(name, fname, adata, ck, colors, basis, velocity, title)
+    if rel:
+        report.img(rel, caption)
+        return
+    def _fig():
+        fig, ax = plt.subplots(figsize=(7, 6))
+        _stream(ax, adata, ck, colors, basis, velocity, title=title)
+        return fig
+    _try(report, name, fname, _fig, caption)
+
+
 def _flow_grid(ax, adata, flow_key, basis, ck, colors, color="black", scale=None,
                n_grid=25, min_mass=25):
     """Grid-averaged flow via the package plot_flow (on_grid), with magnitude outliers
@@ -216,20 +271,17 @@ def section_A(adata, name, ck, report, cfg):
     _try(report, name, "A1_celltypes.png", _ct, f"Cell types on the {basis} embedding.")
 
     report.sub("1.2 Dynamics on the embedding",
-               "Left: the input velocity the model is fit to. Right: the fitted Hopfield "
-               "velocity (W sigma(x) + I - gamma x). Both are projected with scVelo's "
-               "transition-probability streamlines. Close agreement means the GRN reproduces "
-               f"the {cfg['velocity_mode']} dynamics -- progenitors flow to the terminal states.")
-    def _flow():
-        fig, axes = plt.subplots(1, 2, figsize=(13, 5.8))
-        vlab = "pseudotime" if cfg["velocity_mode"] == "pseudotime" else "RNA"
-        _stream(axes[0], adata, ck, colors, basis, np.asarray(adata.layers["velocity_S"]),
-                title=f"{name}: input {vlab} velocity")
-        _stream(axes[1], adata, ck, colors, basis, fitted_velocity(adata, ck),
-                title=f"{name}: fitted Hopfield velocity")
-        return fig
-    _try(report, name, "A2_velocity_flow.png", _flow,
-         "Input vs fitted velocity, both as scVelo streamlines (progenitors -> terminal states).")
+               "Velocity fields drawn with dynamo's streamline plotter (the fitted velocity is "
+               "projected to the embedding with scVelo, then rendered by dynamo). The fitted "
+               "Hopfield velocity should reproduce the input -- progenitors flow to the terminal "
+               "states.")
+    vlab = "pseudotime" if cfg["velocity_mode"] == "pseudotime" else "RNA"
+    _flow_panel(report, name, "A2_input_velocity.png", adata, ck, colors, basis,
+                np.asarray(adata.layers["velocity_S"]), f"{name}: input {vlab} velocity",
+                f"Input {vlab} velocity field (dynamo streamlines).")
+    _flow_panel(report, name, "A2_fitted_velocity.png", adata, ck, colors, basis,
+                fitted_velocity(adata, ck), f"{name}: fitted Hopfield velocity",
+                "Fitted Hopfield velocity field -- reproduces the input dynamics.")
 
     report.sub("1.3 Hill (sigmoid) fitting and goodness of fit",
                "Per-gene Hill activation fit to the expression CDF; goodness of fit is "
@@ -419,6 +471,7 @@ def section_C(adata, name, ck, report, cfg):
             lo, hi = ax.get_ylim(); m = max(abs(lo), abs(hi))
             if m > 0:
                 ax.set_ylim(-m, m)
+            ax.axhline(0, color="k", lw=0.8, ls="--", alpha=0.6)
         return fig
     _try(report, name, "C4_eigen_grid.png", _eig_grid,
          "Leading eigenvector gene loadings per cell type (symmetric y-axis).")
@@ -509,6 +562,10 @@ def section_D(adata, name, ck, report, cfg):
     if pairs:
         try:
             sch.tl.compute_jacobian_elements(adata, gene_pairs=pairs, cluster_key=ck)
+            # plot_jacobian_element_grid hard-codes X_umap; alias it to the report's basis
+            # so paul15 (draw_graph_fa) uses the same embedding as the rest of the report.
+            if "X_umap" not in adata.obsm:
+                adata.obsm["X_umap"] = adata.obsm[f"X_{basis}"]
             def _je():
                 out = sch.pl.plot_jacobian_element_grid(adata, gene_pairs=pairs, cluster_key=ck)
                 fig = out if hasattr(out, "savefig") else (out.figure if hasattr(out, "figure") else plt.gcf())
@@ -606,6 +663,10 @@ def _perturb_section(adata, name, ck, report, cfg, A, B, An, Bn, tag):
     A_cand = list(tf[tf.lineage_bias > 0].sort_values("score_A", ascending=False).head(6).index)
     B_cand = list(tf[tf.lineage_bias <= 0].sort_values("score_B", ascending=False).head(6).index)
     candidates = [g for g in dict.fromkeys(A_cand + B_cand + (cfg.get("anchors") or [])) if g in adata.var_names]
+    # explicitly featured perturbation genes (e.g. paul15: Gata1, Stat3 + two others),
+    # filled up to four with top candidates when fewer are configured
+    forced = [g for g in (cfg.get("perturb_genes") or []) if g in adata.var_names]
+    featured = list(dict.fromkeys(forced + [g for g in (A_cand + B_cand) if g not in forced]))[:4] if forced else None
 
     def _pareto():
         from adjustText import adjust_text
@@ -661,7 +722,7 @@ def _perturb_section(adata, name, ck, report, cfg, A, B, An, Bn, tag):
         print(f"  [E{tag}.2] {exc}", flush=True)
 
     # ---- KO vs OE grid (nb05 style) for the strongest candidate ----
-    g0 = (A_cand[:1] or candidates[:1])[0]
+    g0 = (featured[:1] or A_cand[:1] or candidates[:1])[0]
     report.sub(f"5.{tag}.3 KO vs OE flows and velocity alignment ({g0})",
                "Cell types, reference velocity, KO and OE perturbation flows (streamlines), and "
                "their inner product with the developmental velocity (nb05-style panel).")
@@ -699,7 +760,10 @@ def _perturb_section(adata, name, ck, report, cfg, A, B, An, Bn, tag):
     report.sub(f"5.{tag}.4 KO flows for top candidates (per gene)",
                "KO-induced flow for the top candidates of each lineage, colored by group "
                f"(red={An}, blue={Bn}, orange/purple=lineage-biased).")
-    genes_grp = ([(g, GRP["A"]) for g in A_cand[:3]] + [(g, GRP["B"]) for g in B_cand[:3]])
+    if featured:
+        genes_grp = [(g, GRP["A"] if tf.loc[g, "lineage_bias"] > 0 else GRP["B"]) for g in featured]
+    else:
+        genes_grp = ([(g, GRP["A"]) for g in A_cand[:3]] + [(g, GRP["B"]) for g in B_cand[:3]])
     genes_grp = [(g, c) for g, c in genes_grp if g in adata.var_names]
     def _grid_flows():
         n = len(genes_grp); ncol = 3; nrow = int(np.ceil(n / ncol))

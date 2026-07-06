@@ -140,3 +140,6 @@ archive/
 # Comprehensive figure packs + their re-fits (local-only, heavy; not tracked).
 # Anchored to repo root so analyses/figure_packs/ (the tracked scripts) is unaffected.
 /figure_packs/
+
+# Isolated dynamo env (dynamo needs anndata<0.11, incompatible with the main env)
+.venv-dyn/

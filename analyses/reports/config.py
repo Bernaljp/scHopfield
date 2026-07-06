@@ -32,6 +32,8 @@ DATASETS = {
                          "16Neu", "17Neu", "18Eos"],
                       A_name="erythroid", B_name="myeloid"),
         anchors=["Gata1", "Stat3"],
+        # feature these genes in the perturbation panels (Gata1, Stat3 + two others)
+        perturb_genes=["Gata1", "Stat3", "Klf1", "Cebpa"],
     ),
     # Dynamo hematopoiesis -- the genuinely missing one. Dynamo-processed object
     # (moment layers M_t/M_n..., no spliced/Ms), so map M_t -> Ms and use its velocity
