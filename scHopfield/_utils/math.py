@@ -206,6 +206,50 @@ def fit_sigmoid(g, min_th=0.05, n_min=1.0, n_max=8.0, refine=True):
     return k_best, n_best, offset, mse_best
 
 
+def fit_sigmoid_bimodal(g, min_th=0.05, n_min=1.0, n_max=20.0, margin=0.85):
+    """Fit a two-component Hill CDF ``a*H(x;k1,n1) + (1-a)*H(x;k2,n2)`` to a gene.
+
+    Genes with two expression regimes (a "double sigmoid" CDF) are poorly captured by a
+    single Hill; this fits a bimodal mixture. It is accepted over the single fit only when
+    it improves the MSE by at least ``(1 - margin)`` (default 15%), so the extra
+    parameters do not just overfit noise.
+
+    Returns
+    -------
+    (k1, n1, k2, n2, a, offset, mse, is_bimodal)
+        Component thresholds/exponents, mixing weight ``a`` on component 1, off-fraction,
+        MSE, and whether the bimodal fit was accepted. When not accepted, both components
+        equal the single fit and ``a = 1``.
+    """
+    k1, n1, offset, mse1 = fit_sigmoid(g, min_th=min_th, n_min=n_min, n_max=n_max)
+    g = np.asarray(g, dtype=float); g = g[np.isfinite(g)]
+    if g.size == 0 or not (np.max(g) > 0):
+        return k1, n1, k1, n1, 1.0, offset, mse1, False
+    gmax = float(np.max(g)); thr = min_th * gmax
+    valid = np.sort(g[g > thr])
+    if valid.size < 8:
+        return k1, n1, k1, n1, 1.0, offset, mse1, False
+    x = valid; y = np.linspace(0.0, 1.0, valid.size)
+
+    def _mix(k1_, n1_, k2_, n2_, a_):
+        return a_ * (x ** n1_ / (x ** n1_ + k1_ ** n1_)) + (1 - a_) * (x ** n2_ / (x ** n2_ + k2_ ** n2_))
+
+    try:
+        res = least_squares(
+            lambda p: _mix(*p) - y,
+            x0=[k1, n1, min(2 * k1, gmax), n1, 0.5],
+            bounds=([1e-6, n_min, 1e-6, n_min, 0.0], [gmax, n_max, gmax, n_max, 1.0]),
+            max_nfev=600,
+        )
+        k1b, n1b, k2b, n2b, ab = [float(v) for v in res.x]
+        mse2 = float(np.mean((_mix(k1b, n1b, k2b, n2b, ab) - y) ** 2))
+        if np.isfinite(mse2) and mse2 < margin * mse1:
+            return k1b, n1b, k2b, n2b, ab, offset, mse2, True
+    except Exception:
+        pass
+    return k1, n1, k1, n1, 1.0, offset, mse1, False
+
+
 def int_sig_act_inv(x, s, n, verbose=False):
     """
     Compute the integral of the inverse sigmoid activation function.

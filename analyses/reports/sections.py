@@ -47,9 +47,15 @@ def get_colors(adata, ck):
     return dict(zip([str(c) for c in cats], list(cols)))
 
 
-def order_by_trajectory(adata, ck, clusters, lineages=None):
-    """Order cell types along the differentiation trajectory: left->right by pseudotime,
-    or (with two lineages) terminal-B ... progenitors ... terminal-A (middle-to-sides)."""
+def order_by_trajectory(adata, ck, clusters, lineages=None, explicit=None):
+    """Order cell types along the differentiation trajectory. An explicit config order
+    wins; otherwise left->right by pseudotime, or (with two lineages) terminal-B ...
+    progenitors ... terminal-A (middle-to-sides)."""
+    if explicit:
+        present = set(clusters)
+        ordered = [c for c in explicit if c in present]
+        ordered += [c for c in clusters if c not in set(ordered)]  # any leftover
+        return ordered
     pt = next((c for c in ["Pseudotime", "dpt_pseudotime", "latent_time", "palantir_pseudotime"]
                if c in adata.obs), None)
     if pt is None:
@@ -106,6 +112,62 @@ def _streamplot(ax, adata, flow_key, basis, ck=None, colors=None, n_grid=30, den
     return ax
 
 
+def fitted_velocity(adata, ck):
+    """Per-cell fitted Hopfield velocity W.sigma(x) + I - gamma*x (cluster-specific W/I/gamma)."""
+    x = np.asarray(adata.layers["Ms"]); sig = np.asarray(adata.layers["sigmoid"])
+    lab = adata.obs[ck].astype(str); pred = np.zeros_like(x)
+    for c in lab.unique():
+        if f"W_{c}" not in adata.varp:
+            continue
+        m = (lab == c).values; W = np.asarray(adata.varp[f"W_{c}"])
+        I = np.asarray(adata.var[f"I_{c}"]) if f"I_{c}" in adata.var else 0.0
+        g = np.asarray(adata.var[f"gamma_{c}"]) if f"gamma_{c}" in adata.var else np.asarray(adata.var["gamma"])
+        pred[m] = sig[m] @ W.T + I - g * x[m]
+    return pred.astype(np.float32)
+
+
+def _stream(ax, adata, ck, colors, basis, velocity, title=None, color_key=None):
+    """Project a per-cell velocity to the embedding and draw scVelo streamlines. This uses
+    the transition-probability embedding (like scVelo/dynamo), which gives the clean
+    progenitor->terminal flow that a raw KNN quiver projection does not."""
+    import scvelo as scv
+    a = adata
+    if not hasattr(a.obs[ck], "cat"):
+        a.obs[ck] = a.obs[ck].astype("category")
+    a.uns[f"{ck}_colors"] = [colors.get(str(c), "#888888") for c in a.obs[ck].cat.categories]
+    a.layers["velocity"] = np.asarray(velocity, dtype=np.float32)
+    scv.tl.velocity_graph(a, n_jobs=4, sqrt_transform=False)
+    try:
+        scv.pl.velocity_embedding_stream(
+            a, basis=basis, color=(color_key or ck), ax=ax, show=False, legend_loc="none",
+            title=title or "", density=1.3, linewidth=1.0, arrow_size=1.1, alpha=0.5)
+    except Exception:
+        # scVelo streamplot needs a regular grid; on the rare embedding where it fails,
+        # fall back to a grid quiver of the embedded velocity.
+        scv.tl.velocity_embedding(a, basis=basis)
+        _flow_grid(ax, a, f"velocity_{basis}", basis, ck, colors)
+        ax.set_title(title or "")
+    ax.set_axis_off()
+    return ax
+
+
+def _flow_grid(ax, adata, flow_key, basis, ck, colors, color="black", scale=None,
+               n_grid=25, min_mass=25):
+    """Grid-averaged flow via the package plot_flow (on_grid), with magnitude outliers
+    clipped so a few cells don't dominate, and no axes."""
+    F = np.asarray(adata.obsm[flow_key]); mag = np.linalg.norm(F, axis=1)
+    pos = mag > 0
+    if pos.any():
+        cap = float(np.percentile(mag[pos], 99))
+        if cap > 0:
+            adata.obsm[flow_key] = F * np.minimum(1.0, cap / (mag + 1e-12))[:, None]
+    sch.pl.plot_flow(adata, flow_key=flow_key, basis=basis, ax=ax, on_grid=True,
+                     n_grid=n_grid, min_mass=min_mass, scale=scale, color=color,
+                     cluster_key=ck, colors=colors)
+    ax.set_axis_off()
+    return ax
+
+
 def _try(report, name, fname, fn, caption):
     rel = f"plots/{fname}"
     if not FORCE_FIGS and os.path.exists(f"{ROOT_}/{name}/{rel}"):
@@ -154,17 +216,20 @@ def section_A(adata, name, ck, report, cfg):
     _try(report, name, "A1_celltypes.png", _ct, f"Cell types on the {basis} embedding.")
 
     report.sub("1.2 Dynamics on the embedding",
-               "Hopfield velocity field from the fitted model, drawn as streamlines over the "
-               "cell-type-colored cells.")
+               "Left: the input velocity the model is fit to. Right: the fitted Hopfield "
+               "velocity (W sigma(x) + I - gamma x). Both are projected with scVelo's "
+               "transition-probability streamlines. Close agreement means the GRN reproduces "
+               f"the {cfg['velocity_mode']} dynamics -- progenitors flow to the terminal states.")
     def _flow():
-        if f"original_velocity_flow_{basis}" not in adata.obsm:
-            sch.tl.calculate_flow(adata, source="original", basis=basis, cluster_key=ck, verbose=False)
-        fig, ax = plt.subplots(figsize=(6.6, 5.6))
-        _streamplot(ax, adata, f"original_velocity_flow_{basis}", basis, ck=ck, colors=colors,
-                    title=f"{name}: model velocity field")
+        fig, axes = plt.subplots(1, 2, figsize=(13, 5.8))
+        vlab = "pseudotime" if cfg["velocity_mode"] == "pseudotime" else "RNA"
+        _stream(axes[0], adata, ck, colors, basis, np.asarray(adata.layers["velocity_S"]),
+                title=f"{name}: input {vlab} velocity")
+        _stream(axes[1], adata, ck, colors, basis, fitted_velocity(adata, ck),
+                title=f"{name}: fitted Hopfield velocity")
         return fig
     _try(report, name, "A2_velocity_flow.png", _flow,
-         "Model-inferred velocity field (streamlines) over the cell types.")
+         "Input vs fitted velocity, both as scVelo streamlines (progenitors -> terminal states).")
 
     report.sub("1.3 Hill (sigmoid) fitting and goodness of fit",
                "Per-gene Hill activation fit to the expression CDF; goodness of fit is "
@@ -196,6 +261,37 @@ def section_A(adata, name, ck, report, cfg):
         _try(report, name, "A4_hill_examples.png", _examples,
              "Example Hill fits: two best- and two worst-fit genes by MSE.")
 
+        report.sub("1.4 Double-sigmoid (two-component) Hill fits",
+                   "Some worst-fit genes have two expression regimes (a double-sigmoid CDF) "
+                   "that a single Hill cannot capture. Here the four worst genes are fit with a "
+                   "single Hill and with a two-component mixture a*H(k1,n1)+(1-a)*H(k2,n2); the "
+                   "bimodal fit is shown when it improves the MSE by >15%.")
+        worst = list(names[order[-4:]])
+        def _bimodal():
+            from scHopfield._utils.math import fit_sigmoid as _fs, fit_sigmoid_bimodal as _fb, sigmoid as _sg
+            fig, axes = plt.subplots(1, 4, figsize=(16, 3.8))
+            Ms = np.asarray(adata.layers["Ms"])
+            vnames = list(adata.var_names)
+            for ax, g in zip(axes, worst):
+                gi = vnames.index(g)
+                x = np.sort(Ms[:, gi].ravel()); x = x[x > 0.05 * (x.max() if x.size else 1)]
+                if x.size < 8:
+                    ax.set_visible(False); continue
+                y = np.linspace(0, 1, x.size)
+                k1, n1, _o, m1 = _fs(x)
+                k1b, n1b, k2b, n2b, a, _ob, m2, isbi = _fb(x)
+                ax.plot(x, y, ".", ms=2, color="#aaaaaa", label="ECDF")
+                ax.plot(x, _sg(x, k1, n1), color="#2a6f97", lw=2, label=f"single (mse {m1:.3g})")
+                if isbi:
+                    mix = a * _sg(x, k1b, n1b) + (1 - a) * _sg(x, k2b, n2b)
+                    ax.plot(x, mix, color="#c1121f", lw=2, label=f"bimodal (mse {m2:.3g})")
+                ax.set_title(g, fontsize=9); ax.legend(fontsize=6); ax.set_xlabel("expression")
+            fig.suptitle("Worst single-Hill fits: single vs two-component Hill", y=1.02)
+            return fig
+        _try(report, name, "A5_hill_bimodal.png", _bimodal,
+             "Single vs two-component Hill on the worst-fit genes (bimodal shown when it "
+             "improves MSE >15%).")
+
 
 # --------------------------------------------------------------------------- #
 # Section B: energy landscape
@@ -204,7 +300,7 @@ def section_B(adata, name, ck, report, cfg):
     basis = basis_of(adata)
     colors = get_colors(adata, ck)
     clusters = present_clusters(adata, ck)
-    order = order_by_trajectory(adata, ck, clusters, cfg.get("lineages"))
+    order = order_by_trajectory(adata, ck, clusters, cfg.get("lineages"), explicit=cfg.get("order"))
     report.section(
         "2. Energy landscape",
         "The fitted model defines a Lyapunov energy per cell, decomposed into interaction, "
@@ -243,7 +339,7 @@ def section_C(adata, name, ck, report, cfg):
     from scipy.spatial.distance import squareform
     colors = get_colors(adata, ck)
     clusters = present_clusters(adata, ck)
-    order = order_by_trajectory(adata, ck, clusters, cfg.get("lineages"))
+    order = order_by_trajectory(adata, ck, clusters, cfg.get("lineages"), explicit=cfg.get("order"))
     report.section(
         "3. Regulatory network structure",
         "Cell-type-specific GRNs (`W_c`): similarity across cell types, hub genes, spectral "
@@ -273,28 +369,34 @@ def section_C(adata, name, ck, report, cfg):
         _try(report, name, "C1_network_similarity.png", _dend,
              "Cell-type networks cluster by lineage; the ordered heatmap shows the block structure.")
 
-    report.sub("3.2 Network centrality by cell type",
-               "Hub genes per cell type (total degree centrality), one panel per cell type in "
-               "its own color.")
+    report.sub("3.2 Cell-type-specific hub genes",
+               "A few global hubs (e.g. Myc, Gata1) are central in every cell type, so raw "
+               "top-centrality lists look alike. Here each panel shows the genes whose degree "
+               "centrality is highest *relative to the cross-cell-type mean* -- the hubs that "
+               "are specific to that cell type. One panel per cell type, in its color.")
     def _cent_panels():
+        metric = "degree_centrality_all"
+        M = pd.DataFrame({c: adata.var.get(f"{metric}_{c}",
+                                           pd.Series(0.0, index=adata.var_names)).fillna(0)
+                          for c in order})
+        mean = M.mean(axis=1)
         ncl = len(order); ncol = min(4, ncl); nrow = int(np.ceil(ncl / ncol))
         fig, axes = plt.subplots(nrow, ncol, figsize=(3.6 * ncol, 3.0 * nrow), squeeze=False)
         for k, c in enumerate(order):
             ax = axes[k // ncol][k % ncol]
-            try:
-                sch.pl.plot_network_centrality_rank(adata, metric="degree_centrality_all",
-                                                    clusters=[c], cluster_key=ck, n_genes=12,
-                                                    colors={c: colors.get(c, "#3b6ea5")}, ax=ax)
-                ax.set_title(c, fontsize=9, color=colors.get(c, "k"))
-            except Exception:
-                ax.set_visible(False)
+            diff = (M[c] - mean).sort_values(ascending=False).head(10).iloc[::-1]
+            ax.barh(range(len(diff)), diff.values, color=colors.get(c, "#3b6ea5"))
+            ax.set_yticks(range(len(diff))); ax.set_yticklabels(diff.index, fontsize=7)
+            ax.axvline(0, color="k", lw=0.5)
+            ax.set_title(c, fontsize=9, color=colors.get(c, "k")); ax.tick_params(labelsize=6)
         for k in range(ncl, nrow * ncol):
             axes[k // ncol][k % ncol].set_visible(False)
-        fig.suptitle("Top hub genes per cell type (degree centrality)", fontweight="bold")
+        fig.suptitle("Cell-type-specific hubs (centrality above the cross-cell-type mean)",
+                     fontweight="bold")
         fig.tight_layout()
         return fig
     _try(report, name, "C2_centrality_by_celltype.png", _cent_panels,
-         "Top regulators per cell type, one panel each, in the cell type's color.")
+         "Cell-type-specific hub genes (degree centrality relative to the cross-type mean).")
 
     report.sub("3.3 Centrality-measure comparison",
                "Eigenvector centrality (global regulatory influence) vs betweenness centrality "
@@ -310,9 +412,16 @@ def section_C(adata, name, ck, report, cfg):
 
     report.sub("3.4 Network eigenanalysis",
                "Spectral structure of `W_c`: dominant eigenvalue loadings and eigenvalue spectra.")
-    _try(report, name, "C4_eigen_grid.png",
-         lambda: sch.pl.plot_eigenanalysis_grid(adata, cluster_key=ck, order=order, n_genes=10, colors=colors),
-         "Leading eigenvector gene loadings per cell type.")
+    def _eig_grid():
+        out = sch.pl.plot_eigenanalysis_grid(adata, cluster_key=ck, order=order, n_genes=10, colors=colors)
+        fig = out if hasattr(out, "savefig") else (out.figure if hasattr(out, "figure") else plt.gcf())
+        for ax in fig.axes:
+            lo, hi = ax.get_ylim(); m = max(abs(lo), abs(hi))
+            if m > 0:
+                ax.set_ylim(-m, m)
+        return fig
+    _try(report, name, "C4_eigen_grid.png", _eig_grid,
+         "Leading eigenvector gene loadings per cell type (symmetric y-axis).")
     _try(report, name, "C5_eigenvalue_spectrum.png",
          lambda: sch.pl.plot_eigenvalue_spectrum(adata, cluster_key=ck, colors=colors),
          "Eigenvalue spectra of the cell-type interaction matrices.")
@@ -340,7 +449,7 @@ def section_D(adata, name, ck, report, cfg):
     basis = basis_of(adata)
     colors = get_colors(adata, ck)
     clusters = present_clusters(adata, ck)
-    order = order_by_trajectory(adata, ck, clusters, cfg.get("lineages"))
+    order = order_by_trajectory(adata, ck, clusters, cfg.get("lineages"), explicit=cfg.get("order"))
     report.section(
         "4. Local stability (Jacobian analysis)",
         "The Jacobian at each cell governs local dynamics; its leading eigenvalue measures "
@@ -388,14 +497,29 @@ def section_D(adata, name, ck, report, cfg):
     report.sub("4.3 Element-wise Jacobian dynamics",
                "How specific regulator->target sensitivities vary across the trajectory, for "
                "the strongest hub genes.")
-    hubs = _top_by_centrality(adata, ck, clusters, n=4)
-    pairs = [(hubs[0], hubs[1]), (hubs[2], hubs[3]), (hubs[0], hubs[3])] if len(hubs) >= 4 else []
+    import itertools as _it
+    hubs = _top_by_centrality(adata, ck, clusters, n=8)
+    vn = list(adata.var_names)
+
+    def _edge(a_, b_):
+        gi, gj = vn.index(a_), vn.index(b_)
+        return any(abs(np.asarray(adata.varp[f"W_{c}"])[gi, gj]) > 1e-8
+                   for c in clusters if f"W_{c}" in adata.varp)
+    pairs = [p for p in _it.permutations(hubs, 2) if _edge(*p)][:9] if len(hubs) >= 4 else []
     if pairs:
         try:
             sch.tl.compute_jacobian_elements(adata, gene_pairs=pairs, cluster_key=ck)
-            _try(report, name, "D4_jac_elements.png",
-                 lambda: sch.pl.plot_jacobian_element_grid(adata, gene_pairs=pairs, cluster_key=ck),
-                 f"Jacobian element dynamics for hub pairs {pairs}.")
+            def _je():
+                out = sch.pl.plot_jacobian_element_grid(adata, gene_pairs=pairs, cluster_key=ck)
+                fig = out if hasattr(out, "savefig") else (out.figure if hasattr(out, "figure") else plt.gcf())
+                for ax in fig.axes:
+                    if ax.collections:
+                        ax.set_xticks([]); ax.set_yticks([])
+                        for sp in ax.spines.values():
+                            sp.set_visible(False)
+                return fig
+            _try(report, name, "D4_jac_elements.png", _je,
+                 f"Jacobian element (regulator->target sensitivity) dynamics for {len(pairs)} hub pairs.")
         except Exception as exc:
             print(f"  [jac elements] {exc}", flush=True)
 
@@ -428,14 +552,24 @@ def _perturb(adata, cond, ck, basis):
 
 
 def _lineage_pairs(adata, name, ck, cfg):
-    """Return a list of (A,B,An,Bn) lineage pairs. Explicit config -> one pair; otherwise
-    the two most network-distinct cluster pairs (compare 2 pairs for unclear lineages)."""
-    from rutils import resolve_lineages
+    """Return a list of (A,B,An,Bn) lineage pairs. Explicit config lineage_pairs win (e.g.
+    differentiated-vs-progenitor for multifurcating datasets); else a single configured
+    pair; else the two most network-distinct cluster pairs."""
+    present = present_clusters(adata, ck)
+    cfg_pairs = cfg.get("lineage_pairs")
+    if cfg_pairs:
+        out = []
+        for lp in cfg_pairs:
+            A = [c for c in lp["A"] if c in present]; B = [c for c in lp["B"] if c in present]
+            if A and B:
+                out.append((A, B, lp["A_name"], lp["B_name"]))
+        if out:
+            return out
     lin = cfg.get("lineages")
     if lin:
+        from rutils import resolve_lineages
         A, B, An, Bn = resolve_lineages(adata, name)
         return [(A, B, An, Bn)]
-    present = present_clusters(adata, ck)
     Ws = {c: np.asarray(adata.varp[f"W_{c}"]) for c in present if f"W_{c}" in adata.varp}
     cl = list(Ws)
     pairs = []
@@ -543,14 +677,17 @@ def _perturb_section(adata, name, ck, report, cfg, A, B, An, Bn, tag):
             fig, ax = plt.subplots(3, 2, figsize=(12, 15))
             emb = np.asarray(adata.obsm[f"X_{basis}"])[:, :2]
             ax[0, 0].scatter(emb[:, 0], emb[:, 1], c=[colors.get(str(c), "#ccc") for c in adata.obs[ck].astype(str)], s=8, alpha=0.6)
-            ax[0, 0].set(title="cell types", xticks=[], yticks=[])
-            _streamplot(ax[0, 1], adata, wt_key, basis, ck, colors, title="reference velocity")
-            _streamplot(ax[1, 0], ko, f"perturbation_flow_{basis}", basis, ck, colors,
-                        stream_color=GRP["A"], title=f"{g0} KO flow")
-            _streamplot(ax[1, 1], oe, f"perturbation_flow_{basis}", basis, ck, colors,
-                        stream_color=GRP["B"], title=f"{g0} OE flow")
-            sch.pl.plot_inner_product(ko, basis=basis, ax=ax[2, 0], inner_product_key="ip"); ax[2, 0].set_title(f"{g0} KO . velocity")
-            sch.pl.plot_inner_product(oe, basis=basis, ax=ax[2, 1], inner_product_key="ip"); ax[2, 1].set_title(f"{g0} OE . velocity")
+            ax[0, 0].set_title("cell types"); ax[0, 0].set_axis_off()
+            _stream(ax[0, 1], adata, ck, colors, basis, fitted_velocity(adata, ck), title="reference velocity")
+            _stream(ax[1, 0], ko, ck, colors, basis, np.asarray(ko.layers["delta_X"]), title=f"{g0} KO flow")
+            _stream(ax[1, 1], oe, ck, colors, basis, np.asarray(oe.layers["delta_X"]), title=f"{g0} OE flow")
+            for a2, pert, lab in [(ax[2, 0], ko, "KO"), (ax[2, 1], oe, "OE")]:
+                try:
+                    sch.pl.plot_inner_product(pert, basis=basis, ax=a2, inner_product_key="ip",
+                                              on_grid=True, n_grid=40, min_mass=25)
+                except TypeError:
+                    sch.pl.plot_inner_product(pert, basis=basis, ax=a2, inner_product_key="ip")
+                a2.set_title(f"{g0} {lab} inner product"); a2.set_axis_off()
             fig.tight_layout()
             return fig
         _try(report, name, f"E{tag}_3_ko_oe_grid.png", _grid,
@@ -569,8 +706,8 @@ def _perturb_section(adata, name, ck, report, cfg, A, B, An, Bn, tag):
         fig, axes = plt.subplots(nrow, ncol, figsize=(5 * ncol, 4.6 * nrow), squeeze=False)
         for k, (g, col) in enumerate(genes_grp):
             axx = axes[k // ncol][k % ncol]
-            p = _perturb(adata, {g: 0.0}, ck, basis)
-            _streamplot(axx, p, f"perturbation_flow_{basis}", basis, ck, colors, stream_color=col, title=f"{g} KO")
+            p = sch.dyn.simulate_perturbation(adata, {g: 0.0}, cluster_key=ck, n_propagation=3, verbose=False)
+            _stream(axx, p, ck, colors, basis, np.asarray(p.layers["delta_X"]), title=f"{g} KO")
         for k in range(n, nrow * ncol):
             axes[k // ncol][k % ncol].set_visible(False)
         fig.tight_layout()
@@ -609,6 +746,12 @@ def _perturb_section(adata, name, ck, report, cfg, A, B, An, Bn, tag):
             im2 = ax.imshow(np.where(np.tril(np.ones((n, n)), -1) > 0, canc_m, np.nan),
                             cmap="PRGn", vmin=-lc, vmax=lc)
             ax.axhline(len(AA) - 0.5, color="k", lw=1.5); ax.axvline(len(AA) - 0.5, color="k", lw=1.5)
+            # dashed staircase along the diagonal separating the two triangles
+            xs, ys = [], []
+            for i in range(n):
+                xs += [i - 0.5, i + 0.5, i + 0.5]; ys += [i - 0.5, i - 0.5, i + 0.5]
+            ax.plot(xs, ys, color="k", lw=1.0, ls="--")
+            ax.set_xlim(-0.5, n - 0.5); ax.set_ylim(n - 0.5, -0.5)
             ax.set_xticks(range(n)); ax.set_xticklabels(genes, rotation=60, ha="right", fontsize=7)
             ax.set_yticks(range(n)); ax.set_yticklabels(genes, fontsize=7)
             for t, g in zip(ax.get_xticklabels(), genes):
@@ -616,10 +759,11 @@ def _perturb_section(adata, name, ck, report, cfg, A, B, An, Bn, tag):
             for t, g in zip(ax.get_yticklabels(), genes):
                 t.set_color(GRP["A"] if g in AA else GRP["B"])
             ax.set_title(f"{name}: perturbation matrix (upper=lineage bias, lower=cancellation)")
-            cb1 = fig.colorbar(im1, ax=ax, fraction=0.046, pad=0.04, shrink=0.85)
-            cb1.set_label("lineage bias (upper triangle)", fontsize=8)
-            cb2 = fig.colorbar(im2, ax=ax, fraction=0.046, pad=0.18, shrink=0.85)
-            cb2.set_label("cancellation error (lower triangle)", fontsize=8)
+            fig.subplots_adjust(right=0.80)
+            cax1 = fig.add_axes([0.83, 0.54, 0.022, 0.34])
+            cax2 = fig.add_axes([0.83, 0.12, 0.022, 0.34])
+            fig.colorbar(im1, cax=cax1).set_label("lineage bias (upper)", fontsize=8)
+            fig.colorbar(im2, cax=cax2).set_label("cancellation error (lower)", fontsize=8)
             return fig
         _try(report, name, f"E{tag}_5_epistasis_matrix.png", _combined,
              "Double-KO lineage bias (upper) and cancellation-error epistasis (lower) in one matrix.")
@@ -630,10 +774,11 @@ def _perturb_section(adata, name, ck, report, cfg, A, B, An, Bn, tag):
     report.sub(f"5.{tag}.6 Energy change under KO",
                f"Per-cell-type change in total energy when {g0} is knocked out.")
     def _de():
-        order2 = order_by_trajectory(adata, ck, present_clusters(adata, ck), cfg.get("lineages"))
+        order2 = order_by_trajectory(adata, ck, present_clusters(adata, ck), cfg.get("lineages"), explicit=cfg.get("order"))
         k = sch.dyn.simulate_perturbation(adata, {g0: 0.0}, cluster_key=ck, n_propagation=3, verbose=False)
         e0 = adata.obs["energy_total"].values
         kk = k.copy(); kk.layers["Ms"] = kk.layers["simulated_count"]
+        sch.pp.compute_sigmoid(kk, spliced_key="Ms")  # recompute activation from perturbed state
         sch.tl.compute_energies(kk, cluster_key=ck)
         de = kk.obs["energy_total"].values - e0
         lab = adata.obs[ck].astype(str)

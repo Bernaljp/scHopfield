@@ -98,8 +98,24 @@ def estimate_velocity_from_pseudotime(
 
     dX = E_x - X
     dT = E_t - t
-    V  = dX / (dT[:, None] + 1e-6)
+    # Floor |dT| relative to the pseudotime scale (sign preserved). A fixed 1e-6 floor
+    # let cells whose forward neighbours have near-equal pseudotime (dT ~ 0) produce
+    # exploding velocities (outliers hundreds of times the median), which corrupt both
+    # the GRN fit and the flow plots.
+    nz = np.abs(dT[dT != 0])
+    dt_floor = 1e-2 * float(np.median(nz)) if nz.size else 1e-6
+    sign = np.sign(dT); sign[sign == 0] = 1.0
+    denom = sign * np.maximum(np.abs(dT), dt_floor)
+    V = dX / denom[:, None]
     V[dT == 0] = 0.0
+    # Winsorize extreme per-cell velocity magnitudes at the 99th percentile (direction
+    # preserved) so a few residual outliers do not dominate the fit or the field.
+    mag = np.linalg.norm(V, axis=1)
+    pos = mag > 0
+    if pos.any():
+        cap = float(np.percentile(mag[pos], 99))
+        if cap > 0:
+            V = V * np.minimum(1.0, cap / (mag + 1e-12))[:, None]
 
     if copy:
         return V

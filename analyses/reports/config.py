@@ -41,12 +41,28 @@ DATASETS = {
         cluster_key="cell_type", species="mouse", base_grn=MOUSE_GRN,
         prepare=False, velocity_mode="velocity",
         velocity_key="velocity_alpha_minus_gamma_s", ms_layer="M_t",
-        lineages=None, anchors=None,
+        # center-to-sides (HSC in the middle), matching the notebook order
+        order=["Meg", "Ery", "MEP-like", "HSC", "GMP-like", "Mon", "Bas", "Neu"],
+        lineage_pairs=[dict(A=["Ery", "Meg", "MEP-like"], B=["Neu", "Mon", "Bas", "GMP-like"],
+                            A_name="erythroid", B_name="myeloid")],
+        lineages=dict(A=["Ery", "Meg", "MEP-like"], B=["Neu", "Mon", "Bas", "GMP-like"],
+                      A_name="erythroid", B_name="myeloid"),
+        anchors=None,
     ),
     "pancreas": dict(
         path="data/Pancreas/pancreas_scvelo_ready.h5ad",
         cluster_key="clusters", species="mouse", base_grn=MOUSE_GRN,
         prepare=False, velocity_mode="velocity", velocity_key="velocity_S",
+        # differentiation left->right
+        order=["Ductal", "Ngn3 low EP", "Ngn3 high EP", "Pre-endocrine",
+               "Alpha", "Beta", "Delta", "Epsilon"],
+        # multifurcation: the meaningful axis is differentiated vs progenitor (does a KO
+        # block differentiation / push cells back to progenitors?), plus alpha-vs-beta.
+        lineage_pairs=[
+            dict(A=["Alpha", "Beta", "Delta", "Epsilon"], B=["Ductal", "Ngn3 low EP", "Ngn3 high EP"],
+                 A_name="differentiated", B_name="progenitor"),
+            dict(A=["Alpha"], B=["Beta"], A_name="alpha", B_name="beta"),
+        ],
         lineages=dict(A=["Alpha"], B=["Beta"], A_name="alpha", B_name="beta"),
         anchors=None,
     ),
