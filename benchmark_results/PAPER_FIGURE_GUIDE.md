@@ -1,7 +1,7 @@
 # scHopfield paper: figure guide
 
 A navigable guide to every results section: the composed paper figure
-(`../latex/figures/`), the underlying exploratory plots (`<section>/plots/`), and a
+(`../paper/figures/`), the underlying exploratory plots (`<section>/plots/`), and a
 short explanation of each and what it means. Numbers come from the section JSONs;
 findings are logged in [`FINDINGS.md`](FINDINGS.md). Three sections have their own
 detailed guides, linked below.
@@ -26,7 +26,7 @@ detailed guides, linked below.
 
 ## 1. Model overview (Fig 1)
 
-![fig1](../latex/figures/fig1.png)
+![fig1](../paper/figures/fig1.png)
 
 The composed schematic: the continuous-Hopfield model `dx/dt = W·σ(x) − γx + I`, the
 fitted Hill activation, a cell-type GRN, the Lyapunov energy landscape, and the

@@ -128,7 +128,7 @@ docs/api/generated/
 !benchmark_results/pipeline/**/*.png
 
 # Manuscript drafts and paper documents (kept locally, out of the package repo).
-# The compiled paper lives in latex/ (main.tex + main.pdf); these are its
+# The compiled paper lives in paper/ (main.tex + main.pdf); these are its
 # draft/source materials and old review comments.
 ManuscriptIdeaJesper/
 docs/methods/
@@ -143,3 +143,8 @@ archive/
 
 # Isolated dynamo env (dynamo needs anndata<0.11, incompatible with the main env)
 .venv-dyn/
+
+# The compiled paper's own figures are tracked assets; re-include them despite the
+# broad `figures/` and `*.png` ignore rules above (these negations must come last).
+!paper/figures/
+!paper/figures/**

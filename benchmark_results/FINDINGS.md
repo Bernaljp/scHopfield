@@ -459,3 +459,23 @@ Reconstruction cosine: baseline (neighbors 0.2) 0.853, no neighbors 0.858, neigh
 
 ## M23 -- Ablation: Hill fit and bias penalty (pancreas)
 Jointly-fit Hill cosine 0.739 vs heuristic 0.853. Bias energy fraction: L1 0.0%, L2 0.3%, no penalty 42.3%, no scaffold 94.8%. The scaffold + L1 penalty are what keep the bias term from taking over.
+
+## M24 -- Ablation: single vs bimodal Hill (pancreas)
+
+Two-component Hill flagged 51/200 genes (26%) as genuinely bimodal (Sarle BC>0.6 + separation + >=40% MSE gain); median MSE drop 92% on those. Circuit negative control flags 0 (single-Hill toggle, expect 0). Per-cell energy r=0.95, recon cosine 0.812 (single) vs 0.811 (bimodal), driver Jaccard 0.48. Bimodal is a targeted fit-quality refinement for double-sigmoid genes; downstream conclusions are stable.
+
+## M25 -- Velocity-source comparison (pancreas)
+
+Sources: scvelo, dynamo, pseudotime. Same cells + gene set, shared sigmoids + scaffold. Raw velocity agreement (median per-cell cosine): scvelo-dynamo 0.92; scvelo-pseudotime 0.23; dynamo-pseudotime 0.16. Fitted-W correlation across sources 0.04-0.88 (mean 0.33); top-25 driver Jaccard 0.33 with 11 consensus drivers; reconstruction cosine {'scvelo': 0.812, 'dynamo': 0.838, 'pseudotime': 0.448}. Fitted velocity streams are coherent for every source. Takeaway: the fitted GRN and energy landscape are most similar where the raw velocities agree; the pseudotime velocity differs most in raw direction yet still yields a coherent fitted flow and recovers the consensus drivers.
+
+## M26 -- Velocity-source comparison (dynamo_hematopoiesis)
+
+Sources: dynamo, pseudotime (no splicing, so no scVelo). Same cells + gene set, shared sigmoids + scaffold. Raw velocity agreement (median per-cell cosine): dynamo-pseudotime -0.19 (essentially uncorrelated/opposed). Fitted-W correlation -0.03; top-25 driver Jaccard 0.06 with 3 consensus drivers; reconstruction cosine {'dynamo': 0.633, 'pseudotime': 0.246}. This is the weakest-agreement case: dynamo and the diffusion-pseudotime velocity disagree in raw direction, and the fitted networks are essentially unrelated. Both still project to a coherent HSC->myeloid/erythroid flow (streams side by side), but here the velocity source materially changes the inferred GRN, so on datasets like this the source choice should be reported, not assumed interchangeable.
+
+## M27 -- Velocity-source comparison (murine_nc)
+
+Sources: scvelo, dynamo, pseudotime. Same cells + gene set, shared sigmoids + scaffold. Raw velocity agreement (median per-cell cosine): scvelo-dynamo 0.30; scvelo-pseudotime 0.42; dynamo-pseudotime 0.00. Fitted-W correlation across sources 0.04-0.42 (mean 0.22); top-25 driver Jaccard 0.90 with 23 consensus drivers; reconstruction cosine {'scvelo': 0.767, 'dynamo': 0.923, 'pseudotime': 0.452}. Notably, raw-velocity and fitted-W agreement here are low (unlike pancreas) yet the nominated drivers are highly consistent (Jaccard 0.90): the scaffold + expression pin down the top structural drivers even when the velocity target, and hence the exact weights, differ. Fitted velocity streams are coherent for every source.
+
+## M28 -- Velocity-source comparison: cross-dataset synthesis
+
+Across the three datasets (pancreas 3-way, murine_nc 3-way, dynamo_hematopoiesis 2-way) the pattern is heterogeneous, not uniform. Consistent findings: (i) splicing-based reconstruction cosine is always good (0.63-0.92) and the pseudotime velocity is always the hardest to fit (0.25-0.45), because it is a coarser, denominator-sensitive target; (ii) the fitted Hopfield velocity projects to a coherent progenitor->terminal flow for every source (all montages), so no source produces a degenerate landscape. Variable findings: raw-velocity agreement ranges from tight (pancreas scvelo-dynamo 0.92) to opposed (hematopoiesis dynamo-pseudotime -0.19), and it does NOT cleanly predict driver overlap: murine_nc has low raw agreement (0.30) but the highest driver consensus (Jaccard 0.90), whereas hematopoiesis has both low raw agreement and low driver consensus (0.06). Honest conclusion: the velocity source is a real modeling choice that can move the fitted weights substantially (so it should be reported), but the scaffold-constrained top-driver nominations are the most source-robust readout, and the qualitative landscape/flow is source-invariant.

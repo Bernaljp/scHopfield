@@ -38,7 +38,7 @@ def cache_path(name):
 # --------------------------------------------------------------------------- #
 # preprocessing + fit + full analysis set
 # --------------------------------------------------------------------------- #
-def prepare_and_fit(name, device="cuda", force=False, mode=None, tag=""):
+def prepare_and_fit(name, device="cuda", force=False, mode=None, tag="", bimodal=None):
     """Return the fully analyzed AnnData for a dataset (cached).
 
     ``mode`` overrides the dataset's velocity_mode ('velocity' or 'pseudotime'); ``tag``
@@ -126,8 +126,8 @@ def prepare_and_fit(name, device="cuda", force=False, mode=None, tag=""):
 
     # ---- sigmoids (raised exponent ceiling + multi-start refine handle sharp/double
     #      sigmoid genes) ----
-    sch.pp.fit_all_sigmoids(sub, spliced_key="Ms", n_max=HILL_N_MAX,
-                            bimodal=cfg.get("bimodal_hill", False))
+    use_bimodal = cfg.get("bimodal_hill", False) if bimodal is None else bimodal
+    sch.pp.fit_all_sigmoids(sub, spliced_key="Ms", n_max=HILL_N_MAX, bimodal=use_bimodal)
     sch.pp.compute_sigmoid(sub, spliced_key="Ms")
 
     # ---- scaffold + GRN fit ----
