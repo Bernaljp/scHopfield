@@ -4,6 +4,7 @@ from .interactions import fit_interactions
 from .optimizer import ScaffoldOptimizer, MaskedLinearLayer
 from .datasets import CustomDataset
 from .scaffold import build_scaffold, scaffold_from_edges
+from .base_grn import fetch_base_grn
 
 __all__ = [
     'fit_interactions',
@@ -12,4 +13,5 @@ __all__ = [
     'CustomDataset',
     'build_scaffold',
     'scaffold_from_edges',
+    'fetch_base_grn',
 ]
