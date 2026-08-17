@@ -13,7 +13,14 @@ Panels (reading order a..f); per-cell-type panels use the requested cell types:
   f  small regulatory network (TikZ): a gene set + their top regulators, shell layout,
      uniform node size
 
-Run (defaults = pancreas / Ductal, Pre-endocrine, Beta / Malat1, Meg3, Ptprn2, Ins2):
+Focal genes are a REQUIRED INPUT, not a decoration. Panel f draws a curated set of master
+regulators together with their top regulators, so the set must belong to the system being
+plotted. They come from the FOCAL_GENES table below, keyed by dataset, or from --genes,
+which overrides it. There is no gene default: a dataset absent from the table stops the
+run rather than borrow another system's regulators. Borrowing is what once drew pancreatic
+transcription factors on hematopoiesis and myogenesis and left panel f empty.
+
+Run (defaults = pancreas / Ductal, Pre-endocrine, Beta / the curated pancreatic cascade):
   python reproducibility/make_network_figure.py
   python reproducibility/make_network_figure.py --dataset murine_nc \
       --celltypes "A,B,C" --genes "G1,G2,G3"
@@ -78,6 +85,8 @@ SUB_OUT = os.path.join(paths.FIGURES_SPEC, "ExtendedDataFig4.pdf")
 # selection drops some canonical regulators (Tal1 from paul15, SOX10 from schwann, SIX1 from human_limb).
 # Ranking the curated regulators by out-strength instead was tried and rejected: it does not reproduce
 # the pancreatic cascade the manuscript names, and it drops Gata1 and Spi1 from hematopoiesis.
+# Kept identical to the copy the analysis tree runs, so the same dataset renders the same panel f
+# from either tree; change both together.
 FOCAL_N = 7
 FOCAL_GENES = {
     "pancreas": ["Pdx1", "Nkx6-1", "Sox9", "Neurog3", "Neurod1", "Arx", "Pax4"],
