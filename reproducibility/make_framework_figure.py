@@ -62,7 +62,7 @@ import paths                                                     # noqa: E402
 from paper_plot_style import use_style, save, INK, MUTED       # noqa: E402
 import anndata as ad                                           # noqa: E402
 from sections import basis_of                                  # noqa: E402
-from scHopfield._utils.math import sigmoid                     # noqa: E402
+from scHopfield import sigmoid                                 # noqa: E402
 
 OUT = paths.FIGURES
 FW, FH = 7.087, 9.70                    # portrait, a full page. 7.087 in = 180 mm exactly,

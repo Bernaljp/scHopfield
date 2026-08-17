@@ -135,7 +135,7 @@ def draw_fate_map(ax, emb, vals, vmax, title, eps, cmap="RdBu_r", s_bg=3, s_fg=6
 def _grid_arrows(ax, adm, flow_key, basis, color="#333333", n_grid=25, min_mass=25, size=1.0):
     """The grid-averaged displacement quiver of the report's `_flow_grid` (same outlier-clip + scale),
     WITHOUT the cluster cell coloring, so it can be overlaid on an inner-product-colored scatter."""
-    from scHopfield.tools.flow import calculate_grid_flow
+    from scHopfield.tools import calculate_grid_flow
     Fl = np.asarray(adm.obsm[flow_key])[:, :2].astype(float)
     mag = np.linalg.norm(Fl, axis=1); pos = mag > 0
     if pos.any():

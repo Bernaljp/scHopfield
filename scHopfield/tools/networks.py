@@ -628,3 +628,78 @@ def get_eigenanalysis_table(
         result[(cluster, '-EV value')] = [f"{v:.3f}" for v in df_min['component_value'].values]
 
     return result
+
+
+def regulatory_out_strength(adata: AnnData, cluster_key: str = 'cell_type',
+                            clusters: Optional[List[str]] = None) -> pd.Series:
+    """Per-gene outgoing regulatory strength, summed over the cluster-specific networks.
+
+    ``W`` is stored as ``W[target, regulator]``, so a gene's outgoing influence is the column sum
+    of ``|W|``. A gene with zero out-strength is a pure sink: it is regulated but regulates
+    nothing, so knocking it out cannot propagate. Filtering candidate perturbations on this is
+    what keeps a highly expressed non-regulator out of a knockout screen.
+
+    Parameters
+    ----------
+    adata : AnnData
+        Fitted object carrying ``varp["W_<cluster>"]`` per cluster.
+    cluster_key : str, default 'cell_type'
+        ``adata.obs`` column holding the cell-type assignment.
+    clusters : list of str, optional
+        Restrict the sum to these clusters. Defaults to every cluster present. Pass an explicit
+        list to exclude clusters whose fit rests on too few cells to be worth trusting.
+
+    Returns
+    -------
+    pandas.Series
+        Out-strength indexed by gene name, over every gene in ``adata.var_names``. A cluster with
+        no fitted network contributes nothing.
+    """
+    genes = np.asarray(adata.var_names.values)
+    out = np.zeros(adata.n_vars)
+    names = (adata.obs[cluster_key].astype(str).unique() if clusters is None
+             else [str(c) for c in clusters])
+    for cluster in names:
+        key = f"W_{cluster}"
+        if key in adata.varp:
+            out += np.abs(np.asarray(adata.varp[key])).sum(0)
+    return pd.Series(out, index=genes)
+
+
+def regulatory_coupling(adata: AnnData, genes: List[str],
+                        wkey: str = 'W_all') -> pd.DataFrame:
+    """How similarly two genes perturb the fitted system: the overlap of their Jacobian columns.
+
+    For the fitted dynamics :math:`J_{ig} = W_{ig}\\,\\varphi'(x_g)`, so column ``g`` is the
+    regulator's out-profile :math:`W_{:,g}` up to a positive scalar and the column cosine equals
+    :math:`\\cos(W_{:,a},\\, W_{:,g})`, the activation scaling cancelling. Two genes with a large
+    overlap share or oppose downstream targets, which is the structural predictor of a
+    non-additive double knockout. The direct edge :math:`J_{ag}` alone will not serve, being too
+    sparse: an anchor regulator rarely regulates its best partner directly.
+
+    Parameters
+    ----------
+    adata : AnnData
+        Fitted object carrying the effective interaction matrix in ``varp[wkey]``.
+    genes : list of str
+        Genes to score. Deduplicated, and restricted to those in ``adata.var_names``.
+    wkey : str, default 'W_all'
+        ``adata.varp`` key of the global effective interaction matrix, ``W[target, regulator]``.
+
+    Returns
+    -------
+    pandas.DataFrame
+        Symmetric ``|cosine|`` overlap in [0, 1], indexed and columned by the retained genes. A
+        gene whose out-profile is entirely zero couples to nothing.
+    """
+    from scipy import sparse as _sp
+
+    W = adata.varp[wkey]
+    W = W.toarray() if _sp.issparse(W) else np.asarray(W)
+    idx = {g: i for i, g in enumerate(adata.var_names)}
+    kept = [g for g in dict.fromkeys(genes) if g in idx]
+    cols = W[:, [idx[g] for g in kept]].astype(float)
+    norm = np.linalg.norm(cols, axis=0)
+    norm[norm == 0] = 1.0
+    unit = cols / norm
+    return pd.DataFrame(np.abs(unit.T @ unit), index=kept, columns=kept)

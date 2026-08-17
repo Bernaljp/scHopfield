@@ -859,3 +859,393 @@ def compute_perturbation_alignment(
         GV[low_density] = np.nan
 
     return {'coords': coords, 'ip': ip_ko, 'GX': GX, 'GY': GY, 'GU': GU, 'GV': GV}
+
+
+# --------------------------------------------------------------------------------------------- #
+# First-order (Jacobian) knockout readouts
+#
+# All three readouts below are different summaries of the same finite-difference pass, so they
+# share one core rather than each re-differencing the solver. Column g of the Jacobian is the
+# central difference of the fitted solver's own dynamics, which is exact for the fitted field and
+# does not require re-deriving the Hill derivative.
+# --------------------------------------------------------------------------------------------- #
+def jacobian_knockout_response(
+    adata: AnnData,
+    cluster_key: str,
+    genes: Optional[List[str]] = None,
+    lineage_pairs: Optional[List[tuple]] = None,
+    groups: Optional[Dict[str, List[str]]] = None,
+    spliced_key: str = 'Ms',
+    eps: float = 1e-2,
+) -> Dict[str, Dict]:
+    """First-order knockout response from the fitted Jacobian, in three summaries.
+
+    Knocking gene ``g`` out removes its drive, so to first order every other gene's production
+    rate moves by :math:`r_i = -J_{ig} x_g`. Positive means gene ``i`` rises when ``g`` is knocked
+    out, that is, a repression was lifted; negative means an activation was lost. This is a
+    gene-space prediction, with no embedding projection anywhere in it.
+
+    Parameters
+    ----------
+    adata : AnnData
+        Fitted object.
+    cluster_key : str
+        ``adata.obs`` column holding the cell-type assignment.
+    genes : list of str, optional
+        Genes to knock out. Defaults to the genes named in ``groups`` that resolve to a decision
+        axis, which is the set the commitment push is defined for.
+    lineage_pairs : list of tuple, optional
+        Decisions as ``(A_clusters, B_clusters, A_name, B_name)``. Required for the commitment
+        push, which needs an axis to project onto. Decision ``k`` is tied to the ``k`` th entry of
+        ``groups``.
+    groups : dict, optional
+        ``{group name: [gene, ...]}`` tying each gene to the decision it belongs to, in the same
+        order as ``lineage_pairs``.
+    spliced_key : str, default 'Ms'
+        Layer holding the expression state.
+    eps : float, default 1e-2
+        Central-difference step used for the Jacobian column.
+
+    Returns
+    -------
+    dict
+        ``response``
+            ``{gene: Series over target genes}``, the cell-averaged response, with the knocked-out
+            gene dropped from its own Series.
+        ``response_by_celltype``
+            ``{gene: DataFrame of targets by cell type}``, the same response resolved per cluster.
+        ``commitment_push``
+            ``{gene: (A_name, B_name, per-cell push)}``, the response projected on that gene's own
+            decision axis :math:`d = \\mathrm{normalize}(\\bar{x}_A - \\bar{x}_B)`. Positive means
+            the immediate molecular response nudges that cell toward arm A. Empty when no
+            ``lineage_pairs`` or ``groups`` are given.
+
+    Notes
+    -----
+    This is the *immediate* response, before any propagation through the network. It answers which
+    genes a knockout changes, not where cells end up; the fate readouts in
+    :mod:`scHopfield.tools.fate` answer the second question.
+    """
+    from ..dynamics.solver import create_solver          # local: dynamics imports tools
+
+    genes_used = get_genes_used(adata)
+    names = list(np.asarray(adata.var_names)[genes_used])
+    X = np.asarray(adata.layers[spliced_key])[:, genes_used].astype(float)
+    clusters = adata.obs[cluster_key].astype(str).values
+
+    # tie each named gene to the decision axis it is a driver of
+    group_names = list(groups or {})
+    gene_pair: Dict[str, int] = {}
+    axis: Dict[int, tuple] = {}
+    for k, (A, B, An, Bn) in enumerate(lineage_pairs or []):
+        if k >= len(group_names):
+            break
+        in_a = np.isin(clusters, [str(c) for c in A])
+        in_b = np.isin(clusters, [str(c) for c in B])
+        if in_a.sum() == 0 or in_b.sum() == 0:
+            continue
+        d = X[in_a].mean(0) - X[in_b].mean(0)
+        axis[k] = (d / (np.linalg.norm(d) + 1e-12), An, Bn)
+        for gene in (groups or {}).get(group_names[k], []):
+            gene_pair[gene] = k
+
+    if genes is None:
+        targets = [g for g in gene_pair if g in names and gene_pair[g] in axis]
+    else:
+        targets = [g for g in dict.fromkeys(genes) if g in names]
+
+    resp_sum = {g: np.zeros(len(names)) for g in targets}
+    resp_ct: Dict[str, Dict[str, np.ndarray]] = {g: {} for g in targets}
+    push = {g: np.zeros(len(clusters)) for g in targets}
+    n_cells = 0
+    for cluster in pd.unique(clusters):
+        sel = np.where(clusters == str(cluster))[0]
+        try:
+            solver = create_solver(adata, str(cluster), spliced_key=spliced_key)
+        except Exception:
+            continue
+        Xc = X[sel]
+        for g in targets:
+            gi = names.index(g)
+            x_plus = Xc.copy()
+            x_plus[:, gi] += eps
+            x_minus = Xc.copy()
+            x_minus[:, gi] -= eps
+            jcol = (solver.dynamics_batch(x_plus, 0.0)
+                    - solver.dynamics_batch(x_minus, 0.0)) / (2 * eps)
+            r = -jcol * Xc[:, gi][:, None]              # (n_cells_in_cluster, n_targets)
+            resp_sum[g] += r.sum(0)
+            resp_ct[g][str(cluster)] = r.mean(0)
+            k = gene_pair.get(g)
+            if k in axis:
+                push[g][sel] = r @ axis[k][0]
+        n_cells += len(sel)
+
+    response = {g: pd.Series(resp_sum[g] / max(n_cells, 1), index=names)
+                .drop(labels=[g], errors='ignore') for g in targets}
+    response_ct = {g: pd.DataFrame(resp_ct[g], index=names) for g in targets}
+    commitment_push = {g: (axis[gene_pair[g]][1], axis[gene_pair[g]][2], push[g])
+                       for g in targets if gene_pair.get(g) in axis}
+    return {'response': response, 'response_by_celltype': response_ct,
+            'commitment_push': commitment_push}
+
+
+def jacobian_response(
+    adata: AnnData,
+    cluster_key: str,
+    genes: List[str],
+    spliced_key: str = 'Ms',
+    eps: float = 1e-2,
+) -> Dict[str, pd.Series]:
+    """Cell-averaged first-order knockout response, :math:`r_i = -J_{ig} x_g`, per gene.
+
+    The ``response`` summary of :func:`jacobian_knockout_response`, which see for the definition.
+
+    Returns
+    -------
+    dict
+        ``{gene: Series of signed mean response over target genes}``, the knocked-out gene dropped
+        from its own Series.
+    """
+    return jacobian_knockout_response(adata, cluster_key, genes=genes,
+                                      spliced_key=spliced_key, eps=eps)['response']
+
+
+def jacobian_commitment_push(
+    adata: AnnData,
+    cluster_key: str,
+    lineage_pairs: List[tuple],
+    groups: Dict[str, List[str]],
+    spliced_key: str = 'Ms',
+    eps: float = 1e-2,
+) -> Dict[str, tuple]:
+    """Per-cell first-order response projected onto each gene's own lineage-decision axis.
+
+    The ``commitment_push`` summary of :func:`jacobian_knockout_response`, which see. This is the
+    readout that can be painted on the embedding: it ties "which genes change" to a direction on
+    the decision the gene belongs to, complementing the propagated fate map.
+
+    Returns
+    -------
+    dict
+        ``{gene: (A_name, B_name, per-cell push)}``. Positive pushes that cell toward arm A.
+    """
+    return jacobian_knockout_response(adata, cluster_key, genes=None,
+                                      lineage_pairs=lineage_pairs, groups=groups,
+                                      spliced_key=spliced_key, eps=eps)['commitment_push']
+
+
+# --------------------------------------------------------------------------------------------- #
+# Combinatorial perturbation
+# --------------------------------------------------------------------------------------------- #
+def double_knockout_matrix(
+    adata: AnnData,
+    cluster_key: str,
+    scaffold: Dict,
+    genes: List[str],
+    axes: Dict[tuple, Dict],
+    workers: int = 1,
+) -> tuple:
+    """Fate shift for every single and every pair drawn from ``genes``, and their synergy.
+
+    The synergy is what makes the pair worth measuring:
+
+    .. math::
+        s_{gh} = \\Delta_{gh} - (\\Delta_g + \\Delta_h)
+
+    so a pair whose joint effect is exactly the sum of its parts scores zero. Positive means the
+    two knockouts reinforce each other beyond additivity, negative that they cancel. Every shift
+    is the decider-cell mean change in the A-versus-B split fraction, the same readout the single
+    knockout screen reports, so singles and doubles are directly comparable.
+
+    Parameters
+    ----------
+    adata : AnnData
+        Fitted object.
+    cluster_key : str
+        ``adata.obs`` column holding the cell-type assignment.
+    scaffold : dict
+        From :func:`scHopfield.tools.fate_scaffold`.
+    genes : list of str
+        Genes forming the matrix. Every unordered pair is evaluated.
+    axes : dict
+        From :func:`scHopfield.tools.lineage_pair_axes`, one entry per decision to score.
+    workers : int, default 1
+        CPU processes for the fate evaluations.
+
+    Returns
+    -------
+    blocks, fate_single, fate_double : dict, dict, dict
+        ``blocks`` maps each decision to ``genes``, ``matrix`` (off-diagonal double-knockout
+        shift, diagonal single), ``synergy_matrix``, ``single`` (Series) and ``synergy``
+        (``{(g, h): value}``). The two fate dictionaries are returned so a caller can reuse the
+        per-cell probabilities without recomputing them.
+    """
+    import itertools
+
+    from .fate import perturbed_fates, split_fraction
+
+    gene_list = list(dict.fromkeys(genes))
+    pairs = list(itertools.combinations(gene_list, 2))
+    tasks = [[g] for g in gene_list] + [list(p) for p in pairs]
+    evaluated = perturbed_fates(adata, cluster_key, scaffold, tasks, workers)
+    fate_single = {g: evaluated[i] for i, g in enumerate(gene_list)}
+    fate_double = {p: evaluated[len(gene_list) + i] for i, p in enumerate(pairs)}
+
+    def decider_shift(fate, ax):
+        return float((split_fraction(fate, ax['Ac'], ax['Bc'])
+                      - ax['split_wt'])[ax['focus']].mean())
+
+    n = len(gene_list)
+    idx = {g: i for i, g in enumerate(gene_list)}
+    blocks = {}
+    for pair_key, ax in axes.items():
+        single = pd.Series({g: decider_shift(fate_single[g], ax) for g in gene_list})
+        shift_m = np.full((n, n), np.nan)
+        syn_m = np.full((n, n), np.nan)
+        for g in gene_list:
+            shift_m[idx[g], idx[g]] = single[g]
+        synergy = {}
+        for (g1, g2), fate in fate_double.items():
+            d = decider_shift(fate, ax)
+            s = d - (single[g1] + single[g2])
+            shift_m[idx[g1], idx[g2]] = shift_m[idx[g2], idx[g1]] = d
+            syn_m[idx[g1], idx[g2]] = syn_m[idx[g2], idx[g1]] = s
+            synergy[(g1, g2)] = s
+        blocks[pair_key] = dict(genes=gene_list, matrix=shift_m, synergy_matrix=syn_m,
+                                single=single, synergy=synergy)
+    return blocks, fate_single, fate_double
+
+
+# --------------------------------------------------------------------------------------------- #
+# Candidate selection
+# --------------------------------------------------------------------------------------------- #
+def fate_bias_candidates(
+    adata: AnnData,
+    cluster_key: str,
+    lineage_pairs: List[tuple],
+    genes: List[str],
+    n_per_arm: int = 6,
+) -> List[str]:
+    """Curated genes plus, per decision, the strongest structural driver of each arm.
+
+    A screen reported over curated regulators alone cannot show whether the curated set is
+    actually the strongest candidate the data offers. Adding the top structural drivers of both
+    arms puts the curated genes in that context without letting the selection depend on the
+    perturbation result being reported.
+
+    Returns
+    -------
+    list of str
+        Deduplicated, order-preserving, restricted to measured genes.
+    """
+    candidates = list(genes)
+    for A, B, An, Bn in lineage_pairs:
+        scored = score_driver_tfs(adata, A, B, cluster_key=cluster_key)
+        candidates += list(scored[scored.lineage_bias > 0]
+                           .sort_values('score_A', ascending=False).head(n_per_arm).index)
+        candidates += list(scored[scored.lineage_bias <= 0]
+                           .sort_values('score_B', ascending=False).head(n_per_arm).index)
+    return [g for g in dict.fromkeys(candidates) if g in adata.var_names]
+
+
+def select_specificity_wings(
+    driver_scores: pd.DataFrame,
+    out_strength: pd.Series,
+    exclude: Optional[List[str]] = None,
+    q: float = 95.0,
+    pool_per_wing: int = 6,
+) -> Dict[str, List[str]]:
+    """Lineage-specific candidate regulators: the specificity wings, not the generalist corner.
+
+    A gene scoring above threshold on *both* lineage axes is a generalist, and the Pareto corner
+    is full of them. The genes that discriminate a decision are the ones above threshold on one
+    axis and below it on the other, which is what this keeps. Pure sinks are dropped first, since
+    a gene with no outgoing edges cannot propagate a knockout however well it scores.
+
+    Parameters
+    ----------
+    driver_scores : pandas.DataFrame
+        Indexed by gene, with columns ``score_A`` and ``score_B``.
+    out_strength : pandas.Series
+        Per-gene regulatory out-strength; see
+        :func:`scHopfield.tools.regulatory_out_strength`. Only strictly positive entries survive.
+    exclude : list of str, optional
+        Genes already spoken for, such as the known regulators or picks from an earlier decision.
+    q : float, default 95.0
+        Percentile of each score defining that axis's threshold.
+    pool_per_wing : int, default 6
+        Genes kept per wing, ranked by specificity ``score_A - score_B`` on the A wing and the
+        negation on the B wing.
+
+    Returns
+    -------
+    dict
+        ``{"A": [gene, ...], "B": [gene, ...]}``.
+    """
+    thr_a = np.percentile(driver_scores.score_A, q)
+    thr_b = np.percentile(driver_scores.score_B, q)
+    is_regulator = out_strength.reindex(driver_scores.index).fillna(0).values > 0
+    eligible = driver_scores[is_regulator & ~driver_scores.index.isin(exclude or [])].copy()
+
+    wing_a = eligible[(eligible.score_A > thr_a) & (eligible.score_B <= thr_b)].copy()
+    wing_b = eligible[(eligible.score_B > thr_b) & (eligible.score_A <= thr_a)].copy()
+    wing_a['spec'] = wing_a.score_A - wing_a.score_B
+    wing_b['spec'] = wing_b.score_B - wing_b.score_A
+    return {
+        'A': list(wing_a.sort_values('spec', ascending=False).index[:pool_per_wing]),
+        'B': list(wing_b.sort_values('spec', ascending=False).index[:pool_per_wing]),
+    }
+
+
+def rank_by_fate_effect(
+    lineage_pairs: List[tuple],
+    pools: Dict[int, Dict[str, List[str]]],
+    fate_bias: Dict[tuple, Dict[str, pd.Series]],
+    per_pair: int = 3,
+    alpha: float = 0.05,
+) -> tuple:
+    """Keep, per decision, the probed candidates with the strongest measured fate effect.
+
+    Selection is by the perturbation result rather than by structural driver score, so a gene that
+    scores well structurally but does nothing when knocked out does not survive. Significant
+    candidates are preferred; when too few clear ``alpha`` the ranking falls back to the largest
+    absolute effect, so a decision always yields a selection. No directional balance is imposed:
+    an axis whose strong drivers all point one way should show them that way.
+
+    Parameters
+    ----------
+    lineage_pairs : list of tuple
+        Decisions, in the same order as the keys of ``pools``.
+    pools : dict
+        ``{decision index: {"A": [gene, ...], "B": [gene, ...]}}``, from
+        :func:`select_specificity_wings`.
+    fate_bias : dict
+        From :func:`scHopfield.tools.pairwise_fate_bias`.
+    per_pair : int, default 3
+        Genes kept per decision.
+    alpha : float, default 0.05
+        Significance threshold on the screen's Wilcoxon p-value.
+
+    Returns
+    -------
+    genes, groups : list of str, dict
+        The selection in decision order, and ``{"A_name vs B_name": [gene, ...]}``. A gene is
+        never selected twice across decisions.
+    """
+    selected: List[str] = []
+    groups: Dict[str, List[str]] = {}
+    used: set = set()
+    for k, (A, B, An, Bn) in enumerate(lineage_pairs):
+        pool = pools.get(k, {}).get('A', []) + pools.get(k, {}).get('B', [])
+        bias = fate_bias.get((An, Bn), {}).get('bias', pd.Series(dtype=float))
+        pvals = fate_bias.get((An, Bn), {}).get('pvals', pd.Series(dtype=float))
+        candidates = [g for g in pool if g in bias.index and g not in used]
+        significant = [g for g in candidates if float(pvals.get(g, 1.0)) < alpha]
+        ranked = sorted(significant or candidates,
+                        key=lambda g: abs(float(bias.get(g, 0.0))), reverse=True)
+        picks = ranked[:per_pair]
+        groups[f"{An} vs {Bn}"] = picks
+        used.update(picks)
+        selected += picks
+    return selected, groups

@@ -1275,3 +1275,176 @@ def run_dose_response(
         })
 
     return pd.DataFrame(records)
+
+
+# --------------------------------------------------------------------------------------------- #
+# Propagated (ODE) perturbation readouts
+#
+# These integrate the fitted field with genes clamped, rather than reading the instantaneous
+# response. They answer where the perturbation drives cells over time, which is a different
+# question from the first-order Jacobian response and from the terminal-fate probabilities.
+# --------------------------------------------------------------------------------------------- #
+def knockout_displacement_flow(
+    adata: AnnData,
+    cluster_key: str,
+    perturbations: List[Union[str, Tuple[str, ...]]],
+    basis: str = 'umap',
+    device: str = 'cuda',
+    n_steps: int = 100,
+    method: str = 'euler',
+    level: float = 0.0,
+    spliced_key: str = 'Ms',
+) -> Tuple[Dict, np.ndarray]:
+    """Embedding flow of the displacement each perturbation drives, plus the wild-type flow.
+
+    Each perturbation is integrated with its genes held fixed and the resulting *absolute*
+    displacement :math:`\\Delta x = x^{\\mathrm{KO}} - x_0` is projected to the embedding with the
+    correlation kernel. The absolute displacement is used rather than the perturbation-specific
+    residual :math:`\\Delta x^{\\mathrm{KO}} - \\Delta x^{\\mathrm{WT}}` because it is a smooth,
+    coherent field that grid-averages cleanly, where subtracting the shared developmental baseline
+    leaves a small noisy field. The wild-type flow is returned alongside so a caller that wants
+    the perturbation-specific part can take the difference itself, or colour the smooth arrows by
+    the residual's alignment with development.
+
+    Parameters
+    ----------
+    adata : AnnData
+        Fitted object.
+    cluster_key : str
+        ``adata.obs`` column holding the cell-type assignment.
+    perturbations : list
+        Each entry is a gene name, or a tuple of gene names held jointly. A tuple of two is the
+        double knockout. Entries are deduplicated, preserving order.
+    basis : str, default 'umap'
+        Embedding to project into.
+    device : str, default 'cuda'
+        Device for the ODE integration.
+    n_steps, method
+        Integration controls, passed to :func:`simulate_shift_ode`.
+    level : float, default 0.0
+        Level the genes are held at. Zero is a knockout.
+    spliced_key : str, default 'Ms'
+        Layer holding the expression state.
+
+    Returns
+    -------
+    flows, wt_flow : dict, ndarray
+        ``flows`` is keyed by the entries of ``perturbations`` exactly as they were given, each
+        value an ``(n_cells, 2)`` field; ``wt_flow`` is the unperturbed displacement flow.
+    """
+    from .simulation import simulate_shift_ode
+    from ..tools.flow import calculate_flow
+
+    store_key = f"perturbation_flow_{basis}"
+
+    def project(obj):
+        calculate_flow(obj, source='delta', basis=basis, method='correlation',
+                       cluster_key=cluster_key, store_key=store_key, verbose=False)
+        return np.asarray(obj.obsm[store_key])[:, :2].copy()
+
+    wt = simulate_shift_ode(adata, {}, cluster_key=cluster_key, n_steps=n_steps, method=method,
+                            device=device)
+    wt_flow = project(wt)
+
+    flows: Dict = {}
+    for entry in perturbations:
+        if entry in flows:
+            continue
+        genes = [entry] if isinstance(entry, str) else list(entry)
+        perturbed = simulate_shift_ode(adata, {g: float(level) for g in genes},
+                                       cluster_key=cluster_key, n_steps=n_steps, method=method,
+                                       device=device)
+        flows[entry] = project(perturbed)
+    return flows, wt_flow
+
+
+def perturbation_cascade(
+    adata: AnnData,
+    cluster_key: str,
+    genes: List[str],
+    device: str = 'cuda',
+    tmax: float = 20.0,
+    n_segments: int = 20,
+    n_steps: int = 50,
+    spliced_key: str = 'Ms',
+    verbose: bool = False,
+) -> pd.DataFrame:
+    """How far a knockout has driven each cell type away from wild type, as a function of time.
+
+    Wild type and each knockout are advanced from the *same* initial state in ``n_segments``
+    segments, each resuming from the previous segment's final state, and the readout is the
+    per-cluster mean of :math:`|x^{\\mathrm{KO}}(t) - x^{\\mathrm{WT}}(t)|` over the fitted genes.
+    Comparing against a wild-type trajectory rather than against the initial state separates what
+    the knockout did from what development was doing anyway, so every curve starts at zero.
+
+    The knocked-out gene is excluded from the mean. Its own coordinate is pinned by the clamp, so
+    including it would add a large constant offset that says nothing about propagation.
+
+    Parameters
+    ----------
+    adata : AnnData
+        Fitted object.
+    cluster_key : str
+        ``adata.obs`` column holding the cell-type assignment.
+    genes : list of str
+        Genes to knock out, one at a time.
+    device : str, default 'cuda'
+        Device for the ODE integration.
+    tmax : float, default 20.0
+        Horizon in ODE time.
+    n_segments : int, default 20
+        Segments the horizon is advanced in, so the step is ``tmax / n_segments``.
+    n_steps : int, default 50
+        Integration steps within each segment.
+    spliced_key : str, default 'Ms'
+        Layer holding the expression state.
+    verbose : bool, default False
+        Print progress as each trajectory is integrated.
+
+    Returns
+    -------
+    pandas.DataFrame
+        Long form, with columns ``perturbation``, ``cluster``, ``t`` and ``mean_abs_delta``. Only
+        the knockouts appear: wild type against itself is identically zero.
+    """
+    from .simulation import simulate_shift_ode
+
+    genes_used = get_genes_used(adata)
+    model_names = np.asarray(adata.var_names.values)[genes_used]
+    clusters = adata.obs[cluster_key].astype(str).values
+    cluster_names = list(pd.unique(clusters))
+    dt = tmax / n_segments
+
+    if verbose:
+        print(f"[cascade] wild-type reference (tmax={tmax})", flush=True)
+    current_wt = adata.copy()
+    wt_states = []
+    for _ in range(n_segments):
+        current_wt = simulate_shift_ode(current_wt, {}, cluster_key=cluster_key, dt=float(dt),
+                                        n_steps=n_steps, use_cluster_specific_GRN=True,
+                                        device=device)
+        current_wt.layers[spliced_key] = np.asarray(current_wt.layers['simulated_count'])
+        wt_states.append(np.asarray(current_wt.layers[spliced_key])[:, genes_used].copy())
+
+    rows = []
+    for gene in genes:
+        keep = np.array([g != gene for g in model_names])
+        if verbose:
+            print(f"[cascade] {gene} knockout", flush=True)
+        current = adata.copy()
+        for cluster in cluster_names:                        # t=0: knockout and wild type agree
+            rows.append(dict(perturbation=f"{gene} KO", cluster=str(cluster), t=0.0,
+                             mean_abs_delta=0.0))
+        for step in range(1, n_segments + 1):
+            current = simulate_shift_ode(current, {gene: 0.0}, cluster_key=cluster_key,
+                                         dt=float(dt), n_steps=n_steps,
+                                         use_cluster_specific_GRN=True, device=device)
+            current.layers[spliced_key] = np.asarray(current.layers['simulated_count'])
+            per_cell = np.abs(np.asarray(current.layers[spliced_key])[:, genes_used]
+                              - wt_states[step - 1])[:, keep].mean(1)
+            means = pd.DataFrame({'cluster': clusters, 'val': per_cell}).groupby(
+                'cluster', observed=True)['val'].mean()
+            for cluster, value in means.items():
+                rows.append(dict(perturbation=f"{gene} KO", cluster=str(cluster),
+                                 t=step * dt, mean_abs_delta=float(value)))
+    return pd.DataFrame(rows)
