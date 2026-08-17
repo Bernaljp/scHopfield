@@ -1,0 +1,122 @@
+{
+  "hematopoiesis": {
+    "clusters": [
+      "14Mo",
+      "2Ery",
+      "13Baso",
+      "3Ery"
+    ],
+    "by_frac": {
+      "0.0": {
+        "eff_rank": 5.97,
+        "splithalf_W": 0.019,
+        "n": 12
+      },
+      "0.1": {
+        "eff_rank": 6.34,
+        "splithalf_W": -0.044,
+        "n": 12
+      },
+      "0.2": {
+        "eff_rank": 6.65,
+        "splithalf_W": 0.015,
+        "n": 12
+      },
+      "0.4": {
+        "eff_rank": 7.1,
+        "splithalf_W": 0.013,
+        "n": 12
+      }
+    }
+  },
+  "pancreas": {
+    "clusters": [
+      "Ductal",
+      "Ngn3 high EP",
+      "Pre-endocrine",
+      "Beta"
+    ],
+    "by_frac": {
+      "0.0": {
+        "eff_rank": 13.87,
+        "splithalf_W": 0.017,
+        "n": 12
+      },
+      "0.1": {
+        "eff_rank": 14.59,
+        "splithalf_W": 0.082,
+        "n": 12
+      },
+      "0.2": {
+        "eff_rank": 15.0,
+        "splithalf_W": 0.114,
+        "n": 12
+      },
+      "0.4": {
+        "eff_rank": 15.45,
+        "splithalf_W": 0.095,
+        "n": 12
+      }
+    }
+  },
+  "murine_NC": {
+    "clusters": [
+      "Neural crest (PNS neurons)",
+      "Neural crest (PNS glia)",
+      "Myelinating Schwann cells",
+      "Otic sensory neurons"
+    ],
+    "by_frac": {
+      "0.0": {
+        "eff_rank": 19.41,
+        "splithalf_W": 0.06,
+        "n": 12
+      },
+      "0.1": {
+        "eff_rank": 20.89,
+        "splithalf_W": 0.028,
+        "n": 12
+      },
+      "0.2": {
+        "eff_rank": 21.81,
+        "splithalf_W": 0.057,
+        "n": 12
+      },
+      "0.4": {
+        "eff_rank": 23.05,
+        "splithalf_W": 0.043,
+        "n": 12
+      }
+    }
+  },
+  "human_limb": {
+    "clusters": [
+      "0",
+      "1",
+      "2",
+      "3"
+    ],
+    "by_frac": {
+      "0.0": {
+        "eff_rank": 18.2,
+        "splithalf_W": 0.039,
+        "n": 12
+      },
+      "0.1": {
+        "eff_rank": 18.73,
+        "splithalf_W": 0.041,
+        "n": 12
+      },
+      "0.2": {
+        "eff_rank": 18.92,
+        "splithalf_W": 0.024,
+        "n": 12
+      },
+      "0.4": {
+        "eff_rank": 19.48,
+        "splithalf_W": 0.04,
+        "n": 12
+      }
+    }
+  }
+}

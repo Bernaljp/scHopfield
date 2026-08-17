@@ -1,0 +1,7 @@
+{
+  "dataset": "linear",
+  "spearman_energy_vs_time": 0.05306637497343688,
+  "p_energy": 0.23622904333648306,
+  "spearman_leadingEig_vs_time": 0.17311431763958993,
+  "p_stab": 9.996423300707367e-05
+}

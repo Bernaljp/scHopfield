@@ -1,0 +1,7 @@
+{
+  "dataset": "trifurcating",
+  "spearman_energy_vs_time": -0.056338639426687286,
+  "p_energy": 0.20853057557013271,
+  "spearman_leadingEig_vs_time": -0.18373672072115513,
+  "p_stab": 3.573797797793742e-05
+}

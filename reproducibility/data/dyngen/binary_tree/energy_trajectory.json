@@ -1,0 +1,7 @@
+{
+  "dataset": "binary_tree",
+  "spearman_energy_vs_time": 0.569078125015401,
+  "p_energy": 2.9982960842484504e-44,
+  "spearman_leadingEig_vs_time": 0.5794209872191747,
+  "p_stab": 3.568133740784667e-46
+}

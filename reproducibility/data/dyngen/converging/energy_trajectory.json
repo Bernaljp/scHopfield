@@ -1,0 +1,7 @@
+{
+  "dataset": "converging",
+  "spearman_energy_vs_time": -0.04771767274949409,
+  "p_energy": 0.28690501023603304,
+  "spearman_leadingEig_vs_time": -0.4435821377235323,
+  "p_stab": 1.6160510098718546e-25
+}

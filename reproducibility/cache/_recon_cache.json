@@ -1,0 +1,30 @@
+{
+ "paul15": {
+  "cos_celltype": 0.7188163520742323,
+  "cos_global": 0.5793510514174889
+ },
+ "paul15_coarse": {
+  "cos_celltype": 0.6981824645232044,
+  "cos_global": 0.5790882081567448
+ },
+ "dynamo_hematopoiesis": {
+  "cos_celltype": 0.6506637070296927,
+  "cos_global": 0.5149815308204398
+ },
+ "pancreas": {
+  "cos_celltype": 0.9615127144288624,
+  "cos_global": 0.9281725706619588
+ },
+ "murine_nc": {
+  "cos_celltype": 0.7912241542901661,
+  "cos_global": 0.7047238433801422
+ },
+ "schwann": {
+  "cos_celltype": 0.7133739919185864,
+  "cos_global": 0.5690735412383432
+ },
+ "human_limb": {
+  "cos_celltype": 0.6753758442117475,
+  "cos_global": 0.5768298726858165
+ }
+}

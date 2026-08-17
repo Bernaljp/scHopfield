@@ -1,0 +1,19 @@
+# Source distribution contents.
+#
+# pyproject.toml is the single source for dependencies and for which packages are built;
+# this file only decides what extra material rides along in an sdist. setuptools already
+# includes pyproject.toml, README.md and LICENSE, so the work here is exclusion.
+
+# Tests travel with the sdist so the package can be verified after unpacking.
+recursive-include tests *.py
+
+# reproducibility/ is the figure code and its committed inputs, about 8 MB. It belongs to
+# the repository, not to the installable package, so it stays out of the distribution.
+prune reproducibility
+
+prune docs
+
+global-exclude *.py[cod]
+global-exclude __pycache__
+global-exclude .DS_Store
+global-exclude *.egg-info

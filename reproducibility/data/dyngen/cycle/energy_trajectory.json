@@ -1,0 +1,7 @@
+{
+  "dataset": "cycle",
+  "spearman_energy_vs_time": 0.2906604040067271,
+  "p_energy": 3.4328187833125986e-11,
+  "spearman_leadingEig_vs_time": -0.24974382815189597,
+  "p_stab": 1.5101717868210754e-08
+}

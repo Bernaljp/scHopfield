@@ -1,0 +1,44 @@
+[
+  {
+    "dataset": "bifurcating",
+    "spearman_energy_vs_time": -0.0351221994958423,
+    "p_energy": 0.4332558408327152,
+    "spearman_leadingEig_vs_time": 0.349680283051401,
+    "p_stab": 7.934292881819017e-16
+  },
+  {
+    "dataset": "binary_tree",
+    "spearman_energy_vs_time": 0.569078125015401,
+    "p_energy": 2.9982960842484504e-44,
+    "spearman_leadingEig_vs_time": 0.5794209872191747,
+    "p_stab": 3.568133740784667e-46
+  },
+  {
+    "dataset": "converging",
+    "spearman_energy_vs_time": -0.04771767274949409,
+    "p_energy": 0.28690501023603304,
+    "spearman_leadingEig_vs_time": -0.4435821377235323,
+    "p_stab": 1.6160510098718546e-25
+  },
+  {
+    "dataset": "cycle",
+    "spearman_energy_vs_time": 0.2906604040067271,
+    "p_energy": 3.4328187833125986e-11,
+    "spearman_leadingEig_vs_time": -0.24974382815189597,
+    "p_stab": 1.5101717868210754e-08
+  },
+  {
+    "dataset": "linear",
+    "spearman_energy_vs_time": 0.05306637497343688,
+    "p_energy": 0.23622904333648306,
+    "spearman_leadingEig_vs_time": 0.17311431763958993,
+    "p_stab": 9.996423300707367e-05
+  },
+  {
+    "dataset": "trifurcating",
+    "spearman_energy_vs_time": -0.056338639426687286,
+    "p_energy": 0.20853057557013271,
+    "spearman_leadingEig_vs_time": -0.18373672072115513,
+    "p_stab": 3.573797797793742e-05
+  }
+]

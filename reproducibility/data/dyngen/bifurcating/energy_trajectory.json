@@ -1,0 +1,7 @@
+{
+  "dataset": "bifurcating",
+  "spearman_energy_vs_time": -0.0351221994958423,
+  "p_energy": 0.4332558408327152,
+  "spearman_leadingEig_vs_time": 0.349680283051401,
+  "p_stab": 7.934292881819017e-16
+}

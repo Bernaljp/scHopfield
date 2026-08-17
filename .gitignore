@@ -1,0 +1,101 @@
+# scHopfield
+#
+# Written for this repository, not inherited. The single-repo file it replaces excluded by
+# blanket extension (*.npz, *.png, *.csv, *.pdf) and then clawed individual files back with
+# negations. That is what hid the figure inputs: a negation cannot reach into a directory
+# git has already excluded, so files were invisible for reasons nobody had decided.
+#
+# The rule here is the other way round. Nothing under reproducibility/ is excluded by
+# extension. Regenerable artifacts are named one by one, so anything new that lands beside
+# a tracked input shows up in `git status` and gets a decision instead of disappearing.
+
+# --------------------------------------------------------------------------- Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# --------------------------------------------------------------------- Environments
+.env
+.venv
+.venv*/
+env/
+venv/
+ENV/
+
+# ------------------------------------------------------------------- Tooling caches
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+.coverage.*
+htmlcov/
+coverage.xml
+.tox/
+.nox/
+.hypothesis/
+.ipynb_checkpoints/
+
+# -------------------------------------------------------------- Editors and the OS
+.vscode/
+.idea/
+*.swp
+*.swo
+~$*
+._*
+.DS_Store
+Thumbs.db
+
+# --------------------------------------------------------------------------- Docs
+# Sphinx build output. docs/notebooks/ holds rendered copies of the tutorials, written by
+# the build; the directory itself is tracked so the build has somewhere to put them.
+docs/_build/
+docs/api/generated/
+docs/notebooks/*
+!docs/notebooks/.gitkeep
+
+# ------------------------------------------------------- Figure and report output
+# Everything the figure scripts render. See reproducibility/paths.py.
+reproducibility/figures/
+reproducibility/output/
+
+# ------------------------------------------------- Data roots that are not versioned
+# The raw datasets, the base GRN scaffolds, and the per-dataset report tree. All three are
+# located by environment variable and default to these paths; none is distributed here.
+/data/
+/reports/
+
+# ------------------------------------------- Regenerated dyngen artifacts, named exactly
+# Everything else under reproducibility/data/dyngen/ is tracked. adata.h5ad is rebuilt from
+# the committed CSVs by reproducibility/dyngen/02_build_h5ad.py in about 15 s per backbone,
+# progressions.csv is written by the R simulation and read by nothing, and install.log is a
+# machine-specific build transcript. The provenance that matters is the seed and version in
+# 01_simulate.R plus simulate.log, and both are tracked.
+reproducibility/data/dyngen/*/adata.h5ad
+reproducibility/data/dyngen/*/progressions.csv
+reproducibility/data/dyngen/install.log
+
+# --------------------------------------------------------------- Fitted checkpoints
+# A fitted model is a large binary that goes stale against the method. Save your own with
+# sch.tl.save_model; none is distributed.
+*.h5sch
+
+# ----------------------------------------------------------------------- Scratch
+scratch/
