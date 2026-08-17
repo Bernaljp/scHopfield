@@ -36,6 +36,7 @@ sys.path.insert(0, _HERE)
 import paths                                                     # noqa: E402
 from paper_plot_style import use_style, save, PALETTE            # noqa: E402
 import anndata as ad                                             # noqa: E402
+import scHopfield as sch                                         # noqa: E402  (circuit rendering)
 from sections import basis_of, get_colors, present_clusters      # noqa: E402
 
 OUT = paths.FIGURES
@@ -370,29 +371,28 @@ def draw_spectra(ax, a, ck, order, colors, cells_per_type=200, top_k=40):
         ax.set_xlim(-xr * 1.05, xr * 1.05); ax.set_ylim(-yr * 1.1 - 1e-6, yr * 1.1 + 1e-6)
 
 
-ACT, REP = "#2166AC", "#B2182B"                                # activation blue / repression red
+# The activation / repression pair is this figure's, and it is the same pair panel a of the
+# network figure uses, because the two draw the same kind of object and this figure's own
+# legends already import it from there (see the three `from make_network_figure import ACT`
+# below). It used to be a separate blue / red pair defined here, which meant the drawn
+# fallback contradicted the legend printed beside it on any machine without TeX.
+from make_network_figure import ACT, REP, ACT_HEX, REP_HEX          # noqa: E402
+
+#: These networks are rasterized at the poster figure's resolution, not the page one.
+_GRN_DPI = 460
 
 
 def _draw_mini_network(ax, genes, pos, edges, meanJ, mask, smax):
-    """One cell-type regulatory mini-network: directed edge regulator -> target per JAC_PAIR, colored by
-    the SIGN of the cell-type-mean J[target<-reg] (blue = activation with an arrowhead, red = repression
-    with a FLAT BAR head, following the -{Bar}/-{Latex} circuit convention), width ~ |magnitude|."""
-    from matplotlib.patches import FancyArrowPatch
-    ax.set_xlim(-1.55, 1.55); ax.set_ylim(-1.6, 1.5); ax.set_aspect("equal"); ax.set_axis_off()
-    for (t, r) in edges:
-        m = meanJ(t, r, mask)
-        if not np.isfinite(m) or abs(m) < 1e-12:
-            continue
-        lw = 0.5 + 3.0 * min(abs(m) / smax, 1.0)
-        style = "-|>" if m > 0 else "-["                        # arrowhead = activation, flat bar = repression
-        ms = 7 if m > 0 else 5.5
-        ax.add_patch(FancyArrowPatch(pos[r], pos[t], connectionstyle="arc3,rad=0.17", arrowstyle=style,
-                                     mutation_scale=ms, lw=lw, color=ACT if m > 0 else REP, alpha=0.9,
-                                     shrinkA=8, shrinkB=8, zorder=2))
-    for g in genes:                                            # nodes
-        x, y = pos[g]
-        ax.scatter([x], [y], s=90, c="#f0efe9", edgecolor="0.35", lw=0.6, zorder=3)
-        ax.text(x, y, g, fontsize=4.2, ha="center", va="center", zorder=4)
+    """One cell-type regulatory mini-network, drawn with matplotlib.
+
+    This is what the panel falls back to when the TikZ render is unavailable. A directed
+    edge runs regulator -> target per JAC_PAIR, colored by the SIGN of the cell-type-mean
+    J[target<-reg] (activation with an arrowhead, repression with a FLAT BAR head,
+    following the -{Bar}/-{Latex} circuit convention), width ~ |magnitude|.
+    """
+    eds = [(r, t, meanJ(t, r, mask)) for (t, r) in edges]
+    return sch.pl.draw_grn_mpl(ax, genes, pos, eds, wmax=smax, act_color=ACT, rep_color=REP,
+                               xlim=(-1.55, 1.55), ylim=(-1.6, 1.5))
 
 
 def draw_jacobian_networks(fig, gs_cell, a, basis, ck, order, colors, ds):
@@ -428,10 +428,9 @@ def draw_jacobian_networks(fig, gs_cell, a, basis, ck, order, colors, ds):
     smax = float(np.nanpercentile([m for m in mags if np.isfinite(m)], 95)) or 1.0
     cent = {c: emb[cl == c].mean(0) for c in order if (cl == c).any()}
 
-    try:                                                       # reuse the TikZ circuit renderer (proper
-        from make_network_figure import render_tikz, tikz_grn_body   # -{Latex} activation / -{Bar} repression)
-    except Exception:
-        render_tikz = tikz_grn_body = None
+    # The circuit renderer is package API now (proper -{Latex} activation / -{Bar} repression),
+    # so this panel no longer reaches sideways into another figure script for it.
+    grn_preamble = sch.pl.grn_preamble(ACT_HEX, REP_HEX)
 
     ncol = max(len(order), 1)
     bb = gs_cell.get_position(fig)
@@ -461,11 +460,12 @@ def draw_jacobian_networks(fig, gs_cell, a, basis, ck, order, colors, ds):
         # 0.4x, so a label set at \tiny (5 pt) lands near 2 pt on the page. 13 pt inside the
         # picture comes out near 5 pt printed. off_base is raised to keep the larger labels
         # clear of the nodes.
-        img = render_tikz(tikz_grn_body(genes, pos, eds, scale=2.4, size=5.5,
-                                        lblfont=r"\fontsize{13}{15}\selectfont",
-                                        off_base=0.26, label_sep=0.9,
-                                        edge_lw=(0.55, 2.0), head_scale=1.7)) \
-            if (render_tikz is not None and eds) else None
+        img = sch.pl.render_tikz(
+            sch.pl.grn_tikz_body(genes, pos, eds, scale=2.4, size=5.5,
+                                 lblfont=r"\fontsize{13}{15}\selectfont",
+                                 off_base=0.26, label_sep=0.9,
+                                 edge_lw=(0.55, 2.0), head_scale=1.7),
+            preamble=grn_preamble, dpi=_GRN_DPI) if eds else None
         x0 = bb.x0 + (k + 0.5) * bb.width / ncol - S / 2       # default row baseline, then user offset
         y0 = bb.y0 + 0.004
         dxu, dyu = offs.get(c, (0.0, 0.0))

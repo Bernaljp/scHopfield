@@ -46,6 +46,15 @@ from .flow import (
     plot_ode_perturbation_flow,
     visualize_ode_perturbation,
 )
+from .tikz import (
+    tikz_available,
+    render_tikz,
+    grn_preamble,
+    grn_tikz_body,
+    draw_grn,
+    draw_grn_mpl,
+    GRN_PREAMBLE,
+)
 
 __all__ = [
     # Energy visualization
@@ -90,4 +99,12 @@ __all__ = [
     'plot_reference_flow',
     'plot_ode_perturbation_flow',
     'visualize_ode_perturbation',
+    # Circuit rendering: TikZ where TeX is available, matplotlib where it is not
+    'tikz_available',
+    'render_tikz',
+    'grn_preamble',
+    'grn_tikz_body',
+    'draw_grn',
+    'draw_grn_mpl',
+    'GRN_PREAMBLE',
 ]

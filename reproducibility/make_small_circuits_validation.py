@@ -35,9 +35,7 @@ from __future__ import annotations
 
 import argparse
 import os
-import subprocess
 import sys
-import tempfile
 
 import numpy as np
 import matplotlib
@@ -61,6 +59,7 @@ sys.path.insert(0, _HERE)
 import paths                                                     # noqa: E402
 from paper_plot_style import use_style, save, PALETTE      # noqa: E402
 import build_circuits_report as B                          # noqa: E402
+import scHopfield as sch                                    # noqa: E402  (circuit rendering)
 from scHopfield.validation.circuits import ToggleCircuit, OscillatorCircuit  # noqa: E402
 from scHopfield.validation.simulate import simulate_circuit  # noqa: E402
 
@@ -181,21 +180,12 @@ TIKZ_REPRESSILATOR_SUB = r"""
 
 
 def render_tikz(body, dpi=600):
-    """Compile a standalone TikZ snippet to a high-DPI image array (or None on failure)."""
-    try:
-        with tempfile.TemporaryDirectory() as td:
-            with open(os.path.join(td, "c.tex"), "w") as f:
-                f.write(TIKZ_PREAMBLE + body + "\\end{tikzpicture}\n\\end{document}\n")
-            r = subprocess.run(["pdflatex", "-interaction=nonstopmode", "-halt-on-error", "c.tex"],
-                               cwd=td, capture_output=True)
-            if r.returncode != 0 or not os.path.exists(os.path.join(td, "c.pdf")):
-                return None
-            subprocess.run(["pdftoppm", "-png", "-r", str(dpi), "-singlefile",
-                            os.path.join(td, "c.pdf"), os.path.join(td, "c")], capture_output=True)
-            png = os.path.join(td, "c.png")
-            return plt.imread(png) if os.path.exists(png) else None
-    except Exception:
-        return None
+    """Compile one of this figure's circuit snippets against its own preamble.
+
+    The renderer is ``sch.pl.render_tikz``; the preamble stays here because the circuit
+    node styles and the two equation colors are this figure's, not the package's.
+    """
+    return sch.pl.render_tikz(body, preamble=TIKZ_PREAMBLE, dpi=dpi)
 
 
 def draw_toggle_circuit(ax, img):

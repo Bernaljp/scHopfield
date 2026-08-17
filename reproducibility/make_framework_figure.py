@@ -39,7 +39,7 @@ one would be legible at this size. Everything else in the panel, signs and width
 Run:  python reproducibility/make_framework_figure.py [--dataset paul15_coarse]
 """
 from __future__ import annotations
-import argparse, os, pickle, subprocess, sys, tempfile
+import argparse, os, pickle, sys
 import numpy as np
 import pandas as pd
 
@@ -62,6 +62,7 @@ import paths                                                     # noqa: E402
 from paper_plot_style import use_style, save, INK, MUTED       # noqa: E402
 import anndata as ad                                           # noqa: E402
 from sections import basis_of                                  # noqa: E402
+import scHopfield as sch                                       # noqa: E402  (circuit rendering)
 from scHopfield._utils.math import sigmoid                     # noqa: E402
 
 OUT = paths.FIGURES
@@ -198,31 +199,15 @@ TEX_PRE = (
     r"\definecolor{pGam}{HTML}{" + HEXGAM + r"}\definecolor{pI}{HTML}{" + HEXBIAS + r"}"
     r"\begin{document}"
 )
-_TEX_CACHE = {}
-
-
 def render_tex(body, dpi=600):
-    if (body, dpi) in _TEX_CACHE:
-        return _TEX_CACHE[(body, dpi)]
-    _TEX_CACHE[(body, dpi)] = _render_tex_uncached(body, dpi)
-    return _TEX_CACHE[(body, dpi)]
+    """Typeset one snippet against this figure's preamble.
 
-
-def _render_tex_uncached(body, dpi):
-    try:
-        with tempfile.TemporaryDirectory() as td:
-            with open(os.path.join(td, "c.tex"), "w") as f:
-                f.write(TEX_PRE + body + r"\end{document}" + "\n")
-            r = subprocess.run(["pdflatex", "-interaction=nonstopmode", "-halt-on-error", "c.tex"],
-                               cwd=td, capture_output=True)
-            if r.returncode != 0 or not os.path.exists(os.path.join(td, "c.pdf")):
-                return None
-            subprocess.run(["pdftoppm", "-png", "-r", str(dpi), "-singlefile",
-                            os.path.join(td, "c.pdf"), os.path.join(td, "c")], capture_output=True)
-            png = os.path.join(td, "c.png")
-            return plt.imread(png) if os.path.exists(png) else None
-    except Exception:
-        return None
+    The renderer is ``sch.pl.render_tikz``, which caches on the source, so a snippet
+    drawn into several panels is compiled once. This figure sets equations and small
+    tables as well as circuits, so the preamble does not open a ``tikzpicture``: each
+    body opens its own where it wants one.
+    """
+    return sch.pl.render_tikz(body, preamble=TEX_PRE, epilogue=r"\end{document}" + "\n", dpi=dpi)
 
 
 def common_tex_scale(bodies, widths, max_h=0.30):
@@ -252,10 +237,20 @@ def _alpha_on_white(img, thresh=0.94):
 
 
 def tex_panel(fig, x, y, w, h, body, fallback=None, fontsize=8, center=True, scale=None):
+    """Typeset ``body`` into a panel, or fall back when there is no TeX to typeset it with.
+
+    ``fallback`` is either a string, set as plain matplotlib math text, or a callable
+    taking the Axes, for a panel whose content is a drawing rather than a formula. It
+    used to be a string only, and six of the eleven panels here passed nothing at all,
+    so on a machine without TeX they came out as white space that reads as a panel with
+    nothing in it rather than as a panel that failed to draw.
+    """
     img = render_tex(body)
     if img is None:
         ax = fig.add_axes(rect(x, y, w, h)); ax.set_axis_off()
-        if fallback:
+        if callable(fallback):
+            fallback(ax)
+        elif fallback:
             ax.text(0.5, 0.5, fallback, fontsize=fontsize, ha="center", va="center",
                     color=INK, transform=ax.transAxes)
         return ax
@@ -289,6 +284,68 @@ TIKZ_NODES = (
     r"reg/.style={circle,draw=ink,fill=white,line width=0.8pt,minimum size=5.4mm,inner sep=0pt},"
     r"tgt/.style={circle,draw=soft,fill=faint!70,line width=0.7pt,minimum size=3.9mm,inner sep=0pt}]"
 )
+
+
+# --------------------------------------------------------------------------- #
+# Fallbacks for the three panels whose content is a NETWORK rather than a formula.
+#
+# Each one draws the same graph the TikZ body draws, through sch.pl.draw_grn_mpl, so a
+# machine without TeX gets the network instead of white space. They are degradations and
+# are meant to look like one: the repression head becomes a bracket, and the regulator
+# and target discs come out the same size. What they do not do is state anything the
+# TikZ version does not.
+# --------------------------------------------------------------------------- #
+def _bipartite_nodes():
+    """The regulator -> target layout panels b and e share."""
+    nodes = [f"r{i}" for i in range(len(REG_XY))] + [f"t{j}" for j in range(len(TGT_XY))]
+    pos = {f"r{i}": xy for i, xy in enumerate(REG_XY)}
+    pos.update({f"t{j}": xy for j, xy in enumerate(TGT_XY)})
+    return nodes, pos
+
+
+def prior_fallback(in_prior):
+    """Panel b's prior. Its edges stay UNSIGNED, as in the TikZ version: a promoter-based
+    prior asserts that a regulator MAY act on a target, not whether it activates or
+    represses, so coloring them by sign would put a claim in the panel that is not there."""
+    nodes, pos = _bipartite_nodes()
+    eds = [(f"r{a}", f"t{b}", 1.0) for a, b in EDGES if (a, b) in in_prior]
+    return lambda ax: sch.pl.draw_grn_mpl(
+        ax, nodes, pos, eds, labels=False, neutral_color=SOFT, node_size=70,
+        node_face="white", node_edge=INK, node_lw=0.8,
+        edge_lw=(0.9, 0.0), rad=0.0, shrink=5, alpha=1.0)
+
+
+def fitted_network_fallback(W, reg_idx, tgt_idx, wmax, extra):
+    """Panel e's fitted networks. The schematic off-prior edges stay dashed, because that
+    dash is what says they are drawn by hand rather than fitted (see EXTRA_EDGES)."""
+    nodes, pos = _bipartite_nodes()
+    real = [(f"r{a}", f"t{b}", float(W[tgt_idx[b], reg_idx[a]])) for a, b in EDGES]
+    sketch = [(f"r{a}", f"t{b}", float(sgn)) for a, b, sgn in extra]
+    kw = dict(wmax=wmax, labels=False, act_color=WARM, rep_color=COOL, node_size=70,
+              node_face="white", node_edge=INK, node_lw=0.8, rad=0.0, shrink=5, alpha=1.0)
+
+    def draw(ax):
+        sch.pl.draw_grn_mpl(ax, nodes, pos, real, edge_lw=(0.45, 1.25), **kw)
+        sch.pl.draw_grn_mpl(ax, nodes, pos, sketch, edge_lw=(0.8, 0.0), linestyle=(0, (1.8, 1.4)),
+                            draw_nodes=False, **kw)
+    return draw
+
+
+def circular_network_fallback(W, core, out):
+    """Panel f's regulator core, on the same circular layout at the same 0.14 threshold."""
+    n = len(core)
+    sub = W[np.ix_(core, core)]
+    smax = float(np.max(np.abs(sub))) if np.any(sub) else 1.0
+    nodes = [f"n{i}" for i in range(n)]
+    ang = [np.radians(90 + 360.0 * i / n) for i in range(n)]
+    pos = {f"n{i}": (2.35 * np.cos(t), 2.35 * np.sin(t)) for i, t in enumerate(ang)}
+    eds = [(f"n{j}", f"n{i}", float(sub[i, j]))          # target i, regulator j
+           for i in range(n) for j in range(n)
+           if i != j and abs(float(sub[i, j])) >= 0.14 * smax]
+    return lambda ax: sch.pl.draw_grn_mpl(
+        ax, nodes, pos, eds, wmax=smax, labels=False, act_color=WARM, rep_color=COOL,
+        node_size=55, node_face="white", node_edge=INK, node_lw=0.7,
+        edge_lw=(0.40, 1.25), rad=0.11, shrink=4, alpha=1.0)
 
 TIKZ_LINEAGE = r"""
 \begin{tikzpicture}[
@@ -420,7 +477,11 @@ TEX_JACOBIAN = r"""
 def circular_network_tex(W, core, out):
     """The regulator core as a circular-layout graph, drawn in TikZ so that repression carries the
     house flat-bar head. matplotlib has no bar arrowstyle; its nearest option is a bracket, which
-    looks like punctuation rather than a repression glyph."""
+    looks like punctuation rather than a repression glyph.
+
+    That is why TikZ is preferred, and it is not a reason to draw nothing where TeX is missing:
+    circular_network_fallback() draws the same graph with the bracket, which is worse typography
+    and the same claim. A blank panel is the only option here that says something false."""
     n = len(core)
     sub = W[np.ix_(core, core)]
     smax = float(np.max(np.abs(sub))) if np.any(sub) else 1.0
@@ -640,12 +701,12 @@ def panel_a(fig, x, y, w, h, a, cache, rng):
 def panel_b(fig, x, y, w, h, in_prior):
     head(fig, x, y, "b", "Optional inputs")
     sub = (w - 0.26) / 2
-    for j, (body, title, badge) in enumerate((
-            (prior_tex(in_prior), "regulatory prior", "recommended"),
-            (TIKZ_LINEAGE, "cell-type relationships", "optional"))):
+    for j, (body, title, badge, fb) in enumerate((
+            (prior_tex(in_prior), "regulatory prior", "recommended", prior_fallback(in_prior)),
+            (TIKZ_LINEAGE, "cell-type relationships", "optional", "lineage tree"))):
         xx = x + 0.09 + j * (sub + 0.08)
         panel_box(fig, xx, y + 0.28, sub, h - 0.56, lw=0.7, edge=SOFT, ls=(0, (2.2, 1.6)))
-        tex_panel(fig, xx + 0.05, y + 0.34, sub - 0.10, h - 0.72, body)
+        tex_panel(fig, xx + 0.05, y + 0.34, sub - 0.10, h - 0.72, body, fallback=fb, fontsize=5.4)
         lab(fig, xx + sub / 2, y + 0.25, title)
         lab(fig, xx + sub / 2, y + h - 0.09, badge, size=5.0, color=MUTED)
 
@@ -657,7 +718,8 @@ def panel_c(fig, x, y, w, h, a, genes):
     head(fig, x, y, "c", "Gene activation")
     tex_panel(fig, x + 0.06, y + 0.20, w - 0.12, 0.30, TEX_HILL,
               fallback=r"$\varphi(x)=x^n/(x^n+k^n)$")
-    tex_panel(fig, x + 0.08, y + 0.58, w - 0.16, 0.32, TEX_HILL_KEY)
+    tex_panel(fig, x + 0.08, y + 0.58, w - 0.16, 0.32, TEX_HILL_KEY,
+              fallback=r"$k$ threshold,  $n$ steepness", fontsize=5.4)
     ax = fig.add_axes(rect(x + 0.32, y + 1.06, w - 0.46, h - 1.28))
     spliced = a.uns.get("scHopfield", {}).get("spliced_key", "Ms")
     X = _layer(a, spliced)
@@ -685,10 +747,13 @@ def panel_d(fig, x, y, w, h):
     head(fig, x, y, "d", "The fitted system")
     tex_panel(fig, x + 0.08, y + 0.20, w - 0.16, 0.32, TEX_MODEL,
               fallback=r"$dx_i/dt = \sum_j W_{ij}\varphi_j(x_j) - \gamma_i x_i + I_i$")
-    tex_panel(fig, x + 0.10, y + 0.60, w - 0.20, 0.54, TEX_KEY)
+    tex_panel(fig, x + 0.10, y + 0.60, w - 0.20, 0.54, TEX_KEY,
+              fallback="\n".join(("$W$ interactions,  $\\varphi$ activation,",
+                                  "$\\gamma$ degradation,  $I$ bias")), fontsize=5.4)
     # the phrase IS the separator; a rule as well was one divider too many
     lab(fig, x + w / 2, y + 1.30, "fitted by minimizing the sum of", size=6.0, color=INK)
-    tex_panel(fig, x + 0.10, y + 1.42, w - 0.20, h - 1.54, TEX_LOSS)
+    tex_panel(fig, x + 0.10, y + 1.42, w - 0.20, h - 1.54, TEX_LOSS,
+              fallback=r"$\|\dot{x} - (W\varphi - \gamma x + I)\|^2 + $ penalties", fontsize=5.4)
 
 
 def panel_e(fig, x, y, w, h, a, types, reg_idx, tgt_idx):
@@ -702,7 +767,8 @@ def panel_e(fig, x, y, w, h, a, types, reg_idx, tgt_idx):
         yy = y + 0.28 + j * (nh + 0.18)
         lab(fig, x + w / 2, yy - 0.03, f"cell type {j + 1}")
         tex_panel(fig, x + 0.08, yy, w - 0.16, nh,
-                  fitted_network_tex(M, reg_idx, tgt_idx, wmax, EXTRA_EDGES[j]))
+                  fitted_network_tex(M, reg_idx, tgt_idx, wmax, EXTRA_EDGES[j]),
+                  fallback=fitted_network_fallback(M, reg_idx, tgt_idx, wmax, EXTRA_EDGES[j]))
 
     ky = y + h - 0.19
     lab(fig, x + 0.12, ky, "activation", size=5.2, color=WARM, ha="left")
@@ -813,7 +879,8 @@ def panel_h(fig, x, y, w, h, a, types):
     reg = np.where(out > 0)[0]
     core = reg[np.argsort(-out[reg])[:12]]
 
-    tex_panel(fig, x + 0.05, y + 0.20, w - 0.10, 1.08, circular_network_tex(W, core, out))
+    tex_panel(fig, x + 0.05, y + 0.20, w - 0.10, 1.08, circular_network_tex(W, core, out),
+              fallback=circular_network_fallback(W, core, out))
 
     ax = fig.add_axes(rect(x + 0.29, y + 1.46, w - 0.43, 0.82))
     inn = np.abs(W).sum(1)
