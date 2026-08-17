@@ -169,6 +169,13 @@ not permit redistribution under this repository's license, so `config.py` names 
 by registry name and `sch.fetch_base_grn` downloads it on first use. See
 [DATA_SOURCES.md](DATA_SOURCES.md).
 
+**An accession is not the object that was fit**, which is a preprocessed one, so the
+preparation step ships too. `reproducibility/prep_pancreas.py` rebuilds the pancreas input
+from scVelo's own download, verified identical to the object the published pancreas fits
+were run on, and `reproducibility/prep_dataset.py` prepares an object that arrives already
+normalized. [DATA_SOURCES.md](DATA_SOURCES.md) records for each of the seven what its
+first step is, which objects rebuild from a package call, and which do not.
+
 Point the scripts at your own copies with:
 
 | Variable | What it locates |
