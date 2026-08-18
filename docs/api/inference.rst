@@ -14,6 +14,19 @@ GRN inference
 
    fit_interactions
 
+Optimizer
+---------
+
+Objects behind :func:`fit_interactions`, public because a caller driving its own
+training loop needs them directly.
+
+.. autosummary::
+   :toctree: generated/
+
+   ScaffoldOptimizer
+   MaskedLinearLayer
+   CustomDataset
+
 Prior-knowledge scaffolds
 -------------------------
 
@@ -22,7 +35,6 @@ Prior-knowledge scaffolds
 
    fetch_base_grn
    build_scaffold
-   scaffold_from_edges
 
 scHopfield does not distribute a base gene regulatory network. ``fetch_base_grn``
 downloads one from the CellOracle repository at a pinned commit, verifies its

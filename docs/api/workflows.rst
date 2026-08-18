@@ -5,13 +5,6 @@ High-level, reproducible orchestration of the whole scHopfield pipeline. Each st
 is an ordinary public call, so you can always drop down to the individual
 functions when you need finer control.
 
-.. currentmodule:: scHopfield
-
-.. autosummary::
-   :toctree: generated/
-
-   run_pipeline
-
 .. currentmodule:: scHopfield.workflows
 
 .. autosummary::

@@ -50,44 +50,6 @@ def plot_energy_landscape(
     return ax
 
 
-def plot_energy_components(
-    adata: AnnData,
-    cluster: str,
-    basis: str = 'umap'
-) -> plt.Figure:
-    """
-    Plot all energy components (total, interaction, degradation, bias) for a cluster.
-
-    Parameters
-    ----------
-    adata : AnnData
-        Annotated data object
-    cluster : str
-        Cluster name
-    basis : str, optional
-        Embedding basis
-
-    Returns
-    -------
-    plt.Figure
-        Figure with subplots
-    """
-    fig, axes = plt.subplots(2, 2, figsize=(12, 10))
-
-    energy_types = ['total', 'interaction', 'degradation', 'bias']
-    for ax, etype in zip(axes.flat, energy_types):
-        grid_X = adata.uns['scHopfield'][f'grid_X_{cluster}']
-        grid_Y = adata.uns['scHopfield'][f'grid_Y_{cluster}']
-        grid_energy = adata.uns['scHopfield'][f'grid_energy_{etype}_{cluster}']
-
-        im = ax.contourf(grid_X, grid_Y, grid_energy, levels=20, cmap='viridis')
-        ax.set_title(f'{etype.capitalize()} Energy')
-        plt.colorbar(im, ax=ax)
-
-    plt.tight_layout()
-    return fig
-
-
 def plot_energy_boxplots(
     adata: AnnData,
     cluster_key: str = 'cell_type',

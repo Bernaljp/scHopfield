@@ -23,7 +23,6 @@ ODE-based Simulation
    simulate_trajectory
    simulate_perturbation_ode
    simulate_shift_ode
-   calculate_trajectory_flow
 
 CellOracle-style GRN Propagation
 ---------------------------------
@@ -38,9 +37,6 @@ Perturbation simulation via GRN signal propagation, inspired by CellOracle
    simulate_perturbation
    simulate_shift
    calculate_perturbation_effect_scores
-   calculate_cell_transition_scores
-   get_top_affected_genes
-   compare_perturbations
 
 Knockout screens
 ----------------

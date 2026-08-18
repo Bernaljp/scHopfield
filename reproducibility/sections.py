@@ -391,7 +391,8 @@ def section_A(adata, name, ck, report, cfg):
                    "bimodal fit is shown when it improves the MSE by >15%.")
         worst = list(names[order[-4:]])
         def _bimodal():
-            from scHopfield._utils.math import fit_sigmoid as _fs, fit_sigmoid_bimodal as _fb, sigmoid as _sg
+            from scHopfield import sigmoid as _sg
+            from scHopfield.preprocessing import fit_sigmoid as _fs, fit_sigmoid_bimodal as _fb
             fig, axes = plt.subplots(1, 4, figsize=(16, 3.8))
             Ms = np.asarray(adata.layers["Ms"])
             vnames = list(adata.var_names)

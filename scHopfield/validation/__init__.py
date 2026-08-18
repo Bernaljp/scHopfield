@@ -11,13 +11,12 @@ Circuits live in `scHopfield.validation.circuits`. Shared infrastructure
 (generic ODE/SDE simulator, fitting wrapper, evaluation metrics) lives at the
 top level of this package.
 
-Two of the circuits are ports of published models. Each cites its source
-publication in its own module docstring.
+Each circuit cites its source in its own module docstring.
 """
 
 from . import circuits
 from .simulate import simulate_circuit
-from .fit_validation import fit_circuit
+from .fit_validation import fit_circuit, build_circuit_scaffold
 from .metrics import (
     edge_sign_accuracy,
     edge_signed_correlation,
@@ -31,6 +30,7 @@ __all__ = [
     "circuits",
     "simulate_circuit",
     "fit_circuit",
+    "build_circuit_scaffold",
     "edge_sign_accuracy",
     "edge_signed_correlation",
     "spectral_overlap",

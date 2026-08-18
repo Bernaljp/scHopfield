@@ -19,9 +19,6 @@ Circuits
 
    ToggleCircuit
    OscillatorCircuit
-   DissertationOscillatorCircuit
-   Novak1997CellCycle
-   Adlung2021JakStat
 
 Simulation and fitting
 ----------------------
@@ -33,6 +30,7 @@ Simulation and fitting
 
    simulate_circuit
    fit_circuit
+   build_circuit_scaffold
 
 Recovery metrics
 ----------------

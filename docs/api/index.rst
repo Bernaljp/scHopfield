@@ -63,6 +63,7 @@ Top-level functions
 
    run_pipeline
    set_seed
+   sigmoid
    build_scaffold
    prepare_dataset
 

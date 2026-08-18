@@ -1,6 +1,6 @@
 """Two-gene mutual inhibition with positive autoregulation (toggle switch).
 
-Source: Dissertation §3.4.1. Hopfield-reformulated, so the ground-truth
+Hopfield-reformulated from the Cherry-Adler form below, so the ground-truth
 interaction matrix W is known exactly.
 
 Original (Cherry-Adler-style) form
@@ -31,9 +31,8 @@ matrix is
 Negative off-diagonal entries encode mutual repression; positive diagonal entries
 encode positive autoregulation.
 
-Default parameters reproduce Figure 3.5 of the dissertation
-(:math:`a_1 = a_2 = 5`, :math:`k = 1`, :math:`n = 4`,
-:math:`\\gamma_1 = \\gamma_2 = 3`). Vary :math:`b` to traverse the pitchfork
+The default parameters (:math:`a_1 = a_2 = 5`, :math:`k = 1`, :math:`n = 4`,
+:math:`\\gamma_1 = \\gamma_2 = 3`) sit in the bistable regime. Vary :math:`b` to traverse the pitchfork
 bifurcation from a single equilibrium at the origin (monostable) to two stable
 equilibria on the diagonal (bistable).
 """

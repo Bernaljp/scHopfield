@@ -46,7 +46,8 @@ import guards                                                    # noqa: E402
 from paper_plot_style import use_style, save, PALETTE            # noqa: E402
 import anndata as ad                                             # noqa: E402
 from sections import basis_of, get_colors                        # noqa: E402
-from scHopfield._utils.math import sigmoid, hill_regime, fit_sigmoid, fit_sigmoid_bimodal  # noqa: E402
+from scHopfield import sigmoid                                    # noqa: E402
+from scHopfield.preprocessing import hill_regime, fit_sigmoid, fit_sigmoid_bimodal  # noqa: E402
 
 OUT = paths.FIGURES
 SUB_OUT = os.path.join(paths.FIGURES_SPEC, "ExtendedDataFig2.pdf")

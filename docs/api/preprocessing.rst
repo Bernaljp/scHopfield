@@ -23,3 +23,6 @@ Sigmoid activation fitting
 
    fit_all_sigmoids
    compute_sigmoid
+   fit_sigmoid
+   fit_sigmoid_bimodal
+   hill_regime

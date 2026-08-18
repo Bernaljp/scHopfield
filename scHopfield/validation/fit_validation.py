@@ -16,7 +16,7 @@ from ..inference.optimizer import ScaffoldOptimizer
 from ._scalenorm_helpers import LoaderShim
 
 
-def _build_scaffold(W_true: np.ndarray, mode: str, seed: int = 0,
+def build_circuit_scaffold(W_true: np.ndarray, mode: str, seed: int = 0,
                     false_pos_rate: float = 0.0) -> np.ndarray:
     """Build a scaffold prior G with one of three regimes.
 
@@ -82,7 +82,7 @@ def fit_circuit(
         Output of ``simulate_circuit``. Must have ``layers['Ms']`` and
         ``layers['velocity_S']``, plus ``uns['ground_truth']`` with the true W.
     scaffold_mode : {'none', 'partial', 'full'}
-        Which scaffold regime to use. See ``_build_scaffold``.
+        Which scaffold regime to use. See ``build_circuit_scaffold``.
     scaffold_regularization, reconstruction_regularization, bias_regularization : float
         Loss weights for the three terms.
     n_epochs, batch_size, learning_rate : training hyperparams.
@@ -117,7 +117,7 @@ def fit_circuit(
     I_true = adata.uns["ground_truth"]["I"]
     gamma_true = adata.uns["ground_truth"]["gamma"]
 
-    scaffold = _build_scaffold(W_true, scaffold_mode, seed=seed,
+    scaffold = build_circuit_scaffold(W_true, scaffold_mode, seed=seed,
                                 false_pos_rate=false_pos_rate)
 
     # We bypass empirical CDF fitting by precomputing sigma(s) on the circuit's

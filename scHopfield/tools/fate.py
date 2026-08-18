@@ -62,7 +62,6 @@ __all__ = [
     "per_cell_fate_shift",
     "dose_fate_bias",
     "fate_embedding_flow",
-    "terminal_fate_shift",
     "commitment_time",
 ]
 
@@ -857,59 +856,6 @@ def fate_embedding_flow(adata: AnnData, cluster_key: str, lineage_pairs: Sequenc
             out[gene] = np.zeros_like(emb)
             continue
         out[gene] = (np.asarray(trans @ emb) - emb) - v_wt
-    return out
-
-
-def terminal_fate_shift(adata: AnnData, cluster_key: str, terminal_clusters: Sequence[str],
-                        ko_genes: Sequence[str], basis: Optional[str] = None,
-                        n_neighbors: int = 30, sigma: float = 0.05, frac: float = 0.3,
-                        spliced_key: str = "Ms") -> Dict[str, Any]:
-    """Knockout change in the absorption probability of each terminal state, state by state.
-
-    Where :func:`pairwise_fate_bias` collapses a decision to one split fraction, this keeps every
-    terminal state as its own column, which is the right readout when the question is which fates
-    a knockout gains or loses rather than how one decision tips. The knocked-out gene's coordinate
-    is dropped from both the wild-type and the knockout kernel and the two are compared
-    gene-matched, so a gene with no outgoing edges gives exactly zero.
-
-    Returns
-    -------
-    dict
-        ``states``, ``fate_wt``, ``terminal_sets``, ``clusters``, and ``ko`` mapping each gene to
-        ``fate``, ``shift`` (mean change per state), ``pvals`` (Wilcoxon per state) and
-        ``max_abs_shift``.
-    """
-    from scipy.stats import wilcoxon
-
-    genes_used = get_genes_used(adata)
-    clusters = adata.obs[cluster_key].astype(str).values
-    knn = _knn_from_basis(adata, basis, n_neighbors)
-    X, v_wt, names = model_velocity(adata, cluster_key, genes_used, spliced_key=spliced_key)
-    vmag = np.linalg.norm(v_wt, axis=1)
-    term = terminal_states(clusters, terminal_clusters, vmag, frac=frac)
-    fate_wt, states = fate_probabilities(fate_transition_matrix(X, v_wt, knn, sigma), term)
-
-    out: Dict[str, Any] = {"states": states, "fate_wt": fate_wt, "terminal_sets": term,
-                           "clusters": clusters, "ko": {}}
-    name_list = list(names)
-    for gene in ko_genes:
-        keep = np.ones(len(names), bool)
-        if gene in name_list:
-            keep[name_list.index(gene)] = False
-        _, v_ko, _ = model_velocity(adata, cluster_key, genes_used, ko_gene=gene,
-                                    spliced_key=spliced_key)
-        fate_wt_g, _ = fate_probabilities(
-            fate_transition_matrix(X[:, keep], v_wt[:, keep], knn, sigma), term)
-        fate_ko_g, _ = fate_probabilities(
-            fate_transition_matrix(X[:, keep], v_ko[:, keep], knn, sigma), term)
-        d = fate_ko_g - fate_wt_g
-        shift = d.mean(0)
-        pvals = []
-        for k in range(len(states)):
-            nz = np.abs(d[:, k]) > 1e-12
-            pvals.append(float(wilcoxon(d[nz, k]).pvalue) if nz.sum() > 10 else np.nan)
-        out["ko"][gene] = {"fate": fate_ko_g, "shift": shift, "pvals": np.array(pvals),
-                           "max_abs_shift": float(np.abs(shift).max())}
     return out
 
 

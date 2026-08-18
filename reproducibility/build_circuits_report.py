@@ -66,11 +66,28 @@ import scHopfield as sch
 from scHopfield.validation.circuits import ToggleCircuit, OscillatorCircuit
 from scHopfield.validation.simulate import simulate_circuit
 from scHopfield.validation.metrics import summarize_recovery, symmetry_index
-from scHopfield.inference.optimizer import ScaffoldOptimizer
-from scHopfield.validation._scalenorm_helpers import LoaderShim
-from scHopfield.validation.fit_validation import _build_scaffold
+from scHopfield.inference import ScaffoldOptimizer
+from scHopfield.validation import build_circuit_scaffold
 
 warnings.filterwarnings("ignore")
+
+
+class _LoaderShim:
+    """Deliver the ((sig, x), v) batches ScaffoldOptimizer.train_model expects.
+
+    Kept here rather than imported: this adapts an internal batch convention of the
+    optimizer, which is not a concept a user of the package has to know about.
+    """
+
+    def __init__(self, base):
+        self.base = base
+
+    def __iter__(self):
+        for sig_b, x_b, v_b in self.base:
+            yield (sig_b, x_b), v_b
+
+    def __len__(self):
+        return len(self.base)
 
 # The report page and its plots are regenerated output. The fit cache is not: it is
 # the whole external input to Figure 2, so it is tracked, and a refit rewrites it in
@@ -106,7 +123,7 @@ def fit_circuit_local(adata, scaffold_mode="full", refit_gamma=True,
     gt = adata.uns["ground_truth"]
     W_true, I_true, gamma_true = gt["W"], gt["I"], gt["gamma"]
 
-    scaffold = _build_scaffold(W_true, scaffold_mode, seed=seed, false_pos_rate=false_pos_rate)
+    scaffold = build_circuit_scaffold(W_true, scaffold_mode, seed=seed, false_pos_rate=false_pos_rate)
 
     expression = adata.layers["Ms"]
     velocity = adata.layers["velocity_S"]
@@ -133,7 +150,7 @@ def fit_circuit_local(adata, scaffold_mode="full", refit_gamma=True,
         normalize_regularization=True,
     )
     loss_hist, recon_hist = opt.train_model(
-        train_loader=LoaderShim(loader), epochs=n_epochs,
+        train_loader=_LoaderShim(loader), epochs=n_epochs,
         learning_rate=learning_rate, criterion="MSE", verbose=False, get_plots=False)
 
     W_inf = opt.W.weight.detach().cpu().numpy().astype(np.float64)

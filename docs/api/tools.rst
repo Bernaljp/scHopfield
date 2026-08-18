@@ -12,9 +12,6 @@ Energy Analysis
    :toctree: generated/
 
    compute_energies
-   decompose_degradation_energy
-   decompose_bias_energy
-   decompose_interaction_energy
 
 Network Analysis
 ----------------
@@ -27,8 +24,6 @@ Network Analysis
    compute_network_centrality
    get_top_genes_table
    compute_eigenanalysis
-   get_top_eigenvector_genes
-   get_eigenanalysis_table
    regulatory_out_strength
    regulatory_coupling
 
@@ -41,7 +36,6 @@ Correlation Analysis
    energy_gene_correlation
    celltype_correlation
    future_celltype_correlation
-   get_correlation_table
 
 Embedding
 ---------
@@ -51,8 +45,6 @@ Embedding
 
    compute_umap
    energy_embedding
-   save_embedding
-   load_embedding
    project_to_embedding
    build_correlation_projector
 
@@ -76,7 +68,6 @@ Velocity
    :toctree: generated/
 
    compute_reconstructed_velocity
-   validate_velocity
    compute_velocity
    compute_velocity_delta
 
@@ -100,13 +91,7 @@ Perturbation Scoring
    score_driver_tfs
    compute_lineage_bias
    compute_perturbation_flow_bias
-   lineage_axis_from_embedding
-   compute_lineage_commitment
-   compute_perturbation_commitment_change
    compute_cluster_effects
-   compute_perturbation_score
-   compute_perturbation_alignment
-   lineage_de
    grn_partner_weights
 
 First-Order (Jacobian) Knockout Response
@@ -147,7 +132,6 @@ Build the wild-type scaffold once with :func:`fate_scaffold` and pass it to the 
    per_cell_fate_shift
    dose_fate_bias
    fate_embedding_flow
-   terminal_fate_shift
    commitment_time
    permutation_null_floor
 
@@ -193,5 +177,3 @@ Model I/O
 
    save_model
    load_model
-   save_checkpoint
-   load_checkpoint

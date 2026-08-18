@@ -1,17 +1,9 @@
-"""Three-gene oscillator circuits.
+"""Three-gene oscillator circuit.
 
-Two variants are exported:
-
-* :class:`OscillatorCircuit` -- Elowitz-Leibler repressilator (Hopfield form).
-  Robust limit cycle for ``alpha=10, n=4`` and similar parameters. This is the
-  one used for the validation suite because it oscillates sustainably from
-  generic initial conditions without parameter fine-tuning.
-
-* :class:`DissertationOscillatorCircuit` -- 3-gene cyclic repression with an
-  external inducer S, as written in Dissertation §3.4.2. Mathematically
-  consistent in Hopfield form but the limit cycle is fragile and depends on
-  parameter fine-tuning. Kept for reference; reproduces the bifurcation
-  structure of the original (non-Hopfield) Wang-style 3-gene model.
+:class:`OscillatorCircuit` is the Elowitz-Leibler repressilator in Hopfield form.
+It holds a robust limit cycle for ``alpha=10, n=4`` and similar parameters,
+oscillating sustainably from generic initial conditions without parameter
+fine-tuning, which is why the validation suite uses it.
 """
 from __future__ import annotations
 from dataclasses import dataclass, field
@@ -147,69 +139,5 @@ class OscillatorCircuit(BaseCircuit):
 
 
 # ---------------------------------------------------------------------------
-# Dissertation §3.4.2 oscillator with external signal S  --  reference
 # ---------------------------------------------------------------------------
 
-@dataclass
-class DissertationOscillatorCircuit(BaseCircuit):
-    """3-gene cyclic-repression oscillator from Dissertation §3.4.2.
-
-    .. math::
-
-        \\dot{x} = -\\varphi(z) - x + S, \\\\
-        \\dot{y} = -\\varphi(x) - \\varphi(z) - y + S, \\\\
-        \\dot{z} = -\\varphi(x) - \\varphi(y) - z.
-
-    External signal ``S`` is the bifurcation parameter, producing Hopf and
-    Saddle-Node bifurcations. The dissertation reports "decaying oscillations"
-    for the standard parameters and "sustained oscillations" only after
-    fine-tuning. Kept for reference and to show the framework can express
-    this regulatory architecture; the more robust limit cycle for validation
-    is the Elowitz :class:`OscillatorCircuit` above.
-    """
-
-    w: float = 1.07
-    S: float = 0.5
-    k: float = 1.0
-    n: int = 4
-    gamma: float = 0.4
-    gene_names: Tuple[str, str, str] = field(default=("x", "y", "z"))
-
-    @property
-    def n_genes(self) -> int:
-        return 3
-
-    def sigma(self, x: np.ndarray) -> np.ndarray:
-        xn = np.power(x, self.n)
-        return xn / (self.k**self.n + xn)
-
-    def W(self) -> np.ndarray:
-        sign_W = np.array(
-            [[0, 0, 1],
-             [1, 0, 1],
-             [1, 1, 0]],
-            dtype=np.float64,
-        )
-        return -self.w * sign_W
-
-    def I_vec(self) -> np.ndarray:
-        return np.array([self.S, self.S, 0.0], dtype=np.float64)
-
-    def gamma_vec(self) -> np.ndarray:
-        return np.array([self.gamma, self.gamma, self.gamma], dtype=np.float64)
-
-    @property
-    def state_names(self) -> Tuple[str, ...]:
-        return ("A", "B", "C")
-
-    def rhs(self, x: np.ndarray) -> np.ndarray:
-        return self.W() @ self.sigma(x) + self.I_vec() - self.gamma_vec() * x
-
-    def sample_initial_conditions(self, n: int = 50, x_max: float = 3.0,
-                                   seed: int = 0) -> np.ndarray:
-        rng = np.random.default_rng(seed)
-        return rng.uniform(0, x_max, size=(n, 3))
-
-    def __repr__(self) -> str:
-        return (f"DissertationOscillatorCircuit(w={self.w}, S={self.S}, "
-                f"k={self.k}, n={self.n}, gamma={self.gamma})")
