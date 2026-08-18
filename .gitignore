@@ -85,6 +85,13 @@ reproducibility/output/
 /data/
 /reports/
 
+# ------------------------------- The tutorial dataset download, named rather than blanket
+# scvelo.datasets.pancreas() writes docs/tutorials/data/Pancreas/endocrinogenesis_day15.h5ad,
+# 51 MB, whenever a tutorial runs with docs/tutorials as the working directory. It is fetched
+# from a public URL on first use and each tutorial that needs it says so in its text, which
+# makes it a download cache rather than an input this repository owns.
+docs/tutorials/data/
+
 # ------------------------------------------- Regenerated dyngen artifacts, named exactly
 # Everything else under reproducibility/data/dyngen/ is tracked. adata.h5ad is rebuilt from
 # the committed CSVs by reproducibility/dyngen/02_build_h5ad.py in about 15 s per backbone,

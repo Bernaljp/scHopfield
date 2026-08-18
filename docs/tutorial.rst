@@ -14,12 +14,15 @@ never has to run the fit.
 
 .. important::
 
-   ``save_model`` stores the interaction matrix, the bias and the degradation
-   rates, but not the fitted activation. So a notebook that loads the checkpoint
-   has to fit the activations itself and call ``compute_sigmoid``, which is why
-   tutorials 3 to 6 each run ``fit_all_sigmoids`` before ``load_model``. Skip it
-   and ``compute_sigmoid`` falls back to a single Hill curve without saying so,
-   where the fit used two components.
+   ``save_model`` stores the whole fitted system: the interaction matrix, the
+   bias and the degradation rates, and the activation in full, meaning both Hill
+   components of every gene and the weight that mixes them. So a notebook that
+   loads a checkpoint can call ``compute_sigmoid`` straight away and get the
+   activation the model was fitted with, which is what tutorials 3 to 6 do.
+   Checkpoints written before the second component was persisted carry the first
+   one alone; ``load_model`` warns when it reads one, and the remedy is to re-run
+   ``fit_all_sigmoids`` on the expression data or to write the checkpoint again
+   from a current fit.
 
 .. toctree::
    :maxdepth: 1

@@ -39,11 +39,15 @@ so it writes three further columns describing the second component:
 
 All three are present whichever way the fit ran. A single-component fit sets the
 second component equal to the first and ``sigmoid_mix`` to 1, which is exactly a
-single Hill curve, so code that ignores these columns is unaffected. Reading them
-is how you tell a genuine single-component fit from an activation that was never
-fitted: ``load_model`` restores the network but not the activation, and
-``compute_sigmoid`` on the defaults left behind by a load will quietly evaluate a
-single Hill curve.
+single Hill curve, so code that ignores these columns is unaffected.
+
+``save_model`` persists all seven of these columns and ``load_model`` restores
+them, so an activation rebuilt from a checkpoint is the one the model was fitted
+with. Two things guard the case where it is not. A checkpoint written before the
+second component was persisted carries the first one alone, and ``load_model``
+warns when it reads one. Within a session, ``compute_sigmoid`` refuses outright
+on an object whose ``uns['scHopfield']['sigmoid_bimodal']`` records a
+two-component fit but whose second component is gone.
 
 Network Parameters (per cluster)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -198,8 +202,18 @@ adata.uns['scHopfield'] (Metadata)
 Configuration
 ~~~~~~~~~~~~~
 
+Written by ``sch.pp.fit_all_sigmoids()`` and ``sch.inf.fit_interactions()``. This
+is also the set that ``save_model`` persists and ``load_model`` restores:
+
+- ``spliced_key`` - Layer the activation was fitted against
+- ``velocity_key`` - Layer holding the velocity the interactions were fitted to
+- ``degradation_key`` - ``var`` column holding the degradation rates
 - ``cluster_key`` - Name of cluster key used
-- ``genes_used`` - Indices of genes used in analysis
+- ``sigmoid_bimodal`` - Whether the activation was fitted with two Hill components
+
+``sch.inf.fit_interactions()`` also writes ``seed`` when one was given. The genes
+used in the analysis are not recorded here: they are the ``scHopfield_used``
+boolean mask in ``adata.var``, which is what the analysis functions read.
 
 Models & Embeddings
 ~~~~~~~~~~~~~~~~~~~
