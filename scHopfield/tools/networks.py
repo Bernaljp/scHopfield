@@ -133,10 +133,12 @@ def get_network_links(
     -------
     dict or pd.DataFrame
         If 'dict': Dictionary mapping cluster names to DataFrames with columns:
-            - source: source gene
-            - target: target gene
-            - coef_mean: interaction coefficient
-            - coef_abs: absolute value of coefficient
+
+        - source: source gene
+        - target: target gene
+        - coef_mean: interaction coefficient
+        - coef_abs: absolute value of coefficient
+
         If 'combined': Single DataFrame with additional 'cluster' column
     """
     genes, gene_names, clusters = get_cluster_genes(adata, cluster_key)
@@ -212,6 +214,7 @@ def compute_network_centrality(
     AnnData or None
         Returns adata if copy=True, otherwise None.
         Adds to adata.var for each cluster:
+
         - 'degree_all_{cluster}': total degree
         - 'degree_centrality_all_{cluster}': normalized total degree
         - 'degree_in_{cluster}': in-degree
@@ -220,7 +223,7 @@ def compute_network_centrality(
         - 'degree_centrality_out_{cluster}': normalized out-degree
         - 'betweenness_centrality_{cluster}': betweenness centrality
         - 'eigenvector_centrality_{cluster}': graph (Bonacich) eigenvector centrality on the
-          |W|-weighted directed graph
+          ``|W|``-weighted directed graph
         - 'dominant_eigvec_weight_{cluster}': magnitude of each gene's component in the leading
           eigenvector of the signed interaction matrix W (dominant eigenmode participation)
 

@@ -44,7 +44,8 @@ Fit sigmoid activation functions to gene expression:
 
 .. code-block:: python
 
-   # Select highly variable genes (50-200 recommended)
+   # Select the genes to model. prepare_dataset defaults to the top 2,000, which is
+   # what the published fits use; a few hundred is enough to explore on a laptop.
    highly_variable_genes = adata.var['highly_variable'].values
 
    # Fit sigmoid functions
@@ -237,7 +238,7 @@ Each step builds on the previous, with all results stored in the AnnData object 
 Next Steps
 ----------
 
-- Read the :doc:`tutorial` for a detailed walkthrough with real data
-- Explore specific analyses in the User Guide
-- Check the :doc:`api/tools` reference for all available functions
-- See :doc:`examples` for Jupyter notebooks with complete analyses
+- Work through the :doc:`tutorials <tutorial>`, six executed notebooks that run
+  this pipeline on real data and then read the fit
+- Run the whole sequence in one call with :doc:`pipeline`
+- Check the :doc:`api/index` reference for every public function

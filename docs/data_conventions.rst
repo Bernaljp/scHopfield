@@ -30,6 +30,25 @@ Added by ``sch.pp.fit_all_sigmoids()`` and ``sch.pp.compute_sigmoid()``:
 - ``sigmoid_mse`` - Mean squared error of fit
 - ``scHopfield_used`` - Boolean mask of genes used in analysis
 
+``fit_all_sigmoids`` fits a two-component activation by default (``bimodal=True``),
+so it writes three further columns describing the second component:
+
+- ``sigmoid_threshold2`` - Threshold of the second Hill component
+- ``sigmoid_exponent2`` - Exponent of the second Hill component
+- ``sigmoid_mix`` - Weight on the first component, in [0, 1]
+
+All three are present whichever way the fit ran. A single-component fit sets the
+second component equal to the first and ``sigmoid_mix`` to 1, which is exactly a
+single Hill curve, so code that ignores these columns is unaffected.
+
+``save_model`` persists all seven of these columns and ``load_model`` restores
+them, so an activation rebuilt from a checkpoint is the one the model was fitted
+with. Two things guard the case where it is not. A checkpoint written before the
+second component was persisted carries the first one alone, and ``load_model``
+warns when it reads one. Within a session, ``compute_sigmoid`` refuses outright
+on an object whose ``uns['scHopfield']['sigmoid_bimodal']`` records a
+two-component fit but whose second component is gone.
+
 Network Parameters (per cluster)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
@@ -57,10 +76,13 @@ Correlations (per cluster)
 
 Added by ``sch.tl.energy_gene_correlation()``:
 
-- ``correlation_energy_total_{cluster}`` - Total energy vs gene expression
-- ``correlation_energy_interaction_{cluster}`` - Interaction energy correlation
-- ``correlation_energy_degradation_{cluster}`` - Degradation energy correlation
-- ``correlation_energy_bias_{cluster}`` - Bias energy correlation
+- ``correlation_total_{cluster}`` - Total energy vs gene expression
+- ``correlation_interaction_{cluster}`` - Interaction energy correlation
+- ``correlation_degradation_{cluster}`` - Degradation energy correlation
+- ``correlation_bias_{cluster}`` - Bias energy correlation
+
+The same four columns are also written with ``all`` in place of the cluster name,
+over every cell at once.
 
 adata.obs (Cell-level Data)
 ----------------------------
@@ -157,9 +179,22 @@ Added by ``sch.pp.compute_sigmoid()``:
 Velocity
 ~~~~~~~~
 
-Added by ``sch.tl.compute_reconstructed_velocity()``:
+Added by ``sch.tl.compute_reconstructed_velocity()``, but only when it is given a
+layer to write to. Its ``layer_key`` argument defaults to ``None``, in which case
+the model-predicted velocity is returned as an array and nothing is stored:
 
-- ``velocity_reconstructed`` - Model-predicted velocity
+.. code-block:: python
+
+   # returned, not stored
+   v = sch.tl.compute_reconstructed_velocity(adata, cluster_key='cell_type')
+
+   # stored in adata.layers['velocity_reconstructed']
+   sch.tl.compute_reconstructed_velocity(
+       adata, cluster_key='cell_type', layer_key='velocity_reconstructed'
+   )
+
+Passing a single ``cluster`` writes to ``f'{layer_key}_{cluster}'`` rather than to
+``layer_key`` itself.
 
 adata.uns['scHopfield'] (Metadata)
 ----------------------------------
@@ -167,8 +202,18 @@ adata.uns['scHopfield'] (Metadata)
 Configuration
 ~~~~~~~~~~~~~
 
+Written by ``sch.pp.fit_all_sigmoids()`` and ``sch.inf.fit_interactions()``. This
+is also the set that ``save_model`` persists and ``load_model`` restores:
+
+- ``spliced_key`` - Layer the activation was fitted against
+- ``velocity_key`` - Layer holding the velocity the interactions were fitted to
+- ``degradation_key`` - ``var`` column holding the degradation rates
 - ``cluster_key`` - Name of cluster key used
-- ``genes_used`` - Indices of genes used in analysis
+- ``sigmoid_bimodal`` - Whether the activation was fitted with two Hill components
+
+``sch.inf.fit_interactions()`` also writes ``seed`` when one was given. The genes
+used in the analysis are not recorded here: they are the ``scHopfield_used``
+boolean mask in ``adata.var``, which is what the analysis functions read.
 
 Models & Embeddings
 ~~~~~~~~~~~~~~~~~~~

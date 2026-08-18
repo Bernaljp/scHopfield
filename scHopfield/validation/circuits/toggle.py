@@ -114,9 +114,12 @@ class ToggleCircuit(BaseCircuit):
     def jacobian(self, x: np.ndarray) -> np.ndarray:
         """Analytic Jacobian at state ``x``. Useful for stability analysis.
 
-        d/dx_j [W sigma(x) + I - gamma x]_i
-            = W_{i,j} * sigma'(x_j)            for i != j
-            = W_{i,i} * sigma'(x_i) - gamma_i  for i == j
+        ::
+
+            d/dx_j [W sigma(x) + I - gamma x]_i
+                = W_{i,j} * sigma'(x_j)            for i != j
+                = W_{i,i} * sigma'(x_i) - gamma_i  for i == j
+
         with sigma'(x) = n * x^(n-1) * k^n / (k^n + x^n)^2.
         """
         xn = np.power(np.maximum(x, 0.0), self.n)

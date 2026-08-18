@@ -14,7 +14,8 @@ Before using scHopfield, you need:
    - ``adata.var['gamma']`` - degradation rates
 
 3. **Cell type annotations** (e.g., ``adata.obs['cell_type']``)
-4. **Highly variable genes** selected (recommended: 50-200 genes)
+4. **Highly variable genes** selected. ``prepare_dataset`` defaults to the top
+   2,000, which is the gene count behind the published fits.
 
 Installation Methods
 --------------------
@@ -97,7 +98,7 @@ For enhanced performance and features:
 System Requirements
 -------------------
 
-- **Python**: >= 3.8
+- **Python**: >= 3.12, as declared in ``pyproject.toml``
 - **OS**: Linux, macOS, Windows
 - **Memory**: Recommended 16GB+ RAM for large datasets
 - **GPU**: Optional (CUDA-compatible GPU for faster training with ``device='cuda'``)
@@ -174,7 +175,7 @@ If using conda, create a clean environment:
 
 .. code-block:: bash
 
-   conda create -n schopfield python=3.10
+   conda create -n schopfield python=3.12
    conda activate schopfield
    pip install -e .
 

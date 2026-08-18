@@ -146,6 +146,7 @@ def simulate_perturbation(
     x_i^new = x_i^current + dt * sum_k W_ik * (sigmoid_k(x_k^current) - sigmoid_k(x_k^original))
 
     The propagation works as follows:
+
     - Step 1: Only the manually perturbed genes propagate their effects
     - Steps 2+: All TFs (genes with outgoing edges in the GRN) that have changed
       from their original state propagate their effects
@@ -158,11 +159,12 @@ def simulate_perturbation(
     adata : AnnData
         Annotated data object with fitted interactions (W matrices)
     perturb_condition : dict
-        Perturbation conditions as {gene_name: value}.
-        Examples:
+        Perturbation conditions as {gene_name: value}. Examples:
+
         - Knockout: {"Gata1": 0.0}
         - Overexpression: {"Gata1": 5.0}
         - Multiple: {"Gata1": 0.0, "Tal1": 2.0}
+
     cluster_key : str, optional (default: 'cell_type')
         Key in adata.obs for cluster labels
     target_clusters : list of str, optional

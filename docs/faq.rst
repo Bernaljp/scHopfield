@@ -28,7 +28,7 @@ A: You need:
    - Single-cell RNA-seq data in AnnData format
    - RNA velocity computed (e.g., with scVelo)
    - Cell type annotations
-   - Highly variable genes selected (50-200 recommended)
+   - Highly variable genes selected (``prepare_dataset`` takes the top 2,000)
 
 **Q: Can I use data without RNA velocity?**
 
@@ -36,7 +36,11 @@ A: No, RNA velocity is required for network inference. Use scVelo or velocyto to
 
 **Q: How many genes should I use?**
 
-A: We recommend 50-200 highly variable genes for computational efficiency and interpretability.
+A: The published fits use the top 2,000 velocity genes, which is what
+``prepare_dataset`` selects by default, and that is the setting to start from if you
+want results comparable to the paper. Fewer genes fit faster and are easier to read
+off a network diagram, so a few hundred is a reasonable way to explore a new dataset,
+but the fitted interactions are not comparable across two different gene sets.
 
 Analysis
 ~~~~~~~~

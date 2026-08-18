@@ -31,8 +31,7 @@ extensions = [
     "sphinx.ext.mathjax",
     "sphinx_design",       # grid/cards on the landing page
     "sphinx_copybutton",   # copy button on code blocks
-    "myst_parser",         # Markdown support
-    "nbsphinx",            # executed-notebook tutorials
+    "myst_nb",             # Markdown support, and notebooks rendered from committed outputs
 ]
 
 # Napoleon (NumPy-style docstrings)
@@ -60,11 +59,10 @@ autodoc_mock_imports = [
 
 templates_path = ["_templates"]
 exclude_patterns = ["_build", "Thumbs.db", ".DS_Store", "README.md",
-                    "**.ipynb_checkpoints", "methods", "archive",
-                    "notebooks/Paper_Figures.ipynb"]
+                    "**.ipynb_checkpoints", "methods", "archive"]
 
-# Markdown + reStructuredText
-source_suffix = {".rst": "restructuredtext", ".md": "markdown"}
+# reStructuredText, Markdown, and notebooks. myst-nb owns the last two.
+source_suffix = {".rst": "restructuredtext", ".md": "myst-nb", ".ipynb": "myst-nb"}
 master_doc = "index"
 
 myst_enable_extensions = ["dollarmath", "amsmath", "colon_fence", "deflist"]
@@ -142,22 +140,18 @@ intersphinx_mapping = {
     "anndata": ("https://anndata.readthedocs.io/en/stable/", None),
 }
 
-# -- nbsphinx ----------------------------------------------------------------
-
-nbsphinx_execute = "never"
-nbsphinx_allow_errors = True
-nbsphinx_timeout = 600
-nbsphinx_prolog = r"""
-{% set docname = 'docs/' + env.doc2path(env.docname, base=None)|string %}
-
-.. only:: html
-
-    .. role:: raw-html(raw)
-        :format: html
-
-    .. nbinfo::
-
-        This page was generated from `{{ docname }}`__.
-
-    __ https://github.com/Bernaljp/scHopfield/blob/main/{{ docname }}
-"""
+# -- myst-nb (tutorial notebooks) --------------------------------------------
+#
+# The tutorials render from the outputs committed alongside them and are never
+# executed by the docs build. Two reasons, and both are load-bearing. A build that
+# executed them would need a GPU, the pancreas dataset and roughly an hour, so it
+# would fail on Read the Docs and on any stranger's checkout. And the outputs are
+# the record of a specific run of a specific fit, which is what a reader should be
+# reading; regenerating them is the notebook author's job, not the doc builder's.
+#
+# myst-nb rather than nbsphinx because nbsphinx shells out to pandoc, a system
+# binary that pip cannot install. With myst-nb the whole toolchain comes from
+# docs/requirements.txt, so the build reproduces from a clean checkout with no
+# apt step.
+nb_execution_mode = "off"
+nb_merge_streams = True

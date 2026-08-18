@@ -390,11 +390,12 @@ def simulate_shift_ode(
         Key for degradation rates.
     method : str, optional (default: 'euler')
         Integration method.
-        GPU-compatible (via torchdiffeq or native torch):
-          'euler', 'rk4', 'midpoint', 'dopri5', 'dopri8', 'bosh3',
-          'adaptive_heun', 'fehlberg2'
-        CPU-only (scipy):
-          'odeint', 'RK45', 'RK23', 'DOP853', 'Radau', 'BDF', 'LSODA'
+
+        - GPU-compatible (via torchdiffeq or native torch): 'euler', 'rk4',
+          'midpoint', 'dopri5', 'dopri8', 'bosh3', 'adaptive_heun', 'fehlberg2'
+        - CPU-only (scipy): 'odeint', 'RK45', 'RK23', 'DOP853', 'Radau', 'BDF',
+          'LSODA'
+
     use_cluster_specific_GRN : bool, optional (default: True)
         If True, uses cluster-specific solvers. If False, uses a global solver.
     x_max_percentile : float, optional (default: 99.0)
@@ -406,10 +407,12 @@ def simulate_shift_ode(
         Ignored when the GPU path is active.
     device : str or None, optional (default: None)
         Target device for GPU-batched integration.
-        None  → auto-detect: use 'cuda' if available and method is GPU-compatible,
-                otherwise 'cpu'.
-        'cuda' → force GPU (raises if CUDA unavailable).
-        'cpu'  → always use the CPU path (scipy/joblib, as before).
+
+        - None: auto-detect, using 'cuda' if it is available and the method is
+          GPU-compatible, and 'cpu' otherwise.
+        - 'cuda': force GPU, raising if CUDA is unavailable.
+        - 'cpu': always use the CPU path (scipy/joblib).
+
     verbose : bool, optional (default: False)
         Print simulation progress.
 
