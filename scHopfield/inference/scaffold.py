@@ -4,7 +4,8 @@ A *scaffold* is a binary (n_genes x n_genes) matrix that restricts which
 gene-gene interactions :func:`scHopfield.inference.fit_interactions` is allowed to
 learn (or penalizes away from). It is typically derived from a base GRN such as a
 CellOracle motif-scan parquet, an ATAC-derived TF->peak->gene map, or any
-long-format edge list.
+long-format edge list. :func:`scHopfield.inference.fetch_base_grn` downloads one of
+the three CellOracle tables scHopfield was developed against.
 
 The same scaffold-construction logic was previously copy-pasted across several
 analysis scripts; it now lives here so every workflow builds the scaffold the
@@ -84,8 +85,8 @@ def build_scaffold(
 
     Examples
     --------
-    >>> import scHopfield as sch, pandas as pd
-    >>> base = pd.read_parquet("base_GRN.parquet")
+    >>> import scHopfield as sch
+    >>> base = sch.fetch_base_grn("mouse")
     >>> scaffold = sch.inf.build_scaffold(adata, base)
     >>> sch.inf.fit_interactions(adata, cluster_key="celltype",
     ...                          w_scaffold=scaffold.values.T,

@@ -21,7 +21,6 @@ import paths                                                     # noqa: E402
 
 warnings.filterwarnings("ignore")
 import numpy as np
-import pandas as pd
 import anndata as ad
 import scanpy as sc
 import matplotlib
@@ -179,7 +178,10 @@ def prepare_and_fit(name, device="cuda", force=False, mode=None, tag="", bimodal
     sch.pp.compute_sigmoid(sub, spliced_key="Ms")
 
     # ---- scaffold + GRN fit ----
-    base = pd.read_parquet(cfg["base_grn"])
+    # cfg["base_grn"] names a table in scHopfield's registry, not a path. The first fit
+    # on a machine downloads it from the pinned CellOracle commit and caches it; every
+    # later fit reads the cache. See DATA_SOURCES.md for the terms it carries.
+    base = sch.fetch_base_grn(cfg["base_grn"])
     scaffold, ntf, nedge = sch.inf.build_scaffold(sub, base, return_stats=True)
     print(f"[{name}] scaffold {ntf} TFs / {nedge} edges; fitting {sub.shape}", flush=True)
     sch.inf.fit_interactions(sub, cluster_key=ck, w_scaffold=scaffold.values.T,

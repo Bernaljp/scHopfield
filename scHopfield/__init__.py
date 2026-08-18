@@ -38,6 +38,12 @@ The fitting defaults are the configuration used throughout the paper, so calling
 published method. A prior-knowledge scaffold is the one thing they cannot supply
 for you: build one with ``sch.inf.build_scaffold`` and pass it as ``w_scaffold``.
 Fitting without a scaffold is a different, and measurably worse, method.
+
+The scaffold is built from a base gene regulatory network, which scHopfield does
+not distribute. ``sch.fetch_base_grn`` downloads one from CellOracle on demand and
+caches it. That table carries CellOracle's own license, restricted to
+non-commercial academic use, and not scHopfield's MIT license; ``DATA_SOURCES.md``
+states the restriction and lists the works to cite.
 """
 
 __version__ = '0.1.0'
@@ -54,7 +60,7 @@ from . import validation
 from ._utils.seed import set_seed
 from ._utils.math import sigmoid
 from .preprocessing import fit_all_sigmoids, compute_sigmoid, prepare_dataset
-from .inference import fit_interactions, build_scaffold
+from .inference import fit_interactions, build_scaffold, fetch_base_grn
 from .tools import compute_energies, compute_umap, energy_embedding
 from .dynamics import ODESolver, simulate_trajectory
 from .workflows import run_pipeline
@@ -73,6 +79,7 @@ __all__ = [
     'prepare_dataset',
     'fit_interactions',
     'build_scaffold',
+    'fetch_base_grn',
     'compute_energies',
     'compute_umap',
     'energy_embedding',

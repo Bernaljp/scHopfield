@@ -140,6 +140,7 @@ What you can do
    :caption: About
 
    data_conventions
+   data_sources
    faq
    changelog
    contributing

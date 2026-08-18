@@ -60,11 +60,12 @@ Build the prior-knowledge scaffold, then learn interaction matrices from RNA vel
 
 .. code-block:: python
 
-   import pandas as pd
-
    # A base GRN is a wide table: one column of target gene names, one binary column
    # per transcription factor. build_scaffold restricts it to the genes being modeled.
-   base_grn = pd.read_parquet('base_GRN.parquet')
+   # scHopfield does not distribute one; fetch_base_grn downloads a CellOracle table
+   # from a pinned commit, verifies its checksum and caches it locally. That table
+   # carries CellOracle's license and not scHopfield's: see DATA_SOURCES.md.
+   base_grn = sch.fetch_base_grn('mouse')     # or 'human'
    scaffold = sch.inf.build_scaffold(adata, base_grn)
 
    sch.inf.fit_interactions(
