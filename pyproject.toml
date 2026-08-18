@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "scHopfield"
-version = "0.1.0"
+version = "1.0.0"
 description = "Single-cell Hopfield network analysis for gene regulatory networks"
 readme = "README.md"
 # Set by the dependencies, not by the syntax: scanpy declares >=3.12 and anndata >=3.11,

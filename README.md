@@ -201,8 +201,11 @@ Point the scripts at your own copies with:
 
 ## Citation
 
-A manuscript describing scHopfield is in preparation. Citation details will be added here
-on publication.
+To cite the software itself, see [CITATION.cff](CITATION.cff), which GitHub renders as
+"Cite this repository".
+
+A manuscript describing scHopfield is in preparation. Its citation, and an archived DOI
+for the release, will be added here and to `CITATION.cff` on publication.
 
 ## License
 

@@ -111,7 +111,7 @@ After installation, verify it works:
 .. code-block:: python
 
    import scHopfield as sch
-   print(sch.__version__)  # Should print: 0.1.0
+   print(sch.__version__)  # Should print: 1.0.0
 
    # Check available modules
    print(dir(sch))  # Should show: pp, inf, tl, pl, dyn, etc.

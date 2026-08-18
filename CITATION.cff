@@ -1,0 +1,27 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite it as below."
+title: scHopfield
+abstract: >-
+  Fit an interpretable dynamical model of gene regulation to single-cell data.
+  scHopfield learns a signed gene-gene interaction matrix per cell type from
+  expression and RNA velocity, in a Hopfield-like form restricted by a
+  prior-knowledge scaffold, and reads an energy landscape, per-cell-type
+  attractors, their local stability and in-silico perturbations off the fitted
+  vector field.
+type: software
+authors:
+  - family-names: "Bernal Tamayo"
+    given-names: "Juan Pablo"
+    email: jpbernal888@gmail.com
+repository-code: "https://github.com/Bernaljp/scHopfield"
+url: "https://schopfield.readthedocs.io"
+license: MIT
+version: 1.0.0
+date-released: "2026-08-19"
+keywords:
+  - single-cell
+  - gene regulatory network
+  - RNA velocity
+  - energy landscape
+  - Hopfield network
+  - dynamical systems

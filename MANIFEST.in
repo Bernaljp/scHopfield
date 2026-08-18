@@ -12,6 +12,10 @@ recursive-include tests *.py
 # rather than existing only in the repository.
 include DATA_SOURCES.md
 
+# The machine-readable citation travels with the distribution, so an unpacked sdist can
+# still say how to cite the work.
+include CITATION.cff
+
 # reproducibility/ is the figure code and its committed inputs, about 8 MB. It belongs to
 # the repository, not to the installable package, so it stays out of the distribution.
 prune reproducibility

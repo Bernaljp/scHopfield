@@ -1,6 +1,24 @@
 Changelog
 =========
 
+Version 1.0.0 (2026-08-19)
+--------------------------
+
+First public release, the version accompanying the manuscript.
+
+- Public API fixed to what each submodule's ``__all__`` declares, reachable as
+  ``sch.pp``, ``sch.inf``, ``sch.tl``, ``sch.pl``, ``sch.dyn`` and ``sch.validation``.
+- Base regulatory network scaffolds fetched on demand by ``sch.fetch_base_grn`` from a
+  pinned upstream commit and checked against a recorded sha256, rather than shipped.
+- Every fitting parameter defaults to the value used throughout the paper, ``seed=0``
+  included, so a call that tunes nothing reproduces the published configuration.
+- ``save_model`` persists the full fitted activation, and ``load_model`` warns when a file
+  predates that and carries only the primary Hill component.
+- Six executed tutorial notebooks and a documentation site at
+  https://schopfield.readthedocs.io.
+- ``reproducibility/`` carries the code behind every figure in the paper, with
+  ``reproducibility/README.md`` documenting the path from the public raw data to each one.
+
 Version 0.1.0 (2025-01-26)
 --------------------------
 
