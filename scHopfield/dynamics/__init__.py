@@ -21,6 +21,8 @@ from .perturbation import (
     compute_epistasis,
     run_dose_response,
     dose_levels_from_fractions,
+    knockout_displacement_flow,
+    perturbation_cascade,
 )
 
 # Deprecated alias, kept for backward compatibility. `simulate_perturbation` is
@@ -61,4 +63,7 @@ __all__ = [
     'compute_epistasis',
     'run_dose_response',
     'dose_levels_from_fractions',
+    # Propagated (ODE) perturbation readouts
+    'knockout_displacement_flow',
+    'perturbation_cascade',
 ]

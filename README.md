@@ -49,7 +49,6 @@ and degradation rates. If you do not have them, `sch.pp.prepare_dataset` produce
 from spliced and unspliced counts through scVelo.
 
 ```python
-import pandas as pd
 import scanpy as sc
 import scHopfield as sch
 
@@ -62,7 +61,8 @@ sch.pp.fit_all_sigmoids(adata)
 sch.pp.compute_sigmoid(adata)
 
 # 2. Restrict the network with a base GRN, then fit it per cell type.
-base_grn = pd.read_parquet("base_GRN.parquet")
+# Downloaded from CellOracle on first use and cached; see DATA_SOURCES.md for its terms.
+base_grn = sch.fetch_base_grn("mouse")
 scaffold = sch.inf.build_scaffold(adata, base_grn)
 sch.inf.fit_interactions(
     adata,
@@ -84,7 +84,11 @@ sequence in one call and returns the processed object.
 **The defaults are the paper's method.** Every fitting parameter defaults to the value
 used throughout the paper, `seed=0` included, so a call that tunes nothing reproduces the
 published configuration. The scaffold is the one exception, because it depends on a base
-GRN that is not ours to distribute. See below.
+GRN that is not ours to distribute: `sch.fetch_base_grn` downloads one from CellOracle at
+a pinned commit, checks it against a recorded sha256 and caches it under
+`~/.cache/scHopfield`. **That table carries CellOracle's license, not ours**, which
+restricts use to non-commercial academic purposes. See
+[DATA_SOURCES.md](DATA_SOURCES.md).
 
 Persist a fit with `sch.tl.save_model`, not with `adata.write_h5ad`: the fitted optimizers
 live in `adata.uns` and AnnData cannot serialize them.
@@ -159,17 +163,20 @@ fitted objects first. A script whose input is missing stops with a `FileNotFound
 naming the exact path it wanted.
 
 **Neither the datasets nor the base GRN scaffolds are redistributed here.** The seven
-datasets are public, each under its own accession. The base GRN tables are third-party
-material under their own terms, which do not permit redistribution under this
-repository's license. Both have to be fetched before any fit can be run.
+datasets are public, each under its own accession, and have to be fetched before any fit
+can be run. The base GRN tables are third-party material under their own terms, which do
+not permit redistribution under this repository's license, so `config.py` names each one
+by registry name and `sch.fetch_base_grn` downloads it on first use. See
+[DATA_SOURCES.md](DATA_SOURCES.md).
 
 Point the scripts at your own copies with:
 
 | Variable | What it locates |
 | :--- | :--- |
-| `SCHOPFIELD_DATA` | the datasets and the base GRN tables |
+| `SCHOPFIELD_DATA` | the datasets |
 | `SCHOPFIELD_REPORTS` | the per-dataset report tree |
 | `SCHOPFIELD_DYNAMISC_DATA` | two datasets read from a separate data directory |
+| `SCHOPFIELD_CACHE` | where fetched base GRN tables are cached, if not `~/.cache` |
 
 ## Citation
 
@@ -181,7 +188,9 @@ on publication.
 MIT. See [LICENSE](LICENSE).
 
 The license covers the code in this repository. It does not extend to the single-cell
-datasets or the base GRN tables, which carry their own terms.
+datasets or the base GRN tables, which carry their own terms and none of which are
+distributed here. [DATA_SOURCES.md](DATA_SOURCES.md) states the base GRN terms, which
+restrict use to non-commercial academic purposes, and lists the works to cite.
 
 ## Contributing
 

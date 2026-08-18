@@ -53,3 +53,17 @@ Knockout screens
    run_pairwise_ko_screen
    compute_epistasis
    run_dose_response
+   dose_levels_from_fractions
+
+Propagated Perturbation Readouts
+---------------------------------
+
+Readouts that integrate the fitted field with genes clamped, rather than reading the
+instantaneous response: where the perturbation drives cells, and how far from wild type it has
+driven each cell type over time.
+
+.. autosummary::
+   :toctree: generated/
+
+   knockout_displacement_flow
+   perturbation_cascade

@@ -18,10 +18,10 @@ _HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.join(_HERE, "compute"))
 sys.path.insert(0, _HERE)
 import paths                                                     # noqa: E402
+import guards                                                    # noqa: E402
 
 warnings.filterwarnings("ignore")
 import numpy as np
-import pandas as pd
 import anndata as ad
 import scanpy as sc
 import matplotlib
@@ -98,9 +98,26 @@ def prepare_and_fit(name, device="cuda", force=False, mode=None, tag="", bimodal
 
     # ---- dynamics: RNA velocity or pseudotime-inferred ----
     if vmode == "pseudotime":
-        pt_key = cfg.get("pseudotime_key", "Pseudotime")
-        if pt_key not in adata.obs:
+        pt_key = cfg.get("pseudotime_key")
+        # A dataset that names its pseudotime column means that column and no other. Falling back to
+        # a fresh diffusion pseudotime when the named one is absent fits different dynamics from the
+        # same input and reports success, so a preparation step that dropped the column looks like it
+        # worked. Stop instead. Where no column is named the fallback IS the recipe, so it stays,
+        # loudly, because the run is then not reproducing a published fit.
+        if pt_key is not None and pt_key not in adata.obs:
+            raise ValueError(
+                f"[{name}] the configured pseudotime column '{pt_key}' is not in obs.\n"
+                f"  present: {', '.join(map(str, adata.obs.columns))}\n"
+                f"  this dataset is fit from that column, so a diffusion pseudotime computed here "
+                f"would fit different dynamics; restore the column in the prepared object, or "
+                f"change pseudotime_key in config.py")
+        if pt_key is None:
             # compute a diffusion pseudotime with a data-driven root (extreme DC1 cell)
+            guards.warn_once(
+                f"dpt-fallback:{name}",
+                f"[{name}] config.py names no pseudotime column, so the velocity is estimated from "
+                f"a diffusion pseudotime computed here with a data-driven root. That is a choice "
+                f"this run made, not a property of the dataset.")
             if "X_diffmap" not in adata.obsm:
                 sc.tl.diffmap(adata)
             adata.uns["iroot"] = int(np.argmin(adata.obsm["X_diffmap"][:, 1]))
@@ -179,7 +196,10 @@ def prepare_and_fit(name, device="cuda", force=False, mode=None, tag="", bimodal
     sch.pp.compute_sigmoid(sub, spliced_key="Ms")
 
     # ---- scaffold + GRN fit ----
-    base = pd.read_parquet(cfg["base_grn"])
+    # cfg["base_grn"] names a table in scHopfield's registry, not a path. The first fit
+    # on a machine downloads it from the pinned CellOracle commit and caches it; every
+    # later fit reads the cache. See DATA_SOURCES.md for the terms it carries.
+    base = sch.fetch_base_grn(cfg["base_grn"])
     scaffold, ntf, nedge = sch.inf.build_scaffold(sub, base, return_stats=True)
     print(f"[{name}] scaffold {ntf} TFs / {nedge} edges; fitting {sub.shape}", flush=True)
     sch.inf.fit_interactions(sub, cluster_key=ck, w_scaffold=scaffold.values.T,

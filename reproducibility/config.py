@@ -11,8 +11,10 @@ regenerated output measured in gigabytes and is not distributed. See
 data.
 
 Neither the seven datasets nor the base GRN scaffolds are redistributed here. The
-datasets are public, each under its own accession; the scaffolds are third-party tables
-under their own license terms. Both have to be fetched before a fit can be run.
+datasets are public, each under its own accession, and have to be fetched before a fit
+can be run. The scaffolds are third-party tables under their own license terms, so each
+dataset below names one by registry name rather than by path, and ``sch.fetch_base_grn``
+downloads and caches it on first use. See ``DATA_SOURCES.md`` for the terms.
 
 velocity_mode:
   'velocity'    use the RNA-velocity layer (velocity_key)
@@ -25,8 +27,6 @@ they are derived data-drivenly (the two most pseudotime-terminal, network-distin
 clusters).
 """
 
-import os
-
 import paths
 
 # Every dataset path below is relative to SCHOPFIELD_DATA. Two of the seven were read
@@ -34,15 +34,22 @@ import paths
 # SCHOPFIELD_DYNAMISC_DATA.
 DATA = paths.DATASETS
 DYN = paths.DYNAMISC
-MOUSE_GRN = os.path.join(DATA, "hematopoiesis/networks/mouse_scATAC_atlas.parquet")
-HUMAN_GRN = os.path.join(DATA, "human_promoter_base_GRN.parquet")
+# The base GRN scaffolds are not paths. They name tables in scHopfield's registry,
+# which sch.fetch_base_grn resolves to a pinned CellOracle commit, downloads once and
+# caches; there is no data/ directory in a clean checkout for a path to point into.
+# Five of the seven datasets are fit with the mouse atlas prior and two with the human
+# promoter prior. The two mouse hematopoiesis entries below previously named a separate
+# file, data/hematopoiesis/base_GRN.parquet, which is a byte-identical duplicate of the
+# atlas, so one source is named here rather than two paths for the same table.
+MOUSE_GRN = "mouse_atlas"
+HUMAN_GRN = "human_promoter"
 
 DATASETS = {
     # paul15 -- the pseudotime showcase (has Pseudotime, no reliance on RNA velocity).
     "paul15": dict(
         path=f"{DATA}/hematopoiesis/base_preprocessed.h5ad",
         cluster_key="paul15_clusters", species="mouse",
-        base_grn=f"{DATA}/hematopoiesis/base_GRN.parquet",
+        base_grn=MOUSE_GRN,
         prepare=False, velocity_mode="pseudotime", pseudotime_key="Pseudotime",
         # use ALL clusters 1..19 in numeric order (megakaryocyte 8Mk and 19Lymph were being
         # skipped); the two 1-cell clusters (11DC, 19Lymph) may still drop out of the fit.
@@ -61,7 +68,7 @@ DATASETS = {
     "paul15_coarse": dict(
         path=f"{DATA}/hematopoiesis/base_preprocessed.h5ad",
         cluster_key="cell_type", species="mouse",
-        base_grn=f"{DATA}/hematopoiesis/base_GRN.parquet",
+        base_grn=MOUSE_GRN,
         prepare=False, velocity_mode="pseudotime", pseudotime_key="Pseudotime",
         order=["MEP", "Erythroids", "Megakaryocytes", "GMP", "late_GMP",
                "Granulocytes", "Monocytes"],

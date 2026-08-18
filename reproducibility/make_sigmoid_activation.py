@@ -42,6 +42,7 @@ _HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.join(_HERE, "compute"))
 sys.path.insert(0, _HERE)
 import paths                                                     # noqa: E402
+import guards                                                    # noqa: E402
 from paper_plot_style import use_style, save, PALETTE            # noqa: E402
 import anndata as ad                                             # noqa: E402
 from sections import basis_of, get_colors                        # noqa: E402
@@ -93,10 +94,17 @@ C2 = PALETTE.get("orange", "#E69F00")
 CFIT = PALETTE.get("vermillion", "#D55E00")
 CGREY = "0.6"
 
-# Canonical pancreatic endocrine regulators + hormone markers, for the enrichment panel (g).
-PANCREAS_LINEAGE = ["Neurog3", "Neurod1", "Pax4", "Arx", "Nkx2-2", "Pax6", "Isl1", "Pdx1", "Mafa",
-                    "Mafb", "Fev", "Rfx6", "Insm1", "Ins1", "Ins2", "Gcg", "Sst", "Ghrl", "Ppy",
-                    "Iapp", "Chga", "Chgb", "Pcsk1", "Pcsk2"]
+# Curated lineage regulators + hormone markers per dataset, for the enrichment panel (g) and the
+# row order of panel e. Panel g's title asserts that the bimodal genes enrich for switch-like
+# lineage regulators, so the comparison is only meaningful against a set curated for the dataset in
+# hand: an absent set made the enrichment bar read zero percent under that title. Curated for the
+# dataset this figure is published on; main() stops rather than drawing panel g for any other.
+LINEAGE_BY_DATASET = {
+    "pancreas": ["Neurog3", "Neurod1", "Pax4", "Arx", "Nkx2-2", "Pax6", "Isl1", "Pdx1", "Mafa",
+                 "Mafb", "Fev", "Rfx6", "Insm1", "Ins1", "Ins2", "Gcg", "Sst", "Ghrl", "Ppy",
+                 "Iapp", "Chga", "Chgb", "Pcsk1", "Pcsk2"],
+}
+LINEAGE = []       # the resolved set for this run, filled by main() before anything draws
 
 
 def _to_dense(a, key):
@@ -247,7 +255,7 @@ def draw_param_ratio(fig, gs_cell, ab, n_max_rows=20):
     (columns), one shared colormap. Rows = the curated lineage genes that are bimodal, filled out with the
     most-separated other bimodal genes, sorted most-separated first."""
     fl = _flagged(ab)
-    lineage = [g for g in PANCREAS_LINEAGE if g in ab.var_names and fl[ab.var_names.get_loc(g)]]
+    lineage = [g for g in LINEAGE if g in ab.var_names and fl[ab.var_names.get_loc(g)]]
     # lead with the curated lineage genes (the recognizable ones); only if too few, top up with the
     # most-separated other bimodal genes.
     if len(lineage) < 10:
@@ -380,7 +388,7 @@ def draw_regime_celltype(fig, gs_cell, ab, ck, order, top_n=16):
 def draw_biology(ax, ab):
     fl = _flagged(ab)
     used = ab.var["scHopfield_used"].values
-    lineage = [g for g in PANCREAS_LINEAGE if g in ab.var_names and used[ab.var_names.get_loc(g)]]
+    lineage = [g for g in LINEAGE if g in ab.var_names and used[ab.var_names.get_loc(g)]]
     lin_idx = [ab.var_names.get_loc(g) for g in lineage]
     frac_all = fl[used].mean()
     frac_lin = fl[lin_idx].mean() if lin_idx else 0.0
@@ -520,14 +528,33 @@ def main():
     from config import DATASETS
     cfg = DATASETS[ds]; ck = cfg["cluster_key"]
 
+    # Panels e and g are drawn against the dataset's curated lineage regulators. Resolve the set
+    # before anything opens a file, so an uncurated --dataset stops here rather than at the point
+    # where panel g would have drawn a zero percent bar under an enrichment claim.
+    global LINEAGE
+    LINEAGE = guards.require_dataset_entry(
+        LINEAGE_BY_DATASET, ds, "LINEAGE_BY_DATASET in make_sigmoid_activation.py",
+        "Extended Data Fig. 2 panels e and g",
+        how="curate the dataset's lineage regulators and hormone markers, the way 'pancreas' is")
+
     def _pick(*cands):                                       # first existing path (robust to canonical state)
         return next((p for p in cands if os.path.exists(p)), cands[-1])
     base = f"{paths.REPORTS}/{ds}/data"
     # bimodal fit: the explicit tagged cache, or the canonical adata once bimodal is promoted.
-    ab = ad.read_h5ad(_pick(f"{base}/adata_analyzed_bimodal.h5ad", f"{base}/adata_analyzed.h5ad"))
+    p_bi = _pick(f"{base}/adata_analyzed_bimodal.h5ad", f"{base}/adata_analyzed.h5ad")
     # single-Hill fit for the comparison panels (c, h): the backup made when bimodal became canonical,
-    # else the canonical adata (pre-promotion it is still single-Hill).
-    asingle = ad.read_h5ad(_pick(f"{base}/adata_analyzed_singlehill.h5ad", f"{base}/adata_analyzed.h5ad"))
+    # else the canonical adata (pre-promotion it is still single-Hill). Once bimodal IS canonical that
+    # fallback lands on the same file as the bimodal arm, and panels c and h then compare a fit with
+    # itself and draw a flat zero improvement. Which era we are in is not worth guessing: the two arms
+    # collapsing onto one path is the defect itself, whichever fit the canonical object holds.
+    p_single = _pick(f"{base}/adata_analyzed_singlehill.h5ad", f"{base}/adata_analyzed.h5ad")
+    guards.require_distinct(
+        p_bi, p_single,
+        "Extended Data Fig. 2 panels c and h, the two-component versus single-Hill comparison",
+        how=(f"re-fit {ds} with config.BIMODAL_HILL = False and save the result as "
+             f"{base}/adata_analyzed_singlehill.h5ad"))
+    ab = ad.read_h5ad(p_bi)
+    asingle = ad.read_h5ad(p_single)
     basis = basis_of(ab); colors = get_colors(ab, ck)
     present = [c for c in ab.obs[ck].astype(str).unique()]
     order = [c for c in (cfg.get("order") or present) if c in present]
@@ -543,7 +570,7 @@ def main():
             mb = float(ab.var["sigmoid_mse"].values[gi_b])
             gain[g] = ms - mb
     ranked = sorted(gain, key=lambda g: -gain[g])
-    lineage_bi = [g for g in PANCREAS_LINEAGE if g in fl_genes]
+    lineage_bi = [g for g in LINEAGE if g in fl_genes]
     ex_genes = (lineage_bi[:2] + [g for g in ranked if g not in lineage_bi][:1])[:3]
     unimodal = [g for g in ab.var_names if not fl[ab.var_names.get_loc(g)]
                 and ab.var["scHopfield_used"].values[ab.var_names.get_loc(g)]]

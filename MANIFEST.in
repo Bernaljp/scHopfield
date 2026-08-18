@@ -7,6 +7,11 @@
 # Tests travel with the sdist so the package can be verified after unpacking.
 recursive-include tests *.py
 
+# fetch_base_grn's docstring and both of its failure messages point at DATA_SOURCES.md
+# for the terms the fetched table carries, so that file has to travel with the package
+# rather than existing only in the repository.
+include DATA_SOURCES.md
+
 # reproducibility/ is the figure code and its committed inputs, about 8 MB. It belongs to
 # the repository, not to the installable package, so it stays out of the distribution.
 prune reproducibility

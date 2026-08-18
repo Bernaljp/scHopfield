@@ -17,7 +17,8 @@ from .embedding import (
     energy_embedding,
     save_embedding,
     load_embedding,
-    project_to_embedding
+    project_to_embedding,
+    build_correlation_projector,
 )
 from .jacobian import (
     compute_jacobians,
@@ -34,7 +35,9 @@ from .networks import (
     get_top_genes_table,
     compute_eigenanalysis,
     get_top_eigenvector_genes,
-    get_eigenanalysis_table
+    get_eigenanalysis_table,
+    regulatory_out_strength,
+    regulatory_coupling,
 )
 from .velocity import (
     compute_reconstructed_velocity,
@@ -45,7 +48,8 @@ from .velocity import (
 from .flow import (
     calculate_flow,
     calculate_grid_flow,
-    calculate_inner_product
+    calculate_inner_product,
+    reference_flow,
 )
 from .io import (
     save_model,
@@ -65,6 +69,13 @@ from .perturbation_analysis import (
     lineage_de,
     grn_partner_weights,
     compute_perturbation_alignment,
+    jacobian_knockout_response,
+    jacobian_response,
+    jacobian_commitment_push,
+    double_knockout_matrix,
+    fate_bias_candidates,
+    select_specificity_wings,
+    rank_by_fate_effect,
 )
 from .fate import (
     model_velocity,
@@ -75,7 +86,18 @@ from .fate import (
     decider_mask,
     fate_shift,
     permutation_null_floor,
+    fate_scaffold,
+    lineage_pair_axes,
+    perturbed_fate,
+    perturbed_fates,
+    pairwise_fate_bias,
+    per_cell_fate_shift,
+    dose_fate_bias,
+    fate_embedding_flow,
+    terminal_fate_shift,
+    commitment_time,
 )
+from .._utils.io import get_genes_used
 from .character import (
     velocity_speed,
     attractor_index,
@@ -101,6 +123,7 @@ __all__ = [
     'save_embedding',
     'load_embedding',
     'project_to_embedding',
+    'build_correlation_projector',
     # Jacobian analysis
     'compute_jacobians',
     'save_jacobians',
@@ -116,6 +139,8 @@ __all__ = [
     'compute_eigenanalysis',
     'get_top_eigenvector_genes',
     'get_eigenanalysis_table',
+    'regulatory_out_strength',
+    'regulatory_coupling',
     # Velocity computation
     'compute_reconstructed_velocity',
     'validate_velocity',
@@ -125,6 +150,9 @@ __all__ = [
     'calculate_flow',
     'calculate_grid_flow',
     'calculate_inner_product',
+    'reference_flow',
+    # Fitted-gene accessor
+    'get_genes_used',
     # Model I/O
     'save_model',
     'load_model',
@@ -142,6 +170,15 @@ __all__ = [
     'lineage_de',
     'grn_partner_weights',
     'compute_perturbation_alignment',
+    # First-order (Jacobian) knockout response
+    'jacobian_knockout_response',
+    'jacobian_response',
+    'jacobian_commitment_push',
+    # Combinatorial perturbation and candidate selection
+    'double_knockout_matrix',
+    'fate_bias_candidates',
+    'select_specificity_wings',
+    'rank_by_fate_effect',
     # Fate probability (projection-free knockout readout) and its permutation null
     'model_velocity',
     'fate_transition_matrix',
@@ -151,6 +188,16 @@ __all__ = [
     'decider_mask',
     'fate_shift',
     'permutation_null_floor',
+    'fate_scaffold',
+    'lineage_pair_axes',
+    'perturbed_fate',
+    'perturbed_fates',
+    'pairwise_fate_bias',
+    'per_cell_fate_shift',
+    'dose_fate_bias',
+    'fate_embedding_flow',
+    'terminal_fate_shift',
+    'commitment_time',
     # Dynamical character
     'velocity_speed',
     'attractor_index',

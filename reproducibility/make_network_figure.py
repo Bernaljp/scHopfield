@@ -2,16 +2,16 @@
 
 Reuses the analyzed report AnnData (reports/<dataset>/data/adata_analyzed.h5ad).
 Panels (reading order a..f); per-cell-type panels use the requested cell types:
-  a  cell-type GRNs (TikZ): top-25 genes by total interaction weight, top-30 edges,
-     cluster (spring) layout; node size = total weight; red arrow = activation, blue
-     bar-head = repression
+  a  cell-type GRNs (TikZ, with a matplotlib fallback where TeX is missing): top-25
+     genes by total interaction weight, top-30 edges, cluster (spring) layout; node
+     size = total weight; teal arrow = activation, rust bar-head = repression
   b  network-similarity heatmap: dendrogram, then cell-type names, then heatmap
   c  cell-type-specific hub genes (degree centrality above the cross-type mean)
   d  regulatory roles: out-strength (regulatory output) vs in-strength (regulation
      received), log-log; master regulators (high out/low in) separate from relays
   e  eigenanalysis: eigenvalue spectra + max-Re and min-Re eigenvector loading heatmaps
-  f  small regulatory network (TikZ): a gene set + their top regulators, shell layout,
-     uniform node size
+  f  small regulatory network (TikZ, same fallback as a): a gene set + their top
+     regulators, shell layout, uniform node size
 
 Focal genes are a REQUIRED INPUT, not a decoration. Panel f draws a curated set of master
 regulators together with their top regulators, so the set must belong to the system being
@@ -34,9 +34,7 @@ still written to reproducibility/figures/, at the same sizes it always was.
 from __future__ import annotations
 import argparse
 import os
-import subprocess
 import sys
-import tempfile
 import warnings
 
 import numpy as np
@@ -68,6 +66,7 @@ from submission_style import (figure_for as sub_figure_for, panel_letter,   # no
                               save as sub_save, use_submission_style)
 import anndata as ad                                    # noqa: E402
 import networkx as nx                                   # noqa: E402
+import scHopfield as sch                                # noqa: E402  (circuit rendering)
 try:
     from adjustText import adjust_text
 except Exception:
@@ -169,63 +168,36 @@ def _gene(t):
     return {"style": "italic"} if SUB else {}
 
 
-TIKZ_PRE = (
-    r"\documentclass[border=3pt]{standalone}"
-    r"\usepackage{helvet}\renewcommand{\familydefault}{\sfdefault}"
-    r"\usepackage{tikz}\usetikzlibrary{arrows.meta}"
-    r"\definecolor{actcol}{HTML}{" + ACT_HEX + r"}\definecolor{repcol}{HTML}{" + REP_HEX + r"}"
-    r"\definecolor{nodefill}{HTML}{ADADAD}"
-    r"\begin{document}\begin{tikzpicture}["
-    r"gene/.style={circle,draw=black!50,fill=nodefill,line width=0.5pt,inner sep=1.0pt},"
-    r"activate/.style={-{Latex[length=3.5pt,width=3pt]},actcol},"
-    r"repress/.style={-{Bar[width=4.5pt]},repcol}]" + "\n"
-)
-
-
-def _tex(s):
-    return s.replace("_", r"\_").replace("%", r"\%").replace("&", r"\&")
-
-
-def _tikz_failed(ax, c):
-    """Make a failed network render impossible to miss.
-
-    render_tikz swallows every error and returns None, so a panel whose TikZ did not compile
-    used to look like ordinary white space. Four shipped supplementary figures carried an empty
-    panel f that way. Shout on stderr and put a visible marker in the panel.
-    """
-    print(f"WARNING: TikZ render failed for '{c}'; panel left empty", file=sys.stderr)
-    ax.text(0.5, 0.5, "network render failed", transform=ax.transAxes, ha="center", va="center",
-            fontsize=8, color=REP, style="italic")
+#: The preamble these panels compile against, at this figure's activation / repression pair.
+TIKZ_PRE = sch.pl.grn_preamble(ACT_HEX, REP_HEX)
 
 
 def render_tikz(body, dpi=None):
+    """Compile a GRN snippet at this figure's resolution.
+
+    The renderer itself is ``sch.pl.render_tikz``; what stays here is the one thing that
+    is this figure's business, which resolution a panel is rasterized at.
+    """
     dpi = dpi if dpi is not None else (600 if SUB else 460)   # 600 dpi at page size
-    try:
-        with tempfile.TemporaryDirectory() as td:
-            open(os.path.join(td, "c.tex"), "w").write(TIKZ_PRE + body + "\\end{tikzpicture}\n\\end{document}\n")
-            r = subprocess.run(["pdflatex", "-interaction=nonstopmode", "-halt-on-error", "c.tex"],
-                               cwd=td, capture_output=True)
-            if r.returncode != 0 or not os.path.exists(os.path.join(td, "c.pdf")):
-                return None
-            subprocess.run(["pdftoppm", "-png", "-r", str(dpi), "-singlefile",
-                            os.path.join(td, "c.pdf"), os.path.join(td, "c")], capture_output=True)
-            p = os.path.join(td, "c.png")
-            return plt.imread(p) if os.path.exists(p) else None
-    except Exception:
-        return None
+    return sch.pl.render_tikz(body, preamble=TIKZ_PRE, dpi=dpi)
+
+
+def draw_grn_fallback(ax, nodes, pos, edges, c, **kw):
+    """Draw the network with matplotlib when the TikZ render did not come back.
+
+    A failed compile used to leave the panel as ordinary white space, and four shipped
+    supplementary figures carried an empty panel f that way. A blank panel does not read
+    as an error, it reads as a network with nothing in it, which is false. So say what
+    happened on stderr and draw the network, with the same encoding the TikZ version
+    carries: arrowhead for activation, flat bar for repression, width with magnitude.
+    """
+    print(f"WARNING: TikZ render failed for '{c}'; drawing the network with matplotlib instead",
+          file=sys.stderr)
+    return sch.pl.draw_grn_mpl(ax, nodes, pos, edges, act_color=ACT, rep_color=REP, **kw)
 
 
 def _hex(rgb):
     return f"{int(rgb[0] * 255):02X}{int(rgb[1] * 255):02X}{int(rgb[2] * 255):02X}"
-
-
-_COMPASS = [(0, "east"), (45, "north east"), (90, "north"), (135, "north west"),
-            (180, "west"), (225, "south west"), (270, "south"), (315, "south east")]
-
-
-def _anchor(ang):                                        # anchor so the label sits away from the centroid
-    a = (ang + 180) % 360
-    return min(_COMPASS, key=lambda c: min(abs(a - c[0]), 360 - abs(a - c[0])))[1]
 
 
 def community_layout(G, nodes, node2c, ncomm):
@@ -248,49 +220,9 @@ def community_layout(G, nodes, node2c, ncomm):
     return pos
 
 
-def tikz_grn_body(nodes, pos, edges, scale, size=4.5, fills=None, borders=None, bold=None, lblfont=r"\tiny",
-                  node_lw=1.0, off_base=0.16, edge_lw=(0.25, 1.0), shorten=2.0, label_sep=0.6,
-                  italic=False, labels=True, wmax=None, head_scale=1.0):
-    """labels=False draws bare nodes, for thumbnails whose gene identities are printed
-    once in a separate key. wmax fixes the edge-width normalizer, so a set of networks
-    drawn separately stays comparable instead of each scaling to its own maximum."""
-    bold = bold or set()
-    idm = {n: f"n{i}" for i, n in enumerate(nodes)}
-    cx = np.mean([pos[n][0] for n in nodes]); cy = np.mean([pos[n][1] for n in nodes])
-    L = []
-    for i, n in enumerate(nodes):
-        if fills and n in fills:
-            L.append(f"\\definecolor{{fll{i}}}{{HTML}}{{{fills[n]}}}")
-        if borders and n in borders:
-            L.append(f"\\definecolor{{brd{i}}}{{HTML}}{{{borders[n]}}}")
-    for i, n in enumerate(nodes):
-        x, y = pos[n]
-        fc = f"fll{i}" if (fills and n in fills) else "nodefill"
-        bc = f"brd{i}" if (borders and n in borders) else "white"
-        L.append(f"\\node[circle,draw={bc},fill={fc},line width={node_lw:.2f}pt,minimum size={size:.1f}mm,inner sep=0pt] "
-                 f"({idm[n]}) at ({scale * x:.2f},{scale * y:.2f}) {{}};")
-        if not labels:
-            continue
-        dx, dy = x - cx, y - cy; r = float(np.hypot(dx, dy)) or 1.0
-        off = size / 20.0 + off_base
-        lx, ly = scale * x + off * dx / r, scale * y + off * dy / r
-        lab = f"\\textit{{{_tex(n)}}}" if italic else _tex(n)
-        lab = f"\\textbf{{{lab}}}" if n in bold else lab
-        L.append(f"\\node[font={lblfont},anchor={_anchor(np.degrees(np.arctan2(dy, dx)))},inner sep={label_sep:.1f}pt] "
-                 f"at ({lx:.2f},{ly:.2f}) {{{lab}}};")
-    wmax = wmax or max((abs(w) for *_, w in edges), default=1.0)
-    for u, v, w in edges:
-        if u not in idm or v not in idm:
-            continue
-        st = "activate" if w > 0 else "repress"
-        if head_scale != 1.0:
-            # A later arrow spec wins over the one in the named style.
-            st += (f",-{{Latex[length={3.5 * head_scale:.2f}pt,width={3.0 * head_scale:.2f}pt]}}"
-                   if w > 0 else f",-{{Bar[width={4.5 * head_scale:.2f}pt]}}")
-        L.append(f"\\draw[{st},line width={edge_lw[0] + edge_lw[1] * abs(w) / wmax:.2f}pt,"
-                 f"shorten >={shorten:.1f}pt,shorten <={shorten:.1f}pt] "
-                 f"({idm[u]}) to[bend left=6] ({idm[v]});")
-    return "\n".join(L)
+#: The GRN snippet builder now lives in the package; the local name is kept because
+#: make_energy_jacobian imports it from here.
+tikz_grn_body = sch.pl.grn_tikz_body
 
 
 def get_ck(dataset):
@@ -411,7 +343,8 @@ def draw_grn_a(ax, adata, c, legend=False, min_comp=5):
         body = tikz_grn_body(kn, pos, edges, scale=4.6, size=4.3, fills=fills, lblfont=r"\tiny")
     img = render_tikz(body)
     if img is None:                                   # a failed TikZ compile used to leave a blank panel
-        _tikz_failed(ax, c)
+        draw_grn_fallback(ax, kn, pos, edges, c, fills=fills, node_size=46 if SUB else 70,
+                          fontsize=5.6 if SUB else 7.0, label_offset=0.11, pad=0.42)
     if img is not None:
         ax.imshow(img)
         # Reserve bottom space ONLY where the legend and colorbar actually sit. Doing it on
@@ -469,7 +402,8 @@ def draw_grn_f(ax, adata, c, genes, legend=False, n_total=15):
         body = tikz_grn_body(nodes, pos, edges, scale=2.3, size=4.8, bold=set(foc), lblfont=r"\scriptsize")
     img = render_tikz(body)
     if img is None:                                   # a failed TikZ compile used to leave a blank panel
-        _tikz_failed(ax, c)
+        draw_grn_fallback(ax, nodes, pos, edges, c, bold=set(foc), node_size=80 if SUB else 110,
+                          fontsize=6.0 if SUB else 8.0, label_offset=0.15, pad=0.55)
     else:
         ax.imshow(img)
     ax.axis("off"); ax.set_title(c, fontsize=sz("grn_title"), fontweight="bold")

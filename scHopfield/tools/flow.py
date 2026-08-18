@@ -618,3 +618,54 @@ def calculate_grid_scalar(
         }
     else:
         raise ValueError("Only 'knn' method is currently supported for grid scalar interpolation.")
+
+
+def reference_flow(
+    adata: AnnData,
+    basis: str = 'umap',
+    velocity_embedding_key: Optional[str] = None,
+    velocity_layer: str = 'velocity_S',
+    store_key: Optional[str] = None,
+) -> np.ndarray:
+    """The wild-type developmental flow in the embedding, against which a perturbation is read.
+
+    A perturbation flow only means something relative to where the cells were already going, so
+    this is the reference every alignment readout is taken against. Two sources are accepted, in
+    order: the dataset's own precomputed embedded velocity when one is configured, and otherwise
+    the input RNA velocity projected with the same correlation kernel used for the perturbation
+    flows. Using the same projection on both sides is what keeps the inner product between them
+    meaningful.
+
+    Parameters
+    ----------
+    adata : AnnData
+        Fitted object.
+    basis : str, default 'umap'
+        Embedding to project into.
+    velocity_embedding_key : str, optional
+        ``adata.obsm`` key of a precomputed embedded velocity. Used when present in ``obsm``;
+        ignored otherwise, so a stale configuration degrades to the projection rather than
+        failing.
+    velocity_layer : str, default 'velocity_S'
+        Layer holding the input RNA velocity, used when projecting.
+    store_key : str, optional
+        ``adata.obsm`` key to write the result to. Defaults to
+        ``f"original_velocity_flow_{basis}"``.
+
+    Returns
+    -------
+    ndarray, shape (n_cells, 2)
+        The reference flow, also stored in ``adata.obsm``.
+    """
+    from .embedding import build_correlation_projector
+
+    key = store_key or f"original_velocity_flow_{basis}"
+    if velocity_embedding_key and velocity_embedding_key in adata.obsm:
+        flow = np.asarray(adata.obsm[velocity_embedding_key])[:, :2].astype(float)
+    else:
+        genes_used = get_genes_used(adata)
+        velocity_in = np.asarray(adata.layers[velocity_layer])[:, genes_used]
+        project = build_correlation_projector(adata, basis=basis)
+        flow = np.asarray(project(velocity_in))[:, :2].astype(float)
+    adata.obsm[key] = flow
+    return flow
