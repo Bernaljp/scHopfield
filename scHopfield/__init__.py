@@ -52,6 +52,7 @@ from . import validation
 
 # Expose key classes and functions at top level
 from ._utils.seed import set_seed
+from ._utils.math import sigmoid
 from .preprocessing import fit_all_sigmoids, compute_sigmoid, prepare_dataset
 from .inference import fit_interactions, build_scaffold
 from .tools import compute_energies, compute_umap, energy_embedding
@@ -66,6 +67,7 @@ __all__ = [
     'dyn',
     'validation',
     'set_seed',
+    'sigmoid',
     'fit_all_sigmoids',
     'compute_sigmoid',
     'prepare_dataset',

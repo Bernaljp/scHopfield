@@ -259,7 +259,7 @@ def _flow_grid(ax, adata, flow_key, basis, ck, colors, color="black", size=1.0,
     the 90th-percentile grid arrow is a fixed fraction (``size``) of the grid-cell spacing.
     Each panel is self-normalized: arrow LENGTH is comparable across panels/datasets and
     encodes only the field's internal magnitude distribution, while DIRECTION is faithful."""
-    from scHopfield.tools.flow import calculate_grid_flow
+    from scHopfield.tools import calculate_grid_flow
     F = np.asarray(adata.obsm[flow_key])[:, :2].astype(float)
     mag = np.linalg.norm(F, axis=1)
     pos = mag > 0
@@ -786,8 +786,7 @@ def _perturb_section(adata, name, ck, report, cfg, A, B, An, Bn, tag):
         # (transition-probability) scheme used for the perturbation flows and the lineage-bias
         # screen, so v_ref and Delta_x live in one consistent projection (the earlier model-WT
         # dot-product reference pointed in a different, sometimes opposite, embedded direction).
-        from scHopfield.tools.embedding import build_correlation_projector
-        from scHopfield.tools.flow import get_genes_used
+        from scHopfield.tools import build_correlation_projector, get_genes_used
         g = get_genes_used(adata)
         vin = np.asarray(adata.layers["velocity_S"])[:, g]
         _proj = build_correlation_projector(adata, basis=basis)

@@ -1,7 +1,8 @@
 """Compute + cache the combinatorial (double-knockout) perturbation analyses for the second
 perturbation figure (make_double_perturbation.py). Companion to _perturb_dynamics_compute.py, which
 does the single-KO figure; this module reuses the exact same projection-free fate-probability engine
-(_fate_probability.py) so the two figures are directly comparable, and adds only the two-gene clamp.
+(sch.tl.perturbed_fate) so the two figures are directly comparable, differing only in how many
+genes are clamped at once.
 
 Two caches are written, both under ``<SCHOPFIELD_REPORTS>/<ds>/data/``.
 ``double_ko_screen.pkl`` holds the all-pairs screen and is the one the figure reads; it is written
@@ -27,7 +28,6 @@ Run:  python reproducibility/compute/_double_ko_compute.py --dataset pancreas
 """
 from __future__ import annotations
 import argparse, itertools, os, sys, pickle
-import multiprocessing as mp
 import numpy as np
 import pandas as pd
 import anndata as ad
@@ -41,8 +41,6 @@ sys.path.insert(0, _HERE)
 import paths                                                     # noqa: E402
 import scHopfield as sch                                          # noqa: E402
 from sections import basis_of, get_colors, present_clusters, _lineage_pairs   # noqa: E402
-from scHopfield.dynamics.solver import create_solver             # noqa: E402
-import _fate_probability as F                                    # noqa: E402  (read-only reuse)
 from _perturb_dynamics_compute import (TFS_BY_DATASET, TF_GROUPS,   # noqa: E402
                                        TRANSITIONAL_BY_DATASET, wt_flow_field)
 
@@ -120,114 +118,15 @@ def _anchor_source_groups(ds):
     return src
 
 
-def _regulatory_coupling(adata, genes, wkey="W_all"):
-    """Jacobian-based coupling between genes = the |cosine| overlap of their regulatory (Jacobian)
-    columns. For the fitted dynamics J[i,g] = W[i,g] * phi'(x_g), so column g is the interaction
-    out-profile W[:,g] up to a positive scalar, and the column cosine equals cos(W[:,a], W[:,g]). It
-    measures how similarly two genes perturb the whole fitted system (shared or opposing downstream
-    targets), which is the structural predictor of a NON-ADDITIVE double knockout; the direct edge
-    J[a,g] alone is too sparse (an anchor rarely directly regulates a top driver). Returns a symmetric
-    DataFrame coupling.loc[a, g] in [0, 1]. W_all is the global effective interaction matrix
-    (W[target, regulator]); the activation scaling that distinguishes J from W cancels in the cosine."""
-    import scipy.sparse as sp
-    W = adata.varp[wkey]; W = W.toarray() if sp.issparse(W) else np.asarray(W)
-    idx = {g: i for i, g in enumerate(adata.var_names)}
-    gl = [g for g in dict.fromkeys(genes) if g in idx]
-    cols = W[:, [idx[g] for g in gl]].astype(float)                    # out-profiles (regulator columns)
-    norm = np.linalg.norm(cols, axis=0); norm[norm == 0] = 1.0
-    U = cols / norm
-    return pd.DataFrame(np.abs(U.T @ U), index=gl, columns=gl)          # |cosine| overlap
-
-
-def model_velocity_multi(adata, ck, genes_used, ko_map, spliced_key="Ms"):
-    """F.model_velocity generalized to clamp SEVERAL genes at once (ko_map = {gene: level}); needed for
-    a joint double knockout, which a single-gene clamp cannot express. Same cluster-specific field, same
-    dynamics_batch call. Local (does not touch _fate_probability, whose readers are running)."""
-    X = np.asarray(adata.layers[spliced_key])[:, genes_used].astype(float)
-    names = list(np.asarray(adata.var_names.values)[genes_used])
-    V = np.zeros_like(X)
-    clusters = adata.obs[ck].astype(str).values
-    clamp = {names.index(g): float(lvl) for g, lvl in ko_map.items() if g in names}
-    for c in pd.unique(clusters):
-        sel = np.where(clusters == c)[0]
-        try:
-            solver = create_solver(adata, c, spliced_key=spliced_key)
-        except Exception:
-            continue
-        Xc = X[sel].copy()
-        for gi, lvl in clamp.items():
-            Xc[:, gi] = lvl
-        V[sel] = solver.dynamics_batch(Xc, 0.0)
-    return X, V, names
-
-
-def joint_perturbed_fate(adata, ck, sc, genes, levels=None):
-    """Per-cell fate probabilities with every gene in ``genes`` clamped (level 0 = knockout) and each
-    one's OWN velocity coordinate neutralized to WT, so only the downstream (propagation) response
-    moves fate. A single gene reproduces F._perturbed_fate; two genes give the joint double KO. Pure
-    sinks contribute nothing (Malat1-robust), exactly as in the single-KO metric."""
-    names = sc["names"]
-    gis = [names.index(g) for g in genes if g in names]
-    if not gis:
-        return sc["fate_wt"]
-    lvl = {g: 0.0 for g in genes} if levels is None else dict(zip(genes, levels))
-    _, Vp, _ = model_velocity_multi(adata, ck, sc["g"], lvl)
-    Vk = Vp.copy()
-    for gi in gis:
-        Vk[:, gi] = sc["V_wt"][:, gi]                            # neutralize each KO gene's own coordinate
-    Tk = F.transition_matrix(sc["X"], Vk, sc["knn"], sc["sigma"])
-    fate, _ = F.fate_probabilities(Tk, sc["term"])
-    return fate
-
-
-# CPU-parallel fate evaluation. The fate metric is entirely CPU-bound (the transition-matrix loop and
-# sparse solve; no GPU), so the independent single/pair evaluations parallelize cleanly across cores. We
-# fork (Linux), so the read-only fate scaffold + AnnData are copy-on-write shared (no per-worker copy),
-# and thread pools are capped at 1 per worker to avoid BLAS oversubscription.
-_WORKER = {}
-
-
-def _init_fate_worker():
-    for v in ("OMP_NUM_THREADS", "MKL_NUM_THREADS", "OPENBLAS_NUM_THREADS", "NUMEXPR_NUM_THREADS"):
-        os.environ[v] = "1"
-    try:
-        from threadpoolctl import threadpool_limits
-        threadpool_limits(1)
-    except Exception:
-        pass
-
-
-def _fate_job(genes):
-    return joint_perturbed_fate(_WORKER["a"], _WORKER["ck"], _WORKER["sc"], list(genes))
-
-
-def _parallel_fates(adata, ck, sc, gene_lists, workers):
-    """Evaluate joint_perturbed_fate for each gene-list, across ``workers`` forked CPU processes."""
-    if workers <= 1 or len(gene_lists) <= 1:
-        return [joint_perturbed_fate(adata, ck, sc, list(g)) for g in gene_lists]
-    _WORKER["a"], _WORKER["ck"], _WORKER["sc"] = adata, ck, sc
-    nw = min(workers, len(gene_lists))
-    with mp.get_context("fork").Pool(nw, initializer=_init_fate_worker) as pool:
-        return pool.map(_fate_job, [list(g) for g in gene_lists], chunksize=1)
-
-
 def _resolve_anchor(ds, An, Bn, drivers):
     a = ANCHOR_BY_PAIR.get(ds, {}).get((An, Bn))
     return a if a in drivers else (drivers[-1] if drivers else None)
 
 
 def _pair_axes(sc, lps):
-    """Per lineage pair: the terminal-state column indices of each arm, the WT A-vs-B split fraction,
-    and the transitional 'decider' focus mask (committed cells excluded, same as the single-KO figure)."""
-    ax = {}
-    for A, B, An, Bn in lps:
-        Ac = [sc["sidx"][str(c)] for c in A if str(c) in sc["sidx"]]
-        Bc = [sc["sidx"][str(c)] for c in B if str(c) in sc["sidx"]]
-        split_wt = F._split(sc["fate_wt"], Ac, Bc)
-        trans = TRANSITIONAL_BY_DATASET.get(sc["ds"], {}).get((An, Bn))
-        focus = F._focus_mask(sc["clusters"], split_wt, trans)
-        ax[(An, Bn)] = dict(Ac=Ac, Bc=Bc, split_wt=split_wt, focus=focus)
-    return ax
+    """Per lineage pair: the arm columns, the WT split fraction and the decider focus mask, with
+    this dataset's transitional populations applied so the summaries match the single-KO figure."""
+    return sch.tl.lineage_pair_axes(sc, lps, TRANSITIONAL_BY_DATASET.get(sc["ds"], {}))
 
 
 def compute_matrix(adata, ck, sc, lps, drivers):
@@ -237,39 +136,22 @@ def compute_matrix(adata, ck, sc, lps, drivers):
     dict with the driver order, the shift matrix, the synergy matrix, the single-KO Series, and the
     anchor-partner bars (total joint shift + synergy for the fixed anchor against each partner)."""
     axes = _pair_axes(sc, lps)
-    fate_single = {g: joint_perturbed_fate(adata, ck, sc, [g]) for g in drivers}
-    pairs = list(itertools.combinations(drivers, 2))
-    print(f"[double-ko] {len(drivers)} singles + {len(pairs)} pairs", flush=True)
-    fate_double = {}
-    for i, (g1, g2) in enumerate(pairs):
-        fate_double[(g1, g2)] = joint_perturbed_fate(adata, ck, sc, [g1, g2])
-        if (i + 1) % 5 == 0:
-            print(f"[double-ko]   {i + 1}/{len(pairs)} pairs", flush=True)
-
-    def dshift(fate, a):                                          # decider-mean shift in the A/B split
-        return float((F._split(fate, a["Ac"], a["Bc"]) - a["split_wt"])[a["focus"]].mean())
+    blocks, fate_single, fate_double = sch.tl.double_knockout_matrix(adata, ck, sc, drivers, axes)
+    print(f"[double-ko] {len(drivers)} singles + {len(fate_double)} pairs", flush=True)
 
     out = {}
-    n = len(drivers); idx = {g: i for i, g in enumerate(drivers)}
     for A, B, An, Bn in lps:
-        a = axes[(An, Bn)]
-        single = pd.Series({g: dshift(fate_single[g], a) for g in drivers})
-        M = np.full((n, n), np.nan); Syn = np.full((n, n), np.nan)
-        for g in drivers:
-            M[idx[g], idx[g]] = single[g]
-        syn = {}
-        for (g1, g2), fate in fate_double.items():
-            d = dshift(fate, a)
-            s = d - (single[g1] + single[g2])
-            M[idx[g1], idx[g2]] = M[idx[g2], idx[g1]] = d
-            Syn[idx[g1], idx[g2]] = Syn[idx[g2], idx[g1]] = s
-            syn[(g1, g2)] = s
+        block = blocks[(An, Bn)]
+        genes = block["genes"]
+        idx = {g: i for i, g in enumerate(genes)}
+        syn = block["synergy"]
         anchor = _resolve_anchor(sc["ds"], An, Bn, drivers)
         partners = [g for g in drivers if g != anchor]
-        total = pd.Series({g: M[idx[anchor], idx[g]] for g in partners})
-        syn_bar = pd.Series({g: Syn[idx[anchor], idx[g]] for g in partners})
+        total = pd.Series({g: block["matrix"][idx[anchor], idx[g]] for g in partners})
+        syn_bar = pd.Series({g: block["synergy_matrix"][idx[anchor], idx[g]] for g in partners})
         interesting = sorted(syn, key=lambda k: abs(syn[k]), reverse=True)[:N_INTERESTING]
-        out[(An, Bn)] = dict(drivers=drivers, matrix=M, synergy_matrix=Syn, single=single,
+        out[(An, Bn)] = dict(drivers=drivers, matrix=block["matrix"],
+                             synergy_matrix=block["synergy_matrix"], single=block["single"],
                              synergy=syn, anchor=anchor, partners=partners,
                              anchor_total=total, anchor_synergy=syn_bar, interesting=interesting)
     return out, fate_single, fate_double, axes
@@ -280,17 +162,16 @@ def compute_deep(adata, ck, sc, lps, mat, axes):
     the joint double KO (spatial map). e: first-order Jacobian 'commitment push' for the joint KO,
     approximated as the sum of the two single-gene pushes (the first-order response is linear in the
     clamped coordinates, and both partners of an interesting pair share the decision axis)."""
-    from perturbation_measures import jacobian_commitment_push
     groups = TF_GROUPS.get(sc["ds"], {})
     push_single = {g: arr for g, (_, _, arr) in
-                   jacobian_commitment_push(adata, ck, lps, groups).items()}
+                   sch.tl.jacobian_commitment_push(adata, ck, lps, groups).items()}
     fate_map, push = {}, {}
     for A, B, An, Bn in lps:
         a = axes[(An, Bn)]
         fmap, pmap = {}, {}
         for (g1, g2) in mat[(An, Bn)]["interesting"]:
-            fate = joint_perturbed_fate(adata, ck, sc, [g1, g2])
-            fmap[(g1, g2)] = F._split(fate, a["Ac"], a["Bc"]) - a["split_wt"]
+            fate = sch.tl.perturbed_fate(adata, ck, sc, [g1, g2])
+            fmap[(g1, g2)] = sch.tl.split_fraction(fate, a["Ac"], a["Bc"]) - a["split_wt"]
             if g1 in push_single and g2 in push_single:
                 pmap[(g1, g2)] = push_single[g1] + push_single[g2]
         fate_map[(An, Bn)] = fmap
@@ -314,13 +195,14 @@ def compute_discovery_anchor(adata, ck, sc, lps, axes, ds):
         ax = axes[(An, Bn)]
 
         def dshift(fate):
-            return float((F._split(fate, ax["Ac"], ax["Bc"]) - ax["split_wt"])[ax["focus"]].mean())
+            return float((sch.tl.split_fraction(fate, ax["Ac"], ax["Bc"])
+                          - ax["split_wt"])[ax["focus"]].mean())
 
-        s_anchor = dshift(joint_perturbed_fate(adata, ck, sc, [anchor]))
+        s_anchor = dshift(sch.tl.perturbed_fate(adata, ck, sc, [anchor]))
         total, syn = {}, {}
         for p in partners:
-            s_p = dshift(joint_perturbed_fate(adata, ck, sc, [p]))
-            s_ap = dshift(joint_perturbed_fate(adata, ck, sc, [anchor, p]))
+            s_p = dshift(sch.tl.perturbed_fate(adata, ck, sc, [p]))
+            s_ap = dshift(sch.tl.perturbed_fate(adata, ck, sc, [anchor, p]))
             total[p] = s_ap
             syn[p] = s_ap - (s_anchor + s_p)
         out[(An, Bn)] = dict(disc_anchor=anchor, disc_partners=partners,
@@ -364,7 +246,7 @@ def compute_screen(adata, ck, lps, ds, basis, reg, n_partner=N_PARTNER, n_matrix
     pairs -> a square matrix (lower = double-KO fate shift, upper = synergy, diagonal = single). Two CPU-
     parallel rounds (anchor-partner doubles, then matrix doubles), fates shared across blocks."""
     import time as _t
-    sc = F._fate_scaffold(adata, ck, lps, basis=basis); sc["ds"] = ds
+    sc = sch.tl.fate_scaffold(adata, ck, lps, basis=basis); sc["ds"] = ds
     axes = _pair_axes(sc, lps)
     meta = _screen_blocks(adata, ck, lps, ds, reg, sc)
 
@@ -373,7 +255,7 @@ def compute_screen(adata, ck, lps, ds, basis, reg, n_partner=N_PARTNER, n_matrix
     # coupled to it in the fitted dynamics; panels b/c then show the ACTUAL synergy/shift as the test).
     need = sorted({g for mb in meta.values() for g in list(mb["anchors"]) + mb["candA"] + mb["candB"]})
     print(f"[screen] Jacobian coupling over {len(need)} genes", flush=True)
-    Ccoup = _regulatory_coupling(adata, need)
+    Ccoup = sch.tl.regulatory_coupling(adata, need)
 
     def _couple(anc, g):                                            # |cos(Jacobian columns)| in [0,1]
         try:
@@ -404,7 +286,8 @@ def compute_screen(adata, ck, lps, ds, basis, reg, n_partner=N_PARTNER, n_matrix
               f"partA={partA[:5]} partB={partB[:5]}", flush=True)
 
     def dshift(fate, ax):
-        return float((F._split(fate, ax["Ac"], ax["Bc"]) - ax["split_wt"])[ax["focus"]].mean())
+        return float((sch.tl.split_fraction(fate, ax["Ac"], ax["Bc"])
+                      - ax["split_wt"])[ax["focus"]].mean())
 
     # ---- round 1: singles (union) + anchor x 20-partner doubles ----
     singles = sorted({g for b in meta.values() for g in b["partners"]} |
@@ -413,7 +296,8 @@ def compute_screen(adata, ck, lps, ds, basis, reg, n_partner=N_PARTNER, n_matrix
                        for anc in b["anchors"] for p in b["partners"] if anc != p})
     print(f"[screen] round1: {len(singles)} singles + {len(ap_pairs)} anchor-partner doubles", flush=True)
     t0 = _t.time()
-    r1 = _parallel_fates(adata, ck, sc, [[g] for g in singles] + [list(p) for p in ap_pairs], workers)
+    r1 = sch.tl.perturbed_fates(adata, ck, sc,
+                                [[g] for g in singles] + [list(p) for p in ap_pairs], workers)
     fate = {(g,): r1[i] for i, g in enumerate(singles)}
     fate.update({p: r1[len(singles) + i] for i, p in enumerate(ap_pairs)})
     print(f"[screen] round1 done in {_t.time() - t0:.0f}s", flush=True)
@@ -443,7 +327,7 @@ def compute_screen(adata, ck, lps, ds, basis, reg, n_partner=N_PARTNER, n_matrix
     need = [p for p in mat_pairs if p not in fate]
     print(f"[screen] round2: {len(need)} matrix doubles", flush=True)
     t0 = _t.time()
-    r2 = _parallel_fates(adata, ck, sc, [list(p) for p in need], workers)
+    r2 = sch.tl.perturbed_fates(adata, ck, sc, [list(p) for p in need], workers)
     fate.update({p: r2[i] for i, p in enumerate(need)})
     print(f"[screen] round2 done in {_t.time() - t0:.0f}s", flush=True)
 
@@ -490,23 +374,8 @@ def compute_double_flow(adata, ck, pairs_by_decision, basis, dev):
     absolute displacement projected with the correlation scheme), plus the WT ODE flow so the figure can
     color by the KO-specific residual alignment with development. Returns
     ({(g1,g2): flow (n,2)}, wt_ode_flow (n,2))."""
-    fk = f"perturbation_flow_{basis}"
-    wt = sch.dyn.simulate_shift_ode(adata, {}, cluster_key=ck, n_steps=100, method="euler", device=dev)
-    sch.tl.calculate_flow(wt, source="delta", basis=basis, method="correlation",
-                          cluster_key=ck, store_key=fk, verbose=False)
-    wt_ode = np.asarray(wt.obsm[fk])[:, :2].copy()
-    out = {}
-    seen = []
-    for (g1, g2) in pairs_by_decision:
-        if (g1, g2) in seen:
-            continue
-        seen.append((g1, g2))
-        pert = sch.dyn.simulate_shift_ode(adata, {g1: 0.0, g2: 0.0}, cluster_key=ck, n_steps=100,
-                                          method="euler", device=dev)
-        sch.tl.calculate_flow(pert, source="delta", basis=basis, method="correlation",
-                              cluster_key=ck, store_key=fk, verbose=False)
-        out[(g1, g2)] = np.asarray(pert.obsm[fk])[:, :2].copy()
-    return out, wt_ode
+    return sch.dyn.knockout_displacement_flow(adata, ck, list(pairs_by_decision), basis=basis,
+                                             device=dev)
 
 
 def main():
@@ -536,8 +405,7 @@ def main():
     drivers = [g for g in TFS_BY_DATASET.get(ds, []) if g in a.var_names]
 
     if args.only == "screen":
-        from perturbation_measures import out_strength, jacobian_commitment_push
-        reg = out_strength(a, ck)
+        reg = sch.tl.regulatory_out_strength(a, ck)
         blocks, sc, axes, fate_single, fate_double = compute_screen(a, ck, lps, ds, basis, reg,
                                                                     workers=args.workers)
         # balanced c/d/e: N_BEST_CDE synergy/cancellation pairs from EACH block, deduplicated GLOBALLY so
@@ -556,14 +424,15 @@ def main():
         fate_map = {}                                                # per-cell split shift (reuse fate_double)
         for pr, k, origin in best_sel:
             An, Bn = lps[k][2], lps[k][3]; ax = axes[(An, Bn)]
-            fate_map[(pr, k, origin)] = F._split(fate_double[pr], ax["Ac"], ax["Bc"]) - ax["split_wt"]
+            fate_map[(pr, k, origin)] = (sch.tl.split_fraction(fate_double[pr], ax["Ac"],
+                                                               ax["Bc"]) - ax["split_wt"])
         gnames = [f"{An} vs {Bn}" for _, _, An, Bn in lps]           # jacobian push on the fate axis
         groups_for_push = {n: [] for n in gnames}
         for pr, k, origin in best_sel:
             groups_for_push[gnames[k]] += [pr[0], pr[1]]
         groups_for_push = {n: list(dict.fromkeys(g)) for n, g in groups_for_push.items()}
         push_single = {g: arr for g, (_, _, arr) in
-                       jacobian_commitment_push(a, ck, lps, groups_for_push).items()}
+                       sch.tl.jacobian_commitment_push(a, ck, lps, groups_for_push).items()}
         push_map = {(pr, k, origin): push_single[pr[0]] + push_single[pr[1]]
                     for pr, k, origin in best_sel if pr[0] in push_single and pr[1] in push_single}
         present = present_clusters(a, ck)
@@ -595,7 +464,7 @@ def main():
     if args.only == "disc-anchor":
         with open(out, "rb") as fh:
             cache = pickle.load(fh)
-        sc = F._fate_scaffold(a, ck, lps, basis=basis)
+        sc = sch.tl.fate_scaffold(a, ck, lps, basis=basis)
         sc["ds"] = ds
         axes = _pair_axes(sc, lps)
         da = compute_discovery_anchor(a, ck, sc, lps, axes, ds)
@@ -621,7 +490,7 @@ def main():
         print(f"[{ds}] double-KO flow merged -> {out}", flush=True)
         return
 
-    sc = F._fate_scaffold(a, ck, lps, basis=basis)
+    sc = sch.tl.fate_scaffold(a, ck, lps, basis=basis)
     sc["ds"] = ds
     print(f"[{ds}] fate scaffold built; drivers={drivers}", flush=True)
     mat, fate_single, fate_double, axes = compute_matrix(a, ck, sc, lps, drivers)
