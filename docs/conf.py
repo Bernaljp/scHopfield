@@ -7,15 +7,16 @@
 
 import os
 import sys
-from datetime import datetime
 
 sys.path.insert(0, os.path.abspath(".."))
 
 # -- Project information -----------------------------------------------------
 
 project = "scHopfield"
-author = "scHopfield Contributors"
-copyright = f"{datetime.now():%Y}, {author}"
+author = "Juan Pablo Bernal Tamayo"
+# Pinned to the year in LICENSE rather than computed from the build date, so a
+# rebuild in a later year cannot make the docs disagree with the license.
+copyright = f"2026, {author}"
 
 release = "0.1.0"
 version = "0.1.0"
