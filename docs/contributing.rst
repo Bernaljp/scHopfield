@@ -85,6 +85,24 @@ All functions must have numpy-style docstrings:
        """
        pass
 
+Tutorial notebooks
+~~~~~~~~~~~~~~~~~~
+
+The notebooks under ``docs/tutorials/`` are committed **with their outputs**, and the
+documentation renders those outputs verbatim rather than re-running them
+(``nb_execution_mode = "off"`` in ``docs/conf.py``). A published notebook therefore shows
+exactly what was recorded when it was last executed.
+
+That makes the recorded output part of the published page, so it must not carry anything
+local to the machine that ran it. Third-party deprecation warnings print the full path of
+the module that raised them, which is an absolute path inside the executing environment.
+After re-executing a notebook, replace that prefix with ``.../site-packages/`` and check
+that nothing local remains::
+
+   grep -rE '/home/|/Users/' docs/tutorials/*.ipynb
+
+The command should print nothing.
+
 Testing
 ~~~~~~~
 
