@@ -14,7 +14,10 @@ Neither the seven datasets nor the base GRN scaffolds are redistributed here. Th
 datasets are public, each under its own accession, and have to be fetched before a fit
 can be run. The scaffolds are third-party tables under their own license terms, so each
 dataset below names one by registry name rather than by path, and ``sch.fetch_base_grn``
-downloads and caches it on first use. See ``DATA_SOURCES.md`` for the terms.
+downloads and caches it on first use. See ``DATA_SOURCES.md`` for the terms, and for what
+each dataset's first step is: which objects rebuild from a package call, which were
+preprocessed before they reached this project, and which single field does not rebuild at
+all.
 
 velocity_mode:
   'velocity'    use the RNA-velocity layer (velocity_key)
@@ -44,8 +47,16 @@ DYN = paths.DYNAMISC
 MOUSE_GRN = "mouse_atlas"
 HUMAN_GRN = "human_promoter"
 
+# Where each object below comes from, and which of them rebuild from a package call, is
+# recorded per dataset in DATA_SOURCES.md. Two entries have a preparation script here:
+# prep_pancreas.py writes the pancreas path, and prep_dataset.py wrote the two under
+# generalize/. The rest arrived preprocessed from elsewhere.
 DATASETS = {
     # paul15 -- the pseudotime showcase (has Pseudotime, no reliance on RNA velocity).
+    # The object is CellOracle's own Paul et al. tutorial object with our layers added.
+    # obs['Pseudotime'] is CellOracle's lineage pseudotime and is the one field that does
+    # not rebuild; a missing column here is silently replaced by a fresh diffusion
+    # pseudotime, which fits different dynamics. See DATA_SOURCES.md.
     "paul15": dict(
         path=f"{DATA}/hematopoiesis/base_preprocessed.h5ad",
         cluster_key="paul15_clusters", species="mouse",
@@ -80,7 +91,9 @@ DATASETS = {
     ),
     # Dynamo hematopoiesis -- the genuinely missing one. Dynamo-processed object
     # (moment layers M_t/M_n..., no spliced/Ms), so map M_t -> Ms and use its velocity
-    # layer directly rather than running scVelo prepare.
+    # layer directly rather than running scVelo prepare. The object is the processed one
+    # dynamo distributes, dyn.sample_data.hematopoiesis(), not a reprocessing of the GEO
+    # series.
     "dynamo_hematopoiesis": dict(
         path=f"{DYN}/hematopoiesis.h5ad",
         # HUMAN: primary human CD34+ HSPCs (Qiu et al., Cell 2022), hence the uppercase HGNC symbols.
@@ -100,6 +113,8 @@ DATASETS = {
                       A_name="erythroid", B_name="myeloid"),
         anchors=None,
     ),
+    # Written by prep_pancreas.py from scvelo.datasets.pancreas(). This is the one object
+    # here whose whole chain is a package call, and it is the primary system.
     "pancreas": dict(
         path=f"{DATA}/Pancreas/pancreas_scvelo_ready.h5ad",
         cluster_key="clusters", species="mouse", base_grn=MOUSE_GRN,
@@ -117,6 +132,10 @@ DATASETS = {
         lineages=dict(A=["Alpha"], B=["Beta"], A_name="alpha", B_name="beta"),
         anchors=None,
     ),
+    # murine_nc and human_limb arrived already normalized, smoothed and with a neighbor
+    # graph from a preprocessing pipeline that is not part of this repository, and were then
+    # written out by prep_dataset.py. Reprocessing from the accession gives a close fit
+    # rather than an equal one.
     "murine_nc": dict(
         path=f"{DATA}/generalize/murine_nc.h5ad",
         cluster_key="celltype_update", species="mouse", base_grn=MOUSE_GRN,
@@ -129,6 +148,8 @@ DATASETS = {
         prepare=False, velocity_mode="velocity", velocity_key="velocity_S",
         lineages=None, anchors=None,
     ),
+    # schwann also arrived preprocessed from elsewhere, and is the one entry prepared on
+    # load (prepare=True) rather than ahead of time.
     # schwann -- use the CELL-TYPE annotation ('assignments'), not anatomical 'location'.
     # Location-based clusters (DRG/Incisor/Trunk/Limb) gave two arbitrary, dubious "lineage"
     # pairs (the confusing duplicate 5.1/5.2 sections); the neural-crest cell types give a
