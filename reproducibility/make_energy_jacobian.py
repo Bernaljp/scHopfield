@@ -1,4 +1,4 @@
-"""Composite figure 3: energy landscape and Jacobian dynamical structure of a differentiation process
+"""Composite Figure 4: energy landscape and Jacobian dynamical structure of a differentiation process
 (default = pancreatic endocrinogenesis). Reads the analyzed report AnnData directly
 (reports/<ds>/data/adata_analyzed.h5ad), whose obs already carries the per-cell energy decomposition
 and Jacobian spectral statistics, so no new heavy compute is needed (panel f runs a light element-wise
@@ -34,6 +34,7 @@ _HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.join(_HERE, "compute"))
 sys.path.insert(0, _HERE)
 import paths                                                     # noqa: E402
+import guards                                                    # noqa: E402
 from paper_plot_style import use_style, save, PALETTE            # noqa: E402
 import anndata as ad                                             # noqa: E402
 import scHopfield as sch                                         # noqa: E402  (circuit rendering)
@@ -390,9 +391,41 @@ def _draw_mini_network(ax, genes, pos, edges, meanJ, mask, smax):
     J[target<-reg] (activation with an arrowhead, repression with a FLAT BAR head,
     following the -{Bar}/-{Latex} circuit convention), width ~ |magnitude|.
     """
+    from submission_style import TYPE_FLOOR
     eds = [(r, t, meanJ(t, r, mask)) for (t, r) in edges]
-    return sch.pl.draw_grn_mpl(ax, genes, pos, eds, wmax=smax, act_color=ACT, rep_color=REP,
+    # At the floor, not below it. draw_grn_mpl labels at 4.2 pt by default, which put 48 gene
+    # symbols under the journal's 5 pt minimum and was the reason this figure's save() had its
+    # type check switched off. The TikZ path sets 13 pt inside a picture scaled to about 0.4x,
+    # which lands near 5 pt printed, so this is the size the typeset panel already uses.
+    return sch.pl.draw_grn_mpl(ax, genes, pos, eds, wmax=smax, fontsize=TYPE_FLOOR,
+                               act_color=ACT, rep_color=REP,
                                xlim=(-1.55, 1.55), ylim=(-1.6, 1.5))
+
+
+def jacobian_circuit(a, ds):
+    """The curated (target, regulator) pairs and node order the mini-network panels draw.
+
+    Both renderers used ``JAC_PAIRS.get(ds, [])`` and drew a plain grey embedding when the lookup
+    missed, so a --dataset the circuit was never curated for produced a panel with no circuit in it
+    under a caption about per-cell-type regulatory mini-networks. The two ways to end up with no
+    edges are different problems and now say so separately: an uncurated dataset, and a curated one
+    whose genes did not survive gene selection."""
+    pairs = guards.require_dataset_entry(
+        JAC_PAIRS, ds, "JAC_PAIRS in make_energy_jacobian.py",
+        "the Jacobian mini-network panels",
+        how="curate the regulator pairs for this dataset, and its node order in NET_GENES")
+    edges = [(t, r) for (t, r) in pairs if t in a.var_names and r in a.var_names]
+    if not edges:
+        missing = sorted({g for e in pairs for g in e} - set(map(str, a.var_names)))
+        raise ValueError(
+            f"the Jacobian mini-network panels have a curated circuit for '{ds}' but none of its "
+            f"genes are in the fitted object.\n"
+            f"  absent: {', '.join(missing)}\n"
+            f"  the fit selects a gene subset, so either widen it or curate JAC_PAIRS against the "
+            f"genes this fit kept")
+    genes = list(dict.fromkeys([g for g in NET_GENES.get(ds, []) if g in a.var_names]
+                               + [g for e in edges for g in e]))
+    return edges, genes
 
 
 def draw_jacobian_networks(fig, gs_cell, a, basis, ck, order, colors, ds):
@@ -403,13 +436,8 @@ def draw_jacobian_networks(fig, gs_cell, a, basis, ck, order, colors, ds):
     the circuit's character can be read off against where the cells sit in the trajectory."""
     import scHopfield as sch
     from matplotlib.patches import ConnectionPatch
-    edges = [(t, r) for (t, r) in JAC_PAIRS.get(ds, []) if t in a.var_names and r in a.var_names]
-    genes = list(dict.fromkeys([g for g in NET_GENES.get(ds, []) if g in a.var_names]
-                               + [g for e in edges for g in e]))
+    edges, genes = jacobian_circuit(a, ds)
     emb = np.asarray(a.obsm[f"X_{basis}"])[:, :2]
-    if len(edges) == 0:
-        ax = fig.add_subplot(gs_cell); ax.scatter(emb[:, 0], emb[:, 1], s=3, c="0.8"); ax.set_axis_off()
-        return ax
     b = a.copy()
     try:
         sch.tl.compute_jacobian_elements(b, gene_pairs=edges, cluster_key=ck, store_in_obs=True)
@@ -479,6 +507,15 @@ def draw_jacobian_networks(fig, gs_cell, a, basis, ck, order, colors, ds):
             y0, y1 = axn.get_ylim()
             axn.set_ylim(y0, y1 - 0.16 * img.shape[0])        # headroom under the cell-type chip
         else:
+            # Drawn rather than typeset, and said out loud: this is the live circuit path on
+            # Figure 4, and it fell back without a word. The encoding survives, the flat
+            # repression bar does not, so a reader comparing this panel with the published one
+            # should know which they are looking at.
+            guards.warn_once(
+                "jacobian-network-fallback",
+                "Figure 4's per-cell-type circuits are drawn with matplotlib rather than TikZ. "
+                "Same edges and signs; the flat repression bar becomes the nearest matplotlib "
+                "head. Install a TeX distribution to reproduce the published panel exactly.")
             _draw_mini_network(axn, genes, pos, edges, meanJ, mask, smax)
         _ct_title(axn, c, colors, fontsize=6.0, pad=1.4, alpha=0.6)
         if c in cent:                                         # black arrow: to the title, or to the nearest edge
@@ -922,6 +959,18 @@ def _sub_mini_network(ax, genes, pos, edges, vals, smax, act, rep):
                      edge_lw=(0.45, 1.5))
     if img is not None:
         ax.imshow(img)
+        return
+    # No TeX. The poster renderer has drawn this circuit with matplotlib since before the
+    # promotion; the submission renderer did not, and skipped in silence, so the published
+    # variant was the one that came out with an empty thumbnail.
+    guards.warn_once("jacobian-thumb-fallback",
+                     "the per-cell-type circuit thumbnails are drawn with matplotlib rather "
+                     "than TikZ. Same edges and signs; the flat repression bar becomes the "
+                     "nearest matplotlib head. Install a TeX distribution to reproduce the "
+                     "published panel exactly.")
+    sch.pl.draw_grn_mpl(ax, genes, pos, tik, wmax=smax, labels=False,   # keyed, not labeled
+                        act_color=act, rep_color=rep,
+                        xlim=(-1.55, 1.55), ylim=(-1.6, 1.5))
 
 
 def _sub_circuit_key(ax, genes, pos, edges, act, rep):
@@ -941,6 +990,15 @@ def _sub_circuit_key(ax, genes, pos, edges, act, rep):
         ax.imshow(img)
         y0, y1 = ax.get_ylim()
         ax.set_ylim(y0 + 0.34 * img.shape[0], y1 - 0.05 * img.shape[0])
+    else:
+        # Worse than a blank thumbnail: the legend below still names activation and repression,
+        # so a key with no nodes in it read as a key to a circuit that was never drawn.
+        guards.warn_once("jacobian-key-fallback",
+                         "the circuit key's node layout is drawn with matplotlib rather than "
+                         "TikZ, so the gene labels sit where matplotlib puts them.")
+        sch.pl.draw_grn_mpl(ax, genes, pos, [], labels=True,
+                            act_color=act, rep_color=rep,
+                            xlim=(-1.55, 1.55), ylim=(-1.6, 1.5))
     ax.text(0.5, 1.0, "circuit key", transform=ax.transAxes, fontsize=FS_TAG,
             color="0.35", ha="center", va="bottom")
     h = [Line2D([0], [0], color=act, lw=1.1, marker=">", markersize=3, label="activation"),
@@ -957,9 +1015,7 @@ def _sub_networks(fig, a, basis, ck, order, colors, ds, top_mm, h_mm):
     thumbnails, and the gene identities move into the key at the left."""
     from matplotlib.patches import ConnectionPatch
     from make_network_figure import ACT as act, REP as rep
-    edges = [(t, r) for (t, r) in JAC_PAIRS.get(ds, []) if t in a.var_names and r in a.var_names]
-    genes = list(dict.fromkeys([g for g in NET_GENES.get(ds, []) if g in a.var_names]
-                               + [g for e in edges for g in e]))
+    edges, genes = jacobian_circuit(a, ds)
     emb = np.asarray(a.obsm[f"X_{basis}"])[:, :2]
     cl = a.obs[ck].astype(str).values
 
@@ -1132,7 +1188,11 @@ def render_submission_circuits(a, ds, ck, order, colors, basis, out_path):
                loc="lower left", bbox_to_anchor=(0.012, 0.012), fontsize=6.0,
                frameon=False, ncol=1, handlelength=1.4, handletextpad=0.5)
     os.makedirs(os.path.dirname(out_path), exist_ok=True)
-    save(fig, out_path, check=False)      # the TikZ circuits are rasters, not Text artists
+    # Checked. It used to be skipped with the note that the circuits are rasters rather than
+    # Text artists, which is true of the typeset circuits and is the reason the check passes
+    # on them; it is not a reason to stop checking the rest of the figure. The drawn
+    # fallback does put real Text on the page, and that is exactly the case worth checking.
+    save(fig, out_path)
     print(f"wrote {out_path}")
     plt.close(fig)
 

@@ -41,6 +41,7 @@ _HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.join(_HERE, "compute"))
 sys.path.insert(0, _HERE)
 import paths                                                     # noqa: E402
+import guards                                                    # noqa: E402
 from paper_plot_style import use_style, save, PALETTE, _resolve_sans   # noqa: E402
 import submission_style as sub                                   # noqa: E402  (journal page rules)
 import anndata as ad                                             # noqa: E402
@@ -543,6 +544,25 @@ def sub_umap_row(fig, lps, pair_genes, valuemap, emb, slots, y_map, h_map, y_cba
         i0 += len(genes_k)
 
 
+def draw_panel_a(ax, ds, C, emb, clusters, colors):
+    """Panel a: the wild-type velocity field over the embedding.
+
+    Prefers the report's pre-rendered streamline PNG, which is what the published panel shows, and
+    falls back to drawing the same field natively from the cache. Both show the same quantity, so
+    the fallback is honest, but it is a visibly different rendering and it used to happen without a
+    word: the poster renderer did not fall back at all and simply left panel a blank."""
+    png = f"{paths.REPORTS}/{ds}/plots/A2_input_velocity.png"
+    if os.path.exists(png):
+        ax.imshow(mpimg.imread(png))
+        return
+    guards.warn_once(
+        f"panel-a-render:{ds}",
+        f"panel a: {png} is absent, so the velocity field is drawn natively from the cache "
+        f"instead of using the report's rendering. Same field, different picture. Produce the "
+        f"PNG by running the {ds} report (reproducibility/sections.py, section_A).")
+    draw_velocity_stream(ax, emb, clusters, colors, C["wt_flow"])
+
+
 def render_submission(C, ds, out_path, suf=""):
     """Panels a-i of the perturbation figure on one journal page.
 
@@ -584,11 +604,7 @@ def render_submission(C, ds, out_path, suf=""):
     # is 358 dpi across the 48.5 mm panel, comfortably above the 300 dpi floor.
     ax_a = _mm_axes(fig, SUB_L, 5.0, 48.5, 26.5)
     ax_a.set_axis_off()
-    _vpath = f"{paths.REPORTS}/{ds}/plots/A2_input_velocity.png"
-    if os.path.exists(_vpath):
-        ax_a.imshow(mpimg.imread(_vpath))
-    else:
-        draw_velocity_stream(ax_a, emb, clusters, colors, C["wt_flow"])
+    draw_panel_a(ax_a, ds, C, emb, clusters, colors)
     _letter(fig, 5.5, 4.2, "a")
     lax = _mm_axes(fig, 6.0, 33.5, 54.0, 9.0); lax.set_axis_off()
     from matplotlib.lines import Line2D
@@ -606,10 +622,12 @@ def render_submission(C, ds, out_path, suf=""):
         A, B, An, Bn = lps[k]
         axp = _mm_axes(fig, x0, 5.5, 43.0, 27.0)
         _letter(fig, x0 - 8.0, 4.2, letter)
-        csvp = f"{paths.REPORTS}/{ds}/data/driver_scores_{k + 1}{suf}.csv"
-        if os.path.exists(csvp):
-            s = draw_pareto(axp, csvp, pair_genes(k), An, Bn, fs=pfs)
-            sc_p = s or sc_p
+        csvp = guards.require_file(
+            f"{paths.REPORTS}/{ds}/data/driver_scores_{k + 1}{suf}.csv",
+            f"panel {letter}, the driver scores for the {An} versus {Bn} decision",
+            how=f"run the {ds} report (reproducibility/sections.py, _perturb_section)")
+        s = draw_pareto(axp, csvp, pair_genes(k), An, Bn, fs=pfs)
+        sc_p = s or sc_p
     if sc_p is not None:                          # the Pareto-front key, shared by b and c
         cax = _mm_axes(fig, 107.0, 41.0, 34.0, 1.3)
         cb = fig.colorbar(sc_p, cax=cax, orientation="horizontal")
@@ -779,18 +797,18 @@ def main():
     gs_top = fig.add_gridspec(1, 1 + npair, top=t, bottom=b, left=L, right=R,
                               width_ratios=[1.5] + [1.0] * npair, wspace=0.22)
     ax_a = fig.add_subplot(gs_top[0, 0]); ax_a.set_axis_off()
-    vpath = f"{paths.REPORTS}/{ds}/plots/A2_input_velocity.png"
-    if os.path.exists(vpath):
-        ax_a.imshow(mpimg.imread(vpath))
+    draw_panel_a(ax_a, ds, C, emb, clusters, colors)
     ax_paretos = []; sc_p = None
     for k in range(npair):
         A, B, An, Bn = lps[k]
         axp = fig.add_subplot(gs_top[0, 1 + k]); ax_paretos.append(axp)
-        csvp = f"{paths.REPORTS}/{ds}/data/driver_scores_{k + 1}{suf}.csv"
-        if os.path.exists(csvp):
-            s = draw_pareto(axp, csvp, pair_genes(k), An, Bn, discovery=discovery)
-            if s is not None:
-                sc_p = s
+        csvp = guards.require_file(
+            f"{paths.REPORTS}/{ds}/data/driver_scores_{k + 1}{suf}.csv",
+            f"the driver-score panel for the {An} versus {Bn} decision",
+            how=f"run the {ds} report (reproducibility/sections.py, _perturb_section)")
+        s = draw_pareto(axp, csvp, pair_genes(k), An, Bn, discovery=discovery)
+        if s is not None:
+            sc_p = s
     if sc_p is not None:
         pcax = fig.add_axes([0.965, b + 0.005, 0.006, (t - b) * 0.55])
         pcb = fig.colorbar(sc_p, cax=pcax); pcb.set_ticks([0, 5])

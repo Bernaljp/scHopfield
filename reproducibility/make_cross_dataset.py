@@ -36,6 +36,7 @@ _HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.join(_HERE, "compute"))
 sys.path.insert(0, _HERE)
 import paths                                                     # noqa: E402
+import guards                                                    # noqa: E402
 from paper_plot_style import use_style, save, PALETTE            # noqa: E402
 import anndata as ad                                             # noqa: E402
 
@@ -74,8 +75,12 @@ def _ck(ds):
 
 
 def _curated_tfs(ds):
+    # Panel b ranks these against every gene, so an empty list is not an empty panel, it is a
+    # nan the reader cannot tell from a dataset where the curated TFs simply rank badly.
     from _perturb_dynamics_compute import TFS_BY_DATASET
-    return list(TFS_BY_DATASET.get(ds, []))
+    return list(guards.require_dataset_entry(
+        TFS_BY_DATASET, ds, "TFS_BY_DATASET in compute/_perturb_dynamics_compute.py",
+        "the curated transcription factors panel b ranks"))
 
 
 def _to_dense(a, key):
@@ -118,7 +123,10 @@ def collect(cache: str | None = None):
         # by quiescent stem/progenitor compartments (also low-velocity), so it is deliberately NOT used here.
         eint = a.obs["energy_interaction"].values.astype(float)
         att = _z(-eint)
-        prog = np.isin(cl, list(PROGENITORS.get(ds, set())))
+        # An uncurated dataset would mark every cell terminal and draw the progenitor arm as nan.
+        prog = np.isin(cl, list(guards.require_dataset_entry(
+            PROGENITORS, ds, "PROGENITORS in config.py",
+            "panel a, the progenitor versus terminal split")))
         att_prog = float(np.nanmean(att[prog])) if prog.any() else np.nan
         att_term = float(np.nanmean(att[~prog])) if (~prog).any() else np.nan
         # b: rank-percentile of curated TFs among all genes (best of the lineage-pair driver CSVs)

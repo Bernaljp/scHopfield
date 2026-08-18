@@ -41,7 +41,6 @@ Run:  python reproducibility/make_framework_figure.py [--dataset paul15_coarse]
 from __future__ import annotations
 import argparse, os, pickle, sys
 import numpy as np
-import pandas as pd
 
 import matplotlib
 matplotlib.use("Agg")
@@ -90,7 +89,6 @@ CONTRAST = {"paul15_coarse": ("MEP", "Monocytes")}
 # are DIFFERENT perturbations and the caption says so; the panel is not one pipeline.
 KO_SIM = {"paul15_coarse": "Gfi1"}
 KO_PROJ = {"paul15_coarse": "Klf1"}
-SCAFFOLD = {"paul15_coarse": os.path.join(paths.DATASETS, "hematopoiesis/base_GRN.parquet")}
 PSEUDOTIME = "Pseudotime"
 
 LANES = [("OBSERVE", "Input: a dynamical observation of single cells"),
@@ -595,12 +593,16 @@ def _layer(a, key):
     return np.asarray(L.todense()) if hasattr(L, "todense") else np.asarray(L, dtype=float)
 
 
-def scaffold_membership(path, reg_names, tgt_names):
+def scaffold_membership(base_grn, reg_names, tgt_names):
     """Which of the DRAWN (regulator, target) pairs are genuinely in the real prior, so panel b and
-    panel e correspond to each other and to the fit."""
-    if not path or not os.path.exists(path):
-        return None
-    g = pd.read_parquet(path)
+    panel e correspond to each other and to the fit.
+
+    Takes the base GRN table itself rather than a path. It used to take a path, return ``None`` when
+    the file was absent, and let the caller fall back to marking every drawn edge as in the prior.
+    That fallback was the one place on this figure where a panel about scaffold membership stated
+    the opposite of what the fit saw, and the file it looked for stopped existing once the prior
+    became a fetched table rather than a shipped one."""
+    g = base_grn
     cols = {c.lower(): c for c in g.columns}
     sub = g[g["gene_short_name"].isin(list(tgt_names))]
     present = set()
@@ -1010,11 +1012,14 @@ def build(dataset="paul15_coarse"):
     reg_pool = np.where(out > 0)[0]
     reg_idx = list(reg_pool[np.argsort(-out[reg_pool])[:len(REG_XY)]])
     tgt_idx = choose_targets(a, CONTRAST[dataset], reg_idx, tot)
-    in_prior = scaffold_membership(SCAFFOLD.get(dataset, ""),
+    # The prior panels b and e are drawn against is the one this dataset was fit with. config.py
+    # names it by registry name, and sch.fetch_base_grn downloads it once and caches it, so there is
+    # no local path to fall back from. A failed fetch raises out of here naming the manual
+    # alternatives, which is the honest outcome for a panel whose subject is scaffold membership.
+    from config import DATASETS
+    in_prior = scaffold_membership(sch.fetch_base_grn(DATASETS[dataset]["base_grn"]),
                                    [str(a.var_names[i]) for i in reg_idx],
                                    [str(a.var_names[i]) for i in tgt_idx])
-    if in_prior is None:
-        in_prior = set(EDGES)
 
     fig = plt.figure(figsize=(FW, FH))
     fig.text(fx(0.50), fy(0.30), "scHopfield", fontsize=13.5, fontweight="bold",
