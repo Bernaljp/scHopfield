@@ -30,6 +30,21 @@ Added by ``sch.pp.fit_all_sigmoids()`` and ``sch.pp.compute_sigmoid()``:
 - ``sigmoid_mse`` - Mean squared error of fit
 - ``scHopfield_used`` - Boolean mask of genes used in analysis
 
+``fit_all_sigmoids`` fits a two-component activation by default (``bimodal=True``),
+so it writes three further columns describing the second component:
+
+- ``sigmoid_threshold2`` - Threshold of the second Hill component
+- ``sigmoid_exponent2`` - Exponent of the second Hill component
+- ``sigmoid_mix`` - Weight on the first component, in [0, 1]
+
+All three are present whichever way the fit ran. A single-component fit sets the
+second component equal to the first and ``sigmoid_mix`` to 1, which is exactly a
+single Hill curve, so code that ignores these columns is unaffected. Reading them
+is how you tell a genuine single-component fit from an activation that was never
+fitted: ``load_model`` restores the network but not the activation, and
+``compute_sigmoid`` on the defaults left behind by a load will quietly evaluate a
+single Hill curve.
+
 Network Parameters (per cluster)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
@@ -57,10 +72,13 @@ Correlations (per cluster)
 
 Added by ``sch.tl.energy_gene_correlation()``:
 
-- ``correlation_energy_total_{cluster}`` - Total energy vs gene expression
-- ``correlation_energy_interaction_{cluster}`` - Interaction energy correlation
-- ``correlation_energy_degradation_{cluster}`` - Degradation energy correlation
-- ``correlation_energy_bias_{cluster}`` - Bias energy correlation
+- ``correlation_total_{cluster}`` - Total energy vs gene expression
+- ``correlation_interaction_{cluster}`` - Interaction energy correlation
+- ``correlation_degradation_{cluster}`` - Degradation energy correlation
+- ``correlation_bias_{cluster}`` - Bias energy correlation
+
+The same four columns are also written with ``all`` in place of the cluster name,
+over every cell at once.
 
 adata.obs (Cell-level Data)
 ----------------------------
@@ -157,9 +175,22 @@ Added by ``sch.pp.compute_sigmoid()``:
 Velocity
 ~~~~~~~~
 
-Added by ``sch.tl.compute_reconstructed_velocity()``:
+Added by ``sch.tl.compute_reconstructed_velocity()``, but only when it is given a
+layer to write to. Its ``layer_key`` argument defaults to ``None``, in which case
+the model-predicted velocity is returned as an array and nothing is stored:
 
-- ``velocity_reconstructed`` - Model-predicted velocity
+.. code-block:: python
+
+   # returned, not stored
+   v = sch.tl.compute_reconstructed_velocity(adata, cluster_key='cell_type')
+
+   # stored in adata.layers['velocity_reconstructed']
+   sch.tl.compute_reconstructed_velocity(
+       adata, cluster_key='cell_type', layer_key='velocity_reconstructed'
+   )
+
+Passing a single ``cluster`` writes to ``f'{layer_key}_{cluster}'`` rather than to
+``layer_key`` itself.
 
 adata.uns['scHopfield'] (Metadata)
 ----------------------------------

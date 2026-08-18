@@ -22,14 +22,20 @@ def sigmoid(x, s, n):
     activation in the Methods; "sigmoid" and "Hill" are used interchangeably in the
     code. ``s`` is the half-maximal threshold (k) and ``n`` is the Hill coefficient.
 
-    Args:
-        x (np.ndarray): Input array for which to compute the sigmoid function.
-        s (float or np.ndarray): Threshold parameter of the sigmoid. The point at which the sigmoid
-                                 transitions from its minimum value to its maximum value.
-        n (float): Exponent parameter controlling the steepness of the sigmoid curve.
+    Parameters
+    ----------
+    x : np.ndarray
+        Input array for which to compute the sigmoid function.
+    s : float or np.ndarray
+        Threshold parameter of the sigmoid: the point at which it transitions from
+        its minimum value to its maximum value.
+    n : float
+        Exponent parameter controlling the steepness of the sigmoid curve.
 
-    Returns:
-        np.ndarray: The sigmoid function applied to each element of x.
+    Returns
+    -------
+    np.ndarray
+        The sigmoid function applied to each element of x.
     """
     # Ensure inputs are numpy arrays for element-wise operations
     x = np.asarray(x)

@@ -55,6 +55,11 @@ scHopfield is organized into submodules, imported together as ``sch``:
 Top-level functions
 -------------------
 
+Everything ``import scHopfield as sch`` puts on ``sch`` directly, besides the
+``sch.pp`` / ``sch.inf`` / ``sch.tl`` / ``sch.dyn`` / ``sch.pl`` / ``sch.validation``
+module aliases above. Each one is re-exported from the submodule it belongs to, and
+is documented in full on that submodule's page.
+
 .. currentmodule:: scHopfield
 
 .. autosummary::
@@ -62,10 +67,21 @@ Top-level functions
    :nosignatures:
 
    run_pipeline
-   set_seed
-   sigmoid
-   build_scaffold
    prepare_dataset
+   fit_all_sigmoids
+   compute_sigmoid
+   fetch_base_grn
+   build_scaffold
+   fit_interactions
+   compute_energies
+   energy_embedding
+   compute_umap
+   simulate_trajectory
+   sigmoid
+   set_seed
+
+``sch.ODESolver`` is re-exported too; it is documented as
+:class:`~scHopfield.dynamics.ODESolver` on the :doc:`dynamics <dynamics>` page.
 
 .. toctree::
    :hidden:

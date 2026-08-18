@@ -9,16 +9,7 @@ build:
   os: ubuntu-22.04
   tools:
     python: "3.12"
-  apt_packages:
-    # nbsphinx needs pandoc to convert the tutorial notebooks
-    - pandoc
   jobs:
-    pre_build:
-      # Copy the tutorial notebooks into docs/notebooks so Sphinx can find them. Tolerant
-      # of there being none yet: the tutorials are being written, and a docs build should
-      # not fail on their absence.
-      - mkdir -p docs/notebooks
-      - cp docs/tutorials/*.ipynb docs/notebooks/ 2>/dev/null || true
     post_install:
       # Install the package itself
       - pip install -e .
@@ -26,7 +17,7 @@ build:
 # Build documentation in the docs/ directory with Sphinx
 sphinx:
   configuration: docs/conf.py
-  fail_on_warning: false
+  fail_on_warning: true
 
 # Optionally declare the Python requirements required to build your docs
 python:

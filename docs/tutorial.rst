@@ -1,62 +1,69 @@
-Tutorial
-========
+Tutorials
+=========
 
-.. note::
-   This tutorial will walk you through a complete scHopfield analysis using a hematopoiesis dataset.
-   Coming soon!
+Six notebooks, meant to be read in order. Each one is a Jupyter notebook under
+``docs/tutorials/`` in the repository, rendered here from the outputs committed
+with it, so every number and every figure on these pages is the output of an
+actual run rather than an illustration.
 
-Overview
---------
+They are runnable. The first one fits the model from
+:func:`scvelo.datasets.pancreas`, which downloads on first use, and saves the
+fitted checkpoint to ``docs/tutorials/pancreas_fitted.h5sch``. That checkpoint is
+committed, so the later tutorials load it in seconds and a reader without a GPU
+never has to run the fit.
 
-This tutorial demonstrates:
+.. important::
 
-1. Loading and preprocessing single-cell RNA-seq data
-2. Computing RNA velocity with scVelo
-3. Fitting sigmoid functions to gene expression
-4. Inferring gene regulatory networks
-5. Computing and analyzing energy landscapes
-6. Network topology analysis
-7. Stability analysis with Jacobians
-8. Visualizing results
-9. Simulating perturbations
+   ``save_model`` stores the interaction matrix, the bias and the degradation
+   rates, but not the fitted activation. So a notebook that loads the checkpoint
+   has to fit the activations itself and call ``compute_sigmoid``, which is why
+   tutorials 3 to 6 each run ``fit_all_sigmoids`` before ``load_model``. Skip it
+   and ``compute_sigmoid`` falls back to a single Hill curve without saying so,
+   where the fit used two components.
 
-Dataset
--------
+.. toctree::
+   :maxdepth: 1
 
-We'll use a hematopoietic differentiation dataset with the following cell types:
+   Fit a Hopfield system <tutorials/01-getting-started>
+   Ground-truth circuits <tutorials/02-ground-truth-circuits>
+   Why the scaffold matters <tutorials/03-why-the-scaffold-matters>
+   Reading the fitted system <tutorials/04-reading-the-fitted-system>
+   Single-gene knockouts <tutorials/05-single-gene-knockouts>
+   Combinatorial perturbation <tutorials/06-combinatorial-perturbation>
 
-- Hematopoietic Stem Cells (HSC)
-- Multipotent Progenitors (MPP)
-- Common Myeloid Progenitors (CMP)
-- Granulocyte-Monocyte Progenitors (GMP)
-- Megakaryocyte-Erythroid Progenitors (MEP)
+What each one covers
+--------------------
 
-Prerequisites
--------------
+:doc:`1. Getting started <tutorials/01-getting-started>`
+    Fits a Hopfield system to pancreatic endocrinogenesis end to end: velocity
+    preparation, sigmoid activation fitting, scaffold construction and the GRN
+    fit. Produces the checkpoint the rest of the series loads.
 
-Before starting, ensure you have:
+:doc:`2. Ground-truth circuits <tutorials/02-ground-truth-circuits>`
+    Fits circuits whose interaction matrix is written down in advance, so the
+    recovery can be scored rather than argued. Isolates the optimizer from
+    velocity-estimation error, which no real dataset can do.
 
-- scHopfield installed (see :doc:`installation`)
-- scVelo for RNA velocity computation
-- A single-cell dataset with spliced/unspliced counts
+:doc:`3. Why the scaffold matters <tutorials/03-why-the-scaffold-matters>`
+    The fit is not free: regulation is restricted to transcription factors, and
+    edges an independent base network does not support are penalized. This
+    measures what dropping each of those two constraints costs.
 
-Step-by-Step Analysis
-----------------------
+:doc:`4. Reading the fitted system <tutorials/04-reading-the-fitted-system>`
+    One fit, three readings: the energy landscape, Jacobian stability, and
+    network structure. Nothing further is fitted here.
 
-Coming soon! This section will include:
+:doc:`5. Single-gene knockouts <tutorials/05-single-gene-knockouts>`
+    In-silico perturbation, and what constrains the answer to a question the data
+    never asked. Covers both the propagated and the fate-probability readouts.
 
-- Data loading and quality control
-- RNA velocity computation
-- Sigmoid fitting and network inference
-- Energy landscape analysis
-- Network topology analysis
-- Jacobian stability analysis
-- Visualization examples
-- Perturbation simulations
+:doc:`6. Combinatorial perturbation <tutorials/06-combinatorial-perturbation>`
+    Double knockouts and departures from additivity, which is where two
+    regulators stop acting independently.
 
 See Also
 --------
 
-- :doc:`quickstart` - Quick start guide
-- :doc:`examples` - Example notebooks
-- :doc:`api/tools` - API reference
+- :doc:`quickstart` - the same pipeline as a page of code
+- :doc:`pipeline` - the one-call entry point
+- :doc:`api/index` - every public function

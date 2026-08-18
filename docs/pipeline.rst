@@ -15,10 +15,9 @@ wrapper just wires them together with sensible defaults and records what it did 
 
 .. tip::
 
-   For a fully worked, executed example, from one ``run_pipeline`` call to every
-   downstream analysis (energy, stability, drivers, eigenmodes, in-silico
-   knockouts, and a 100% known-driver KO validation), see the
-   :doc:`End-to-End Pipeline notebook <notebooks/08_end_to_end_pipeline>`.
+   For fully worked, executed examples, see the :doc:`tutorials <tutorial>`. They
+   run this pipeline on pancreatic endocrinogenesis and then read the fit: energy,
+   stability, network structure, single-gene knockouts and double knockouts.
 
 One call
 --------
@@ -31,7 +30,7 @@ One call
        adata,
        cluster_key="cell_type",
        prepare=True,        # run velocity + sigmoid preprocessing first
-       n_top_genes=250,     # subset to the most dynamic genes
+       n_top_genes=2000,    # the gene count the published fits use
        device="cuda",
        seed=0,
    )
@@ -58,79 +57,22 @@ guide the fit (regularizing the free interactions toward known edges):
        adata,
        cluster_key="cell_type",
        scaffold=scaffold.values.T,        # fit_interactions expects W[target, regulator]
-       fit_kwargs=dict(scaffold_regularization=0.1, only_TFs=True),
        device="cuda",
    )
 
-Reproducible across datasets
-----------------------------
+Where the paper's runs live
+---------------------------
 
-``analyses/run_full_pipeline.py`` runs the identical pipeline over several
-datasets and stores the fitted data and figures in a uniform layout:
+The code that produces the figures in the paper is in ``reproducibility/`` in this
+repository, together with the dataset preparation steps. It is separate from the
+package on purpose: the package is the method, and ``reproducibility/`` is one set
+of runs of it.
 
-.. code-block:: bash
-
-   # all datasets
-   python analyses/run_full_pipeline.py --device cuda --n-genes 250
-
-   # a single dataset
-   python analyses/run_full_pipeline.py --only pancreas
-
-Each dataset produces, under ``benchmark_results/pipeline/<dataset>/``:
-
-``adata_fitted.h5ad``
-    Fitted GRN, energies, and Jacobian eigenvalues.
-``summary.json``
-    Per-cluster energy / stability medians, top GRN drivers, and the in-silico
-    knockout impact of the top driver.
-``energy_stability.png``
-    Per-cluster energy depth, leading Jacobian eigenvalue, and instability count.
-``top_drivers.png``
-    Strongest regulators by GRN out-strength.
-``perturbation_impact.png``
-    Predicted per-cluster impact of knocking out the top driver.
-
-The run demonstrates the method on both mouse and human developmental systems,
-with either an unconstrained (pseudoinverse) fit or a scaffold-guided fit:
-
-.. list-table::
-   :header-rows: 1
-   :widths: 22 12 12 12 30
-
-   * - Dataset
-     - Species
-     - Cells
-     - Fit
-     - Example top drivers
-   * - Hematopoiesis (Paul 2015)
-     - mouse
-     - 2,671
-     - scaffold
-     - Myc, Nfe2, Myb
-   * - Pancreas endocrinogenesis
-     - mouse
-     - 3,696
-     - pseudoinverse
-     - Rfx6, Pam, Ptprn2
-   * - Murine neural crest
-     - mouse
-     - 6,788
-     - pseudoinverse
-     - Wwtr1, Rtn1, Pcdh1
-   * - Human limb
-     - human
-     - 12,207
-     - pseudoinverse
-     - MEST, SHD, COBL
-   * - Schwann cell development
-     - mouse
-     - 8,821
-     - pseudoinverse
-     - (see summary.json)
-
-Each recovered driver set is dominated by regulators of the system in question
-(e.g. Rfx6 for pancreatic endocrine fate, Nfe2 for the erythroid branch),
-providing a face-validity check on the inferred networks.
+The scaffold is the one input the package cannot supply. ``fetch_base_grn``
+downloads a CellOracle base network from a pinned commit and caches it locally.
+That table carries CellOracle's license, which restricts use to non-commercial
+academic purposes, and not scHopfield's MIT license; ``DATA_SOURCES.md`` gives the
+restriction in full and the works to cite.
 
 Individual steps
 ----------------

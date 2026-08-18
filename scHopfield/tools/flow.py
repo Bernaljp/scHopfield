@@ -55,6 +55,7 @@ def calculate_flow(
         Annotated data with perturbation results (delta_X or simulated_count layer)
     source : str, optional (default: 'delta')
         What expression state to compute flow from:
+
         - 'delta': v(perturbed) - v(original)
         - 'perturbed': v(perturbed) absolute
         - 'original': v(original) absolute
@@ -66,6 +67,7 @@ def calculate_flow(
         embedding. This is NOT a simulation method -- the perturbation itself is simulated
         upstream by ``simulate_perturbation`` (discrete propagation) or ``simulate_shift_ode``
         (ODE integration). Options (aliases in parentheses):
+
         - 'model_velocity' ('hopfield'): project the fitted Hopfield model velocity difference
           v(perturbed) - v(original) (gene-space dot-product embedding).
         - 'correlation' ('celloracle'): project the raw displacement delta_X onto the embedding

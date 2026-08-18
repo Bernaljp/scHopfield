@@ -64,12 +64,15 @@ coverage.xml
 Thumbs.db
 
 # --------------------------------------------------------------------------- Docs
-# Sphinx build output. docs/notebooks/ holds rendered copies of the tutorials, written by
-# the build; the directory itself is tracked so the build has somewhere to put them.
+# Sphinx build output and the API stubs autosummary writes. The tutorial notebooks are
+# tracked, not ignored: they are the documentation, and they ship with their outputs.
 docs/_build/
 docs/api/generated/
-docs/notebooks/*
-!docs/notebooks/.gitkeep
+
+# docs/methods/ is a local scratch copy of manuscript material. Nothing from the
+# manuscript belongs in this repository, so the directory is ignored rather than
+# left to be committed by accident.
+docs/methods/
 
 # ------------------------------------------------------- Figure and report output
 # Everything the figure scripts render. See reproducibility/paths.py.

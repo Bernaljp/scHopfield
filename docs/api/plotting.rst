@@ -83,3 +83,5 @@ when no LaTeX toolchain is available.
    grn_tikz_body
    grn_preamble
    GRN_PREAMBLE
+   DEFAULT_ACT_HEX
+   DEFAULT_REP_HEX
