@@ -12,7 +12,7 @@ readme = "README.md"
 requires-python = ">=3.12"
 license = {text = "MIT"}
 authors = [
-    {name = "scHopfield Contributors"}
+    {name = "Juan Pablo Bernal Tamayo", email = "jpbernal888@gmail.com"}
 ]
 keywords = [
     "single-cell",
