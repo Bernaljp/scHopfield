@@ -6,7 +6,17 @@ Produces reproducibility/data/dyngen/fig_fits.npz with:
   traj_<backbone>                   : 3xN array [sim_time; energy; leading Re eig]  (panels f,g)
 
 Fit recipe matches the benchmark and energy-trajectory scripts of the analysis pipeline,
-which are not part of this repository.
+which are not part of this repository. It is pinned in full below rather than inherited
+from the package defaults, so that this script keeps reproducing the cache that ships
+beside it after a default is revised. Verified on 2026-08-17 against the committed
+artifacts: the four recovered W matrices come back bitwise identical, the three
+trajectories to 1.6e-07 absolute (5e-12 relative, the Jacobian eigenvalue accumulation),
+and the six committed benchmark JSONs match on all 90 metrics.
+
+The committed fig_fits.npz also carries a traj_trifurcating array, left over from an
+earlier run. The figure reads only linear, bifurcating and cycle, so a fresh run writes
+a strict subset of the committed keys and every panel still draws.
+
 Run once (GPU): python reproducibility/compute/_dyngen_compute.py
 """
 import os
@@ -34,10 +44,45 @@ DEV = "cuda" if torch.cuda.is_available() else "cpu"
 BACKBONES = ["linear", "bifurcating", "cycle"]
 
 
+# The benchmark recipe, stated in full rather than left to the package defaults.
+#
+# This script reproduces artifacts computed on 2026-07-07 and 2026-07-14. The package
+# defaults have moved since, so a bare call no longer recomputes what ships beside it:
+# the canonical defaults are tuned for real single-cell data, and on this synthetic
+# benchmark they lower every arm (the unscaffolded pseudoinverse falls close to chance).
+# Every value below is therefore pinned to the one in force when the artifacts were
+# written, which reproduces the shipped benchmark JSONs metric for metric.
+#
+# Pinning the whole recipe, rather than only the arguments that happen to have moved so
+# far, is the point: a benchmark that reads a default is a benchmark that silently
+# changes the next time a default is revised.
+SIGMOID_KWARGS = dict(
+    n_max=8.0,        # canonical is 20.0; the benchmark was fitted at the ceiling of 8
+    bimodal=False,    # canonical is True; the benchmark used a single-component Hill
+)
+FIT_KWARGS = dict(
+    reconstruction_regularization=100.0,
+    bias_regularization=1.0,
+    bias_penalty="l1",
+    refit_gamma=True,
+    seed=0,
+    # Below here: values that are no longer the package default. Each one changes the
+    # fitted W on this data, so none of them may be dropped.
+    batch_size=64,                 # canonical 128
+    use_plateau_scheduler=False,   # canonical True
+    plateau_patience=50,           # canonical 100
+    plateau_factor=0.5,            # canonical 0.1
+    include_neighbors=False,       # canonical True
+    neighbor_fraction=0.0,         # canonical 0.2
+    boundedness_lambda=0.0,        # canonical 0.1 (the C1 radial hinge)
+    gamma_min=0.0,                 # canonical 0.01
+)
+
+
 def prep(b):
     a = ad.read_h5ad(f"{ROOT}/{b}/adata.h5ad")
     N = a.n_vars
-    sch.pp.fit_all_sigmoids(a, genes=np.ones(N, bool), spliced_key="Ms")
+    sch.pp.fit_all_sigmoids(a, genes=np.ones(N, bool), spliced_key="Ms", **SIGMOID_KWARGS)
     sch.pp.compute_sigmoid(a, spliced_key="Ms")
     return a, N
 
@@ -46,9 +91,8 @@ def fit_W(a, w_scaffold, reg=1.0, epochs=300):
     sch.inf.fit_interactions(
         a, cluster_key=CK, spliced_key="Ms", velocity_key="velocity",
         w_scaffold=w_scaffold, scaffold_regularization=reg,
-        reconstruction_regularization=100.0, bias_regularization=1.0,
-        bias_penalty="l1", only_TFs=w_scaffold is not None, n_epochs=epochs,
-        refit_gamma=True, device=DEV, seed=0)
+        only_TFs=w_scaffold is not None, n_epochs=epochs, device=DEV,
+        **FIT_KWARGS)
     return np.asarray(a.varp[f"W_{a.obs[CK].cat.categories[0]}"])
 
 
