@@ -125,6 +125,12 @@ per-dataset settings and fit parameters behind every figure, and
 `reproducibility/paths.py` documents the environment variables that locate everything the
 scripts read.
 
+[`reproducibility/README.md`](reproducibility/README.md) carries the detail: which script
+owns which figure and where the manuscript cites it, the measured input list and size for
+each of the ten, the command and cost of regenerating a fitted dataset, the configuration
+schema with the seven datasets as worked examples, and what will not run on another machine
+without extra work.
+
 What this does and does not give you:
 
 **Four of the ten run from a clean clone.** Their inputs are committed here.
@@ -146,7 +152,7 @@ simulator's own CSV exports, from which every matrix is rebuilt bit for bit with
 no dyngen.
 
 ```bash
-python reproducibility/dyngen/02_build_h5ad.py      # about 15 s per backbone, CPU
+python reproducibility/dyngen/02_build_h5ad.py      # about 15 s for all six backbones, CPU
 python reproducibility/make_dyngen_benchmark.py --submission
 ```
 

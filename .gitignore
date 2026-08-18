@@ -84,7 +84,7 @@ reproducibility/output/
 
 # ------------------------------------------- Regenerated dyngen artifacts, named exactly
 # Everything else under reproducibility/data/dyngen/ is tracked. adata.h5ad is rebuilt from
-# the committed CSVs by reproducibility/dyngen/02_build_h5ad.py in about 15 s per backbone,
+# the committed CSVs by reproducibility/dyngen/02_build_h5ad.py in about 15 s for all six,
 # progressions.csv is written by the R simulation and read by nothing, and install.log is a
 # machine-specific build transcript. The provenance that matters is the seed and version in
 # 01_simulate.R plus simulate.log, and both are tracked.

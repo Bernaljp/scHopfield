@@ -567,8 +567,12 @@ def render_submission(C, ds, out_path, suf=""):
     """Panels a-i of the perturbation figure on one journal page.
 
     What buys the height, none of it a rescale and none of it a dropped panel:
-      - panel a is redrawn natively instead of embedding the report's raster streamline plot,
-        so it costs a third of a row rather than a full one and carries live 5 pt type;
+      - panel a is given a third of a row rather than a full one. It goes through
+        draw_panel_a exactly as the poster layout does, so it embeds the report's rendered
+        streamline PNG when that file is present and draws the field natively, saying so on
+        stderr, when it is not. An earlier version of this layout always drew natively and
+        this line said so; it no longer does, and the PNG is an optional input to both
+        layouts;
       - the six knockout columns of d, e, f and g share one column grid, so each row is read
         against the same six genes and no row repeats a header;
       - the per-cell maps of e and g are set to the embedding's own 1.83 aspect ratio, which
