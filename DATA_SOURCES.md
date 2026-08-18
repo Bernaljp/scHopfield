@@ -229,9 +229,13 @@ which is visible in the neural crest object's 50-neighbor graph where this proje
 setting is 30. Verified on that object: `layers['Ms']`, `layers['velocity_S']` and
 `var['gamma']` reproduce bit for bit from its preprocessed input. Its sigmoid columns do
 not, because the package now fits the two-component Hill by default and these objects were
-prepared when the single-component fit was the default. Nothing downstream depends on it:
-the report pipeline refits the sigmoids itself at `config.HILL_N_MAX` and
-`config.BIMODAL_HILL`.
+prepared when the single-component fit was the default. Nothing downstream depends on it,
+and both consumers refit rather than read: the report pipeline at `config.HILL_N_MAX` and
+`config.BIMODAL_HILL`, and `reproducibility/identifiability_multi.py` at the pinned recipe
+in its own `SIGMOID_FIT`. That second one is deliberate rather than incidental. The sweep
+reads four objects, three of which arrive carrying a `sigmoid` layer, so using them would
+make a published number depend on which era each object on disk was prepared in. Refitting
+every dataset removes that dependence and reproduces the committed JSON exactly.
 
 A reader starting from the accession has to reprocess to that state, and the result will
 resemble the fits reported here rather than match them.
