@@ -161,16 +161,41 @@ drew a partial figure.
 
 ## Regenerating a fitted dataset
 
-`rutils.prepare_and_fit` is the whole path from a prepared dataset to
-`<SCHOPFIELD_REPORTS>/<dataset>/data/adata_analyzed.h5ad`, and it is the function that
-produced every fitted object the figures read. It caches: a second call returns the
-existing file unless `force=True`.
+Two steps: prepare the object, then fit it.
+
+**Step 1, the raw data to a prepared object.** An accession is not the object that was fit.
+What that step is differs per dataset, and `DATA_SOURCES.md` records it for all seven. Only
+pancreas rebuilds end to end from a package call:
 
 ```bash
 export SCHOPFIELD_DATA=/path/to/datasets
 export SCHOPFIELD_REPORTS=/path/to/reports
-cd reproducibility
 
+# pancreas: scVelo downloads the raw object and this applies the published recipe,
+# writing the exact path config.py names. 14 s once the raw object is cached,
+# about a minute on a cold run, which is the download. CPU.
+python reproducibility/prep_pancreas.py
+
+# an object that already arrived normalized, written out in the same form:
+python reproducibility/prep_dataset.py --inp raw.h5ad --out prepared.h5ad
+```
+
+Verified here by writing to a scratch path and comparing: `prep_pancreas.py` reproduces the
+pancreas input **byte for byte**, same md5 as the object the published pancreas fits were
+run on.
+
+The other five were preprocessed before they reached this project, so reprocessing from the
+accession gives a close fit rather than an equal one. One field, mouse hematopoiesis's
+lineage pseudotime, does not rebuild at all. `DATA_SOURCES.md` is explicit about which is
+which; do not assume an accession alone reproduces a published fit.
+
+**Step 2, the prepared object to a fitted one.** `rutils.prepare_and_fit` is the whole path
+to `<SCHOPFIELD_REPORTS>/<dataset>/data/adata_analyzed.h5ad`, and it is the function that
+produced every fitted object the figures read. It caches: a second call returns the existing
+file unless `force=True`.
+
+```bash
+cd reproducibility
 python -c "import rutils; rutils.prepare_and_fit('pancreas', device='cuda')"
 ```
 
