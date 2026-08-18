@@ -46,6 +46,7 @@ def save_model(
     Save fitted model parameters to an HDF5 file.
 
     Saves the parameters that define the Hopfield network:
+
     - Interaction matrices W (per cluster) from adata.varp
     - Bias vectors I and degradation rates gamma (per cluster) from adata.var
     - Sigmoid parameters from adata.var: both Hill components (threshold,
