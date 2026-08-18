@@ -7,6 +7,11 @@ from anndata import AnnData
 from .._utils.math import fit_sigmoid, fit_sigmoid_bimodal, sigmoid, hill_regime, HILL_N_MIN
 from .._utils.io import get_matrix, parse_genes, to_numpy
 
+# The second Hill component of the two-component activation. fit_all_sigmoids writes these
+# in either mode (a single-component fit sets component 2 equal to component 1 and the
+# mixing weight to 1), so a fitted object that lacks them has lost them somewhere.
+_BIMODAL_COLS = ('sigmoid_mix', 'sigmoid_threshold2', 'sigmoid_exponent2')
+
 
 def fit_all_sigmoids(
     adata: AnnData,
@@ -70,6 +75,10 @@ def fit_all_sigmoids(
 
     # Store spliced_key for downstream functions
     adata.uns['scHopfield']['spliced_key'] = spliced_key
+
+    # Record which activation this fit produced, so a later compute_sigmoid can tell a
+    # genuinely single-Hill model from a bimodal one whose second component went missing.
+    adata.uns['scHopfield']['sigmoid_bimodal'] = bool(bimodal)
 
     # Parse genes
     gene_indices = parse_genes(adata, genes)
@@ -168,6 +177,21 @@ def compute_sigmoid(
     # Get sigmoid parameters
     threshold = adata.var['sigmoid_threshold'].values[gene_indices]
     exponent = adata.var['sigmoid_exponent'].values[gene_indices]
+
+    # A two-component fit that lost its second component would fall straight through to
+    # the ordinary single Hill below and hand back an activation the model was never fit
+    # with, leaving every energy, velocity and Jacobian built on it wrong without saying
+    # so. Only an object that records a bimodal fit can be caught here: parameters set by
+    # hand, as for a synthetic circuit with a known Hill, are legitimately single
+    # component and carry no such record.
+    missing = [c for c in _BIMODAL_COLS if c not in adata.var.columns]
+    if missing and adata.uns.get('scHopfield', {}).get('sigmoid_bimodal'):
+        raise ValueError(
+            "This model was fitted with bimodal=True, but its second Hill component is "
+            f"missing from adata.var ({', '.join(missing)}), so the activation it was fit "
+            "with cannot be reconstructed. Re-run "
+            "sch.pp.fit_all_sigmoids(adata, bimodal=True) on the expression data."
+        )
 
     # Compute sigmoid. For bimodal (double-sigmoid) genes, assign each cell to the closer
     # Hill component and use that regime's activation; single-Hill genes (mix=1, or no
