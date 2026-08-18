@@ -35,10 +35,16 @@ def fit_all_sigmoids(
         Key in adata.layers for spliced counts
     min_th : float, optional (default: 0.05)
         Minimum threshold as fraction of max expression
-    n_min, n_max : float, optional (default: 1.0, 8.0)
-        Bounds on the fitted Hill exponent (passed to ``fit_sigmoid``).
+    n_min, n_max : float, optional (default: 1.001, 20.0)
+        Bounds on the fitted Hill exponent. ``n_min`` is held just above 1 so that the
+        activation and its derivative are both finite. Note that ``fit_sigmoid`` and
+        ``fit_sigmoid_bimodal`` take a lower ceiling of 8.0 when called directly; the
+        20.0 here is the value the published fits were run at.
     refine : bool, optional (default: True)
         Refine each closed-form fit with a bounded nonlinear least-squares step.
+    bimodal : bool, optional (default: True)
+        Fit a two-component Hill mixture per gene and keep it where it improves on the
+        single Hill, rather than fitting a single Hill only.
     copy : bool, optional (default: False)
         If True, return a copy instead of modifying in-place
 
