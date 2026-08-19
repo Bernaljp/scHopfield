@@ -1,6 +1,20 @@
 Changelog
 =========
 
+Version 1.0.1 (2026-08-19)
+--------------------------
+
+Documentation only. No behavior changes, and no fitted result differs.
+
+- Progress bars in the tutorial output are collapsed to the frame each one ended on.
+  A notebook records every redraw of a bar as a separate output and the documentation
+  has no terminal to overwrite them, so the published Getting Started page was 71
+  percent progress-bar frames.
+- Three non-ASCII characters are removed from docstrings that the API reference
+  publishes, one of which left the PDF stating the opposite of the condition it meant.
+- The PDF build declares the block characters a progress bar is drawn from, so it draws
+  the bar rather than dropping it.
+
 Version 1.0.0 (2026-08-19)
 --------------------------
 

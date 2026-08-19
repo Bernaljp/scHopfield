@@ -46,7 +46,7 @@ non-commercial academic use, and not scHopfield's MIT license; ``DATA_SOURCES.md
 states the restriction and lists the works to cite.
 """
 
-__version__ = '1.0.0'
+__version__ = '1.0.1'
 
 # Import submodules
 from . import preprocessing as pp
