@@ -156,3 +156,47 @@ intersphinx_mapping = {
 # apt step.
 nb_execution_mode = "off"
 nb_merge_streams = True
+
+# -- LaTeX / PDF output ------------------------------------------------------
+#
+# `formats: [pdf, epub]` in .readthedocs.yaml means every page also goes through
+# pdflatex. pdflatex resolves a character through its font encoding, and the block
+# characters a progress bar is drawn from are in none of the encodings the default
+# engine loads, so it raises an error per character and prints nothing in its place.
+# Read the Docs runs latexmk in a mode that ignores the exit code, so the PDF is
+# published with the bar silently missing rather than the build failing.
+#
+# docs/clean_tutorial_output.py keeps only the frame each bar ended on, so what
+# reaches LaTeX is a handful of full blocks rather than thousands. Declaring them
+# draws the bar with a rule of the same width instead, which is what the reader of
+# the PDF should see.
+latex_engine = "pdflatex"
+# A block character fills a character cell, or the left fraction of one, so each is drawn
+# as a rule of that fraction inside a box exactly one cell wide. The cell is measured from
+# the font in force where the character appears rather than fixed here, because the bar
+# sits in a verbatim block set smaller than body text, and a box of the wrong width would
+# walk the rest of the line out of column.
+latex_elements = {
+    "preamble": "\n".join(
+        [
+            r"\newlength{\schopfieldcell}",
+            r"\newcommand{\schopfieldblock}[1]{%",
+            r"  \settowidth{\schopfieldcell}{0}%",
+            r"  \makebox[\schopfieldcell][l]{%",
+            r"    \rule[-0.05em]{\dimexpr\schopfieldcell*#1/8\relax}{0.9em}}}",
+        ]
+        + [
+            r"\DeclareUnicodeCharacter{%04X}{\schopfieldblock{%d}}" % (code, eighths)
+            for code, eighths in (
+                (0x2588, 8),  # FULL BLOCK
+                (0x2589, 7),  # LEFT SEVEN EIGHTHS BLOCK
+                (0x258A, 6),  # LEFT THREE QUARTERS BLOCK
+                (0x258B, 5),  # LEFT FIVE EIGHTHS BLOCK
+                (0x258C, 4),  # LEFT HALF BLOCK
+                (0x258D, 3),  # LEFT THREE EIGHTHS BLOCK
+                (0x258E, 2),  # LEFT ONE QUARTER BLOCK
+                (0x258F, 1),  # LEFT ONE EIGHTH BLOCK
+            )
+        ]
+    ),
+}

@@ -103,6 +103,16 @@ that nothing local remains::
 
 The command should print nothing.
 
+The recorded output also has no terminal to redraw it. A progress bar is one line that a
+terminal overwrites on every update, but the notebook stores each of those updates as a
+separate output, and the documentation prints them all, one under the next. Collapse each
+bar to the frame it ended on::
+
+   python docs/clean_tutorial_output.py docs/tutorials/*.ipynb
+
+Run it after re-executing a notebook, before committing. ``--check`` reports without
+writing and exits non-zero when anything is left to collapse.
+
 Testing
 ~~~~~~~
 
