@@ -160,7 +160,7 @@ def compute_perturbation_flow_bias(
 
     Positive score  → KO aligns with that lineage's differentiation direction.
     Negative score  → KO opposes that lineage's direction (blocks/redirects).
-    lineage_bias = score_A − score_B: positive = lineage-A-biasing.
+    lineage_bias = score_A - score_B: positive = lineage-A-biasing.
 
     Notes
     -----
@@ -277,7 +277,7 @@ def compute_cluster_effects(
     -------
     pd.Series
         Mean absolute delta_X per cluster, indexed by cluster name.
-        Only clusters with ≥1 cell are included.
+        Only clusters with at least 1 cell are included.
 
     Examples
     --------
