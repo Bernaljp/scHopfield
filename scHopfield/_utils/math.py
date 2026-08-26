@@ -383,3 +383,41 @@ def ordinal(n: int):
     else:
         suffix = ['th', 'st', 'nd', 'rd', 'th'][min(n % 10, 4)]
     return str(n) + suffix
+
+
+def sigmoid_regime(x, k1, n1, k2=None, n2=None):
+    """Regime-switched two-component Hill activation.
+
+    This is the activation the model is FITTED with when ``bimodal=True``: each cell is
+    assigned to the nearer of the gene's two Hill components and evaluated under that
+    component. Passing ``k2=None`` (or a single-Hill fit) falls back to the ordinary Hill,
+    so this is safe to call unconditionally.
+
+    Every consumer of the fitted field must use this rather than the primary component
+    alone. Using ``sigmoid`` downstream evaluates a different vector field from the one
+    ``W``, ``gamma`` and ``I`` were fitted to, which is silent and was the defect this
+    function exists to remove.
+    """
+    x = np.asarray(x, dtype=float)
+    s1 = sigmoid(x, k1, n1)
+    if k2 is None:
+        return np.nan_to_num(s1)
+    reg = hill_regime(x, k1, k2)
+    s2 = sigmoid(x, k2, n2)
+    return np.nan_to_num(np.where(reg == 1, s2, s1))
+
+
+def d_sigmoid_regime(x, k1, n1, k2=None, n2=None):
+    """Derivative of :func:`sigmoid_regime` with respect to x.
+
+    Piecewise in the regime assignment, so within a regime it is the ordinary Hill
+    derivative ``n * phi * (1 - phi) / x``. The regime boundary is a measure-zero set of
+    states and is not smoothed; the derivative there is taken from the assigned regime.
+    """
+    x = np.asarray(x, dtype=float)
+    d1 = d_sigmoid(x, k1, n1)
+    if k2 is None:
+        return np.nan_to_num(d1)
+    reg = hill_regime(x, k1, k2)
+    d2 = d_sigmoid(x, k2, n2)
+    return np.nan_to_num(np.where(reg == 1, d2, d1))

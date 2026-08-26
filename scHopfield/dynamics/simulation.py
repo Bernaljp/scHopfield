@@ -257,6 +257,11 @@ def _simulate_cluster_gpu(
     gamma_t     = torch.tensor(solver.gamma,     dtype=dtype, device=device)
     threshold_t = torch.tensor(solver.threshold, dtype=dtype, device=device)
     exponent_t  = torch.tensor(solver.exponent,  dtype=dtype, device=device)
+    # Second Hill component, carried from the solver so the batched integrator evaluates the
+    # same regime-switched field as the scipy path and as the fit.
+    _has2 = getattr(solver, 'threshold2', None) is not None
+    threshold2_t = torch.tensor(solver.threshold2, dtype=dtype, device=device) if _has2 else None
+    exponent2_t  = torch.tensor(solver.exponent2,  dtype=dtype, device=device) if _has2 else None
 
     x_max_t = (
         torch.tensor(solver.x_max, dtype=dtype, device=device)
@@ -287,8 +292,15 @@ def _simulate_cluster_gpu(
 
         x_pos = x_c.clamp(min=1e-12)          # avoid 0^n for fractional n
         xn    = x_pos ** exponent_t            # (n_cells, n_genes)
-        sn    = threshold_t ** exponent_t      # (n_genes,) — broadcast
-        sig   = xn / (xn + sn)                # Hill sigmoid
+        sn    = threshold_t ** exponent_t      # (n_genes,) - broadcast
+        sig   = xn / (xn + sn)                # Hill sigmoid, component 1
+        if threshold2_t is not None:
+            xn2 = x_pos ** exponent2_t
+            sn2 = threshold2_t ** exponent2_t
+            sig2 = xn2 / (xn2 + sn2)
+            # Same nearest-threshold rule as hill_regime: component 2 where x is nearer k2.
+            in_reg2 = (x_c - threshold2_t).abs() < (x_c - threshold_t).abs()
+            sig = torch.where(in_reg2, sig2, sig)
 
         dxdt = sig @ W_t.T - gamma_t * x_c + I_t  # (n_cells, n_genes)
 

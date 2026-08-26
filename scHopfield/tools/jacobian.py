@@ -7,8 +7,8 @@ from typing import Optional
 from anndata import AnnData
 from tqdm import tqdm
 
-from .._utils.io import get_matrix, to_numpy, get_genes_used
-from .._utils.math import sigmoid
+from .._utils.io import get_matrix, to_numpy, get_genes_used, get_hill_params
+from .._utils.math import sigmoid, d_sigmoid_regime
 
 
 def _eig_chunk(W, gamma, sig_prime_chunk, want_vectors):
@@ -109,8 +109,9 @@ def compute_jacobians(
     if compute_eigenvectors:
         jacobian_eigenvectors = np.zeros((n_cells, n_genes, n_genes), dtype=np.complex64)
     
-    threshold = adata.var['sigmoid_threshold'].values[genes]
-    exponent = adata.var['sigmoid_exponent'].values[genes]
+    # Regime-switched activation: the Jacobian must differentiate the SAME field the model
+    # was fitted with, so two-component genes use the Hill of each cell's own regime.
+    threshold, exponent, threshold2, exponent2 = get_hill_params(adata, genes)
     
     clusters = adata.obs[cluster_key].unique()
 
@@ -130,10 +131,10 @@ def compute_jacobians(
             to_numpy(get_matrix(adata, spliced_key, genes=genes)[cluster_indices]),
             dtype=np.float32)
 
-        sigmoid_values = sigmoid(cell_data, threshold[None, :], exponent[None, :])
-        sigmoid_prime = (
-            exponent[None, :].astype(np.float32) * sigmoid_values * (1 - sigmoid_values)
-            / np.where(cell_data == 0, np.float32(1.0), cell_data)
+        sigmoid_prime = d_sigmoid_regime(
+            cell_data, threshold[None, :], exponent[None, :],
+            None if threshold2 is None else threshold2[None, :],
+            None if exponent2 is None else exponent2[None, :],
         ).astype(np.float32)
 
         for s in range(0, len(cluster_indices), chunk):
@@ -400,8 +401,9 @@ def compute_jacobian_elements(
                 raise ValueError(f"Gene '{gene_j}' not found in dataset")
             gene_indices[gene_j] = idx_j[0]
 
-    threshold = adata.var['sigmoid_threshold'].values[genes]
-    exponent = adata.var['sigmoid_exponent'].values[genes]
+    # Regime-switched activation: the Jacobian must differentiate the SAME field the model
+    # was fitted with, so two-component genes use the Hill of each cell's own regime.
+    threshold, exponent, threshold2, exponent2 = get_hill_params(adata, genes)
     n_cells = adata.n_obs
 
     if device == "cuda" and torch.cuda.is_available():
@@ -434,16 +436,14 @@ def compute_jacobian_elements(
         )
 
         # Compute sigmoid derivative
-        sigmoid_values = torch.tensor(
-            sigmoid(cell_data.cpu().numpy(), threshold[None, :], exponent[None, :]),
+        sigmoid_prime = torch.tensor(
+            d_sigmoid_regime(
+                cell_data.cpu().numpy(), threshold[None, :], exponent[None, :],
+                None if threshold2 is None else threshold2[None, :],
+                None if exponent2 is None else exponent2[None, :],
+            ),
             device=device_obj,
             dtype=torch.float32
-        )
-        sigmoid_prime = (
-            torch.tensor(exponent, device=device_obj, dtype=torch.float32)
-            * sigmoid_values
-            * (1 - sigmoid_values)
-            / torch.where(cell_data == 0, torch.ones_like(cell_data), cell_data)
         )
 
         # Compute Jacobian elements for each cell
@@ -510,8 +510,9 @@ def compute_rotational_part(
 
     genes = get_genes_used(adata)
     n_cells = adata.n_obs
-    threshold = adata.var['sigmoid_threshold'].values[genes]
-    exponent = adata.var['sigmoid_exponent'].values[genes]
+    # Regime-switched activation: the Jacobian must differentiate the SAME field the model
+    # was fitted with, so two-component genes use the Hill of each cell's own regime.
+    threshold, exponent, threshold2, exponent2 = get_hill_params(adata, genes)
 
     if device == "cuda" and torch.cuda.is_available():
         device_obj = torch.device("cuda")
@@ -539,16 +540,14 @@ def compute_rotational_part(
             dtype=torch.float32
         )
 
-        sigmoid_values = torch.tensor(
-            sigmoid(cell_data.cpu().numpy(), threshold[None, :], exponent[None, :]),
+        sigmoid_prime = torch.tensor(
+            d_sigmoid_regime(
+                cell_data.cpu().numpy(), threshold[None, :], exponent[None, :],
+                None if threshold2 is None else threshold2[None, :],
+                None if exponent2 is None else exponent2[None, :],
+            ),
             device=device_obj,
             dtype=torch.float32
-        )
-        sigmoid_prime = (
-            torch.tensor(exponent, device=device_obj, dtype=torch.float32)
-            * sigmoid_values
-            * (1 - sigmoid_values)
-            / torch.where(cell_data == 0, torch.ones_like(cell_data), cell_data)
         )
 
         # Closed form, so no per-cell n-by-n matrix is ever materialized.

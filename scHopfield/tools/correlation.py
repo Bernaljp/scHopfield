@@ -7,7 +7,7 @@ from typing import Optional
 from anndata import AnnData
 import hoggorm as ho
 
-from .._utils.io import get_matrix, to_numpy, get_genes_used
+from .._utils.io import get_matrix, to_numpy, get_genes_used, get_hill_params
 
 
 def energy_gene_correlation(
@@ -188,17 +188,18 @@ def future_celltype_correlation(
     rv = pd.DataFrame(index=keys, columns=keys, data=1.0)
     counts = get_matrix(adata, spliced_key, genes=genes)
 
-    threshold = adata.var['sigmoid_threshold'].values[genes]
-    exponent = adata.var['sigmoid_exponent'].values[genes]
+    threshold, exponent, threshold2, exponent2 = get_hill_params(adata, genes)
 
     for k1, k2 in itertools.combinations(keys, 2):
-        from .._utils.math import sigmoid
+        from .._utils.math import sigmoid_regime
 
         counts_k1 = to_numpy(counts[(adata.obs[cluster_key] == k1).values])
         counts_k2 = to_numpy(counts[(adata.obs[cluster_key] == k2).values])
 
-        sig_k1 = sigmoid(counts_k1, threshold[None, :], exponent[None, :])
-        sig_k2 = sigmoid(counts_k2, threshold[None, :], exponent[None, :])
+        _t2 = None if threshold2 is None else threshold2[None, :]
+        _e2 = None if exponent2 is None else exponent2[None, :]
+        sig_k1 = sigmoid_regime(counts_k1, threshold[None, :], exponent[None, :], _t2, _e2)
+        sig_k2 = sigmoid_regime(counts_k2, threshold[None, :], exponent[None, :], _t2, _e2)
 
         W_k1 = adata.varp[f'W_{k1}']
         W_k2 = adata.varp[f'W_{k2}']

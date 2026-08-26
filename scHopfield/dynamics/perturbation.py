@@ -18,8 +18,8 @@ from typing import Dict, Optional, Union, List, Tuple
 from anndata import AnnData
 from tqdm.auto import tqdm
 
-from .._utils.math import sigmoid
-from .._utils.io import get_matrix, to_numpy, get_genes_used
+from .._utils.math import sigmoid, sigmoid_regime
+from .._utils.io import get_matrix, to_numpy, get_genes_used, get_hill_params
 from ._utils import _parse_perturb_genes, _get_W_matrix, _compute_x_bounds, _update_scHopfield_uns
 from ..tools.perturbation_analysis import compute_perturbation_flow_bias, compute_cluster_effects
 
@@ -71,17 +71,19 @@ def _propagate_signal(
         Updated expression matrix after one propagation step
     """
     # Compute sigmoid of current expression for source genes
-    sig_current = sigmoid(
+    sig_current = sigmoid_regime(
         X_current[:, source_indices],
-        threshold[source_indices],
-        exponent[source_indices]
+        threshold[source_indices], exponent[source_indices],
+        None if threshold2 is None else threshold2[source_indices],
+        None if exponent2 is None else exponent2[source_indices],
     )
 
     # Compute sigmoid of original expression for source genes
-    sig_original = sigmoid(
+    sig_original = sigmoid_regime(
         X_original[:, source_indices],
-        threshold[source_indices],
-        exponent[source_indices]
+        threshold[source_indices], exponent[source_indices],
+        None if threshold2 is None else threshold2[source_indices],
+        None if exponent2 is None else exponent2[source_indices],
     )
 
     # Compute delta sigmoid: sigmoid(x^current) - sigmoid(x^original)
@@ -234,8 +236,7 @@ def simulate_perturbation(
     base_expression = to_numpy(get_matrix(adata, spliced_key, genes=genes))
 
     # Get sigmoid parameters
-    threshold = adata.var['sigmoid_threshold'].values[genes]
-    exponent = adata.var['sigmoid_exponent'].values[genes]
+    threshold, exponent, threshold2, exponent2 = get_hill_params(adata, genes)
 
     # Compute expression bounds for stability
     x_min, x_max = _compute_x_bounds(base_expression, x_max_percentile, multiplier=2.0)

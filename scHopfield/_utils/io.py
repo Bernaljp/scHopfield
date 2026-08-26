@@ -198,3 +198,25 @@ def get_cluster_genes(adata, cluster_key, order=None):
         clusters = [c for c in order if c in clusters]
 
     return genes, gene_names, clusters
+
+
+def get_hill_params(adata, genes=None):
+    """Return ``(k1, n1, k2, n2)`` for the requested genes.
+
+    ``k2`` and ``n2`` are ``None`` when the object was fitted single-Hill, or when no gene
+    in the selection was accepted as two-component, so callers can pass the result straight
+    into :func:`scHopfield._utils.math.sigmoid_regime` without branching.
+
+    Single-Hill genes inside a bimodal fit are stored with ``mix = 1`` and component 2
+    copied from component 1, so they are already inert under the regime switch.
+    """
+    idx = slice(None) if genes is None else genes
+    k1 = adata.var['sigmoid_threshold'].values[idx]
+    n1 = adata.var['sigmoid_exponent'].values[idx]
+    if 'sigmoid_mix' not in adata.var.columns:
+        return k1, n1, None, None
+    if not bool((adata.var['sigmoid_mix'].values[idx] < 1 - 1e-9).any()):
+        return k1, n1, None, None
+    return (k1, n1,
+            adata.var['sigmoid_threshold2'].values[idx],
+            adata.var['sigmoid_exponent2'].values[idx])

@@ -5,8 +5,8 @@ from scipy.integrate import odeint, solve_ivp
 from typing import Optional
 from anndata import AnnData
 
-from .._utils.math import sigmoid
-from .._utils.io import get_genes_used
+from .._utils.math import sigmoid, sigmoid_regime
+from .._utils.io import get_genes_used, get_hill_params
 
 
 class ODESolver:
@@ -27,6 +27,8 @@ class ODESolver:
         gamma: np.ndarray,
         threshold: np.ndarray,
         exponent: np.ndarray,
+        threshold2: Optional[np.ndarray] = None,
+        exponent2: Optional[np.ndarray] = None,
         x_min: float = 0.0,
         x_max: Optional[np.ndarray] = None,
         fixed_indices: Optional[np.ndarray] = None,
@@ -61,6 +63,10 @@ class ODESolver:
         self.gamma = gamma
         self.threshold = threshold
         self.exponent = exponent
+        # Second Hill component, or None for a single-Hill fit. The integrated field must be
+        # the fitted field, so two-component genes switch regime as x moves.
+        self.threshold2 = threshold2
+        self.exponent2 = exponent2
         self.x_min = x_min
         self.x_max = x_max
         self.fixed_indices = fixed_indices
@@ -111,7 +117,8 @@ class ODESolver:
         # Clip x to valid range before computing dynamics
         x_clipped = self._clip(x.copy())
 
-        sig = sigmoid(x_clipped, self.threshold, self.exponent)
+        sig = sigmoid_regime(x_clipped, self.threshold, self.exponent,
+                             self.threshold2, self.exponent2)
         dxdt = self.W @ sig - self.gamma * x_clipped + self.I
 
         # Soft boundary: if x is at lower bound, don't let it go more negative
@@ -143,7 +150,8 @@ class ODESolver:
         if self.x_max is not None:
             X_clipped = np.minimum(X_clipped, self.x_max)
 
-        sig = sigmoid(X_clipped, self.threshold, self.exponent)  # (n_cells, n_genes)
+        sig = sigmoid_regime(X_clipped, self.threshold, self.exponent,
+                             self.threshold2, self.exponent2)  # (n_cells, n_genes)
         dxdt = sig @ self.W.T - self.gamma * X_clipped + self.I  # (n_cells, n_genes)
 
         at_lower = X <= self.x_min
@@ -306,8 +314,7 @@ def create_solver(
     gamma_key = f'gamma_{cluster}'
     gamma = adata.var[gamma_key].values[genes] if gamma_key in adata.var else adata.var[degradation_key].values[genes]
 
-    threshold = adata.var['sigmoid_threshold'].values[genes]
-    exponent = adata.var['sigmoid_exponent'].values[genes]
+    threshold, exponent, threshold2, exponent2 = get_hill_params(adata, genes)
 
     # Compute upper bounds from data
     if x_max_percentile is not None:
@@ -318,4 +325,5 @@ def create_solver(
     else:
         x_max = None
 
-    return ODESolver(W, bias_vector, gamma, threshold, exponent, x_min=0.0, x_max=x_max)
+    return ODESolver(W, bias_vector, gamma, threshold, exponent,
+                     threshold2, exponent2, x_min=0.0, x_max=x_max)
