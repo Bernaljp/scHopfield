@@ -60,24 +60,39 @@ SYN_NEG = PALETTE["purple"]                                      # cancellation
 # Jacobian-coupling screen also surfaces genuinely novel candidates (T3): Rorc, Klf13, Zbtb7c, Vdr,
 # Mef2a, Atf6, and the glycolytic hub Eno1 (a high-out-strength non-TF, flagged for cautious reading).
 TIERS = {
-    # Rebuilt 2026-07-31 for the pairs the CANONICAL screen nominates. The previous table was keyed on
-    # pairs from a 2026-07-26 cache that the recomputed screen no longer produces (Arx/Foxo1,
-    # Pax4/Foxo1, Zbtb7c, Atf6 and the Tead2/Foxa3, Creb3l1/Mef2a anchors); those tiers were NOT
-    # transferred, because a tier is a claim about a specific pair. Every reference below was checked
-    # against Crossref as a real journal article with a matching title. Two errors were caught in that
-    # check and are corrected here: the Klf10 paper is the SEI-1/p21Cip1 study, not a SUR1/SERCA2b one,
-    # and the Prox1 evidence is Wang 2005, since the "Paul 2016" reference did not resolve.
+    # Rebuilt 2026-08-31 for the pairs the CURRENT screen nominates. The previous table was keyed on a
+    # 2026-07-31 screen; only Klf10/Rfx6 survives into the present nominations, and its tier is carried
+    # over unchanged. Every other entry is new. A tier is a claim about a specific PAIR, so tiers are
+    # never transferred between pairs. All references verified against Crossref as real articles with
+    # matching titles (existence and identity only, not a judgment of their strength).
+    #
+    # Gene-level evidence used below, for the decision each pair is displayed under:
+    #   Rfx6      established: Ngn3-dependent, required for islet cell development (Soyer 2010)
+    #   Neurod1   established: KO blocks endocrine specification (Naya 1997), loses alpha and beta (Chao 2007)
+    #   Pax4      established: KO loses beta and delta with a proportional alpha increase (Sosa-Pineda 1997)
+    #   Prox1     established: endocrine development (Wang 2005)
+    #   Egr1      evidenced but stress-context: promotes beta identity; Egr1-/- islets gain
+    #             insulin/glucagon co-expressing cells (Wang 2020)
+    #   Klf10     adult islet only (Wu 2015), no developmental fate role
+    #   Crem      beta-cell function (insulin transcription, miR-375), no fate role
+    #   Klf13     no established pancreatic role found
+    #   Vdr       adult islet KO (Zeitz 2003), no developmental fate role
+    #   Foxo3     minor islet FOXO relative to Foxo1, no fate role
     "pancreas": {
         # differentiated versus progenitor (endocrine specification)
-        ("Klf10", "Rfx6"): ("T3", "Rfx6 KO ablates islets (Smith 2010); Klf10 adult islet only; joint untested"),
-        ("Fev", "Rfx6"): ("T1", "RFX6 loss lowers FEV in iPSC islets (Aldous 2024); Rfx6 KO ablates islets (Smith 2010)"),
-        ("Klf10", "Neurod1"): ("T3", "Neurod1 KO blocks endocrine specification (Naya 1997); Klf10 adult only; untested"),
-        ("Klf10", "Tead2"): ("T3", "Klf10 adult islet mass (Wu 2015); Tead2 pancreas expression only (Escot 2018)"),
+        ("Neurod1", "Rfx6"): ("T1", "Rfx6 directly regulates Neurod1 and acts upstream of it (Soyer 2010); "
+                                    "Neurod1 KO blocks endocrine specification (Naya 1997)"),
+        ("Klf10", "Rfx6"): ("T3", "Rfx6 required for islet development (Soyer 2010); Klf10 adult islet only; joint untested"),
+        ("Crem", "Rfx6"): ("T3", "Rfx6 established (Soyer 2010); Crem is beta-cell function, not fate"),
+        ("Klf13", "Rfx6"): ("T3", "Rfx6 established (Soyer 2010); Klf13 has no established pancreatic role"),
         # alpha versus beta (subtype allocation)
-        ("Eno1", "Neurod1"): ("T3", "Neurod1 KO loses alpha and beta (Chao 2007); Eno1 glycolytic, no fate role"),
-        ("Neurod1", "Prox1"): ("T2", "Neurod1 KO loses alpha and beta (Chao 2007) + Prox1 endocrine (Wang 2005); untested"),
-        ("Eno1", "Vdr"): ("T3", "Eno1 beta insulin gene (Luo 2024); Vdr adult islet KO (Zeitz 2003); no fate role"),
-        ("Vdr", "Xbp1"): ("T3", "Xbp1 KO drives beta-to-alpha shift (Lee 2022); Vdr no islet-development role"),
+        ("Egr1", "Pax4"): ("T2", "Pax4 KO loses beta and delta, alpha increases (Sosa-Pineda 1997); Egr1 maintains "
+                                 "beta identity and its loss yields insulin/glucagon co-expressing cells "
+                                 "(Wang 2020); joint epistasis untested"),
+        ("Egr1", "Prox1"): ("T2", "Prox1 endocrine development (Wang 2005); Egr1 beta identity (Wang 2020); "
+                                  "joint epistasis untested"),
+        ("Egr1", "Vdr"): ("T3", "Egr1 beta identity (Wang 2020); Vdr adult islet only (Zeitz 2003), no fate role"),
+        ("Foxo3", "Vdr"): ("T3", "neither has an established role in the alpha-versus-beta decision"),
     },
 }
 TIER_COLOR = {"T1": PALETTE["green"], "T2": PALETTE["orange"], "T3": PALETTE["vermillion"], "?": "0.6"}

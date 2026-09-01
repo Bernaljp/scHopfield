@@ -387,7 +387,7 @@ def fate_shift(adata, cluster_key, A, B, ko_genes, basis=None, n_neighbors=30, s
 
 
 def permutation_null_floor(X, V_wt, displacement, knn_idx, term_sets, a_cols, b_cols,
-                           n=30, seed=0, sigma=0.05, transitional=None, clusters=None,
+                           n=500, seed=0, sigma=0.05, transitional=None, clusters=None,
                            percentile=95.0):
     """Per-gene noise floor for a fate shift, from a magnitude-preserving permutation null.
 
@@ -412,8 +412,10 @@ def permutation_null_floor(X, V_wt, displacement, knn_idx, term_sets, a_cols, b_
         The predicted knockout displacement to permute, in the same space.
     term_sets, a_cols, b_cols
         Absorbing sets and the column indices of the two arms, as in :func:`fate_shift`.
-    n : int, default 30
-        Number of permutation draws.
+    n : int, default 500
+        Number of permutation draws. The 95th percentile of a small sample sits below the
+        percentile of the distribution it is drawn from, so a low draw count places the floor too
+        low and resolves knockouts that a converged floor rejects.
     seed : int, default 0
         Fixed by default so every gene, and every method being compared, is scored against the same
         permutations. That matching is deliberate; it also makes the per-gene floors statistically
@@ -436,8 +438,8 @@ def permutation_null_floor(X, V_wt, displacement, knn_idx, term_sets, a_cols, b_
     absence of spatial structure, not for the per-cell scale of the perturbation.
 
     This is a calibration threshold, not a p-value: no tail probability is computed and no
-    multiplicity correction is applied across a panel. With ``n=30`` the 95th percentile
-    interpolates between the second and third largest absolute null shift.
+    multiplicity correction is applied across a panel. With ``n=500`` the 95th percentile
+    interpolates between the twenty-fifth and twenty-sixth largest absolute null shift.
     """
     rng = np.random.default_rng(seed)
     fate_wt, _ = fate_probabilities(fate_transition_matrix(X, V_wt, knn_idx, sigma), term_sets)

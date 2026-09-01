@@ -217,6 +217,10 @@ BIMODAL_HILL = True
 FIT_KWARGS = dict(
     n_epochs=600, batch_size=128, learning_rate=0.1,
     reconstruction_regularization=100, bias_regularization=1, bias_penalty="l1",
+    # The off-scaffold penalty is a true elastic net, lambda*(r*||.||_1 + (1-r)*||.||_2^2), and
+    # not the L1-plus-unsquared-L2 form the code carried until 2026-08-28. Named explicitly here
+    # rather than inherited, so the paper's configuration does not move with a package default.
+    scaffold_penalty="elastic", scaffold_elastic_ratio=0.5,
     refit_gamma=True, use_plateau_scheduler=True, plateau_patience=100,
     plateau_factor=0.1, drop_last=True, include_neighbors=True, neighbor_fraction=0.2,
     # only_TFs=True is the intended default: only TF->gene edges may be nonzero

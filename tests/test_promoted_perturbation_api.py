@@ -8,7 +8,7 @@ them the readouts they are, on a synthetic fitted object small enough to reason 
 * clamping several genes at once agrees with clamping one when there is only one;
 * evaluating perturbations across processes agrees with evaluating them serially;
 * the double-knockout matrix's diagonal is the single-knockout shift, so singles and doubles are
-  on one scale and the synergy is a real subtraction rather than a comparison of two conventions;
+  on one scale and the synergy compares magnitudes rather than mixing two conventions;
 * the three summaries of the Jacobian pass agree with each other, which is the reason they share
   a pass at all.
 """
@@ -132,7 +132,13 @@ def test_dose_zero_reproduces_the_knockout(fitted, scaffold):
 
 
 def test_double_knockout_matrix_is_consistent_with_its_singles(fitted, scaffold):
-    """Diagonal is the single knockout, the matrices are symmetric, synergy is the subtraction."""
+    """Diagonal is the single knockout, the matrices are symmetric, synergy is the magnitude form.
+
+    The synergy compares the magnitude of the joint effect against the magnitude of the additive
+    expectation, |d12| - |d1 + d2|, so it is symmetric in the two genes and its sign does not
+    depend on which way the pair moves the decision. An earlier signed form, d12 - (d1 + d2)
+    scaled by the sign of the first gene's effect, depended on which gene was named the anchor.
+    """
     genes = ["g0", "g1", "g2"]
     axes = sch.tl.lineage_pair_axes(scaffold, LINEAGE_PAIRS)
     blocks, _, _ = sch.tl.double_knockout_matrix(fitted, "clusters", scaffold, genes, axes)
@@ -147,8 +153,12 @@ def test_double_knockout_matrix_is_consistent_with_its_singles(fitted, scaffold)
     idx = {g: i for i, g in enumerate(block["genes"])}
     for (g1, g2), synergy in block["synergy"].items():
         joint = block["matrix"][idx[g1], idx[g2]]
-        assert synergy == pytest.approx(joint - (block["single"][g1] + block["single"][g2]),
-                                        abs=1e-12)
+        expected = abs(joint) - abs(block["single"][g1] + block["single"][g2])
+        assert synergy == pytest.approx(expected, abs=1e-12)
+        # symmetric in the two genes: swapping them cannot change the score
+        swapped = abs(block["matrix"][idx[g2], idx[g1]]) - abs(
+            block["single"][g2] + block["single"][g1])
+        assert synergy == pytest.approx(swapped, abs=1e-12)
 
 
 def test_the_jacobian_summaries_agree_with_each_other(fitted):

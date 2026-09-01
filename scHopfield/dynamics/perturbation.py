@@ -787,10 +787,13 @@ def compute_epistasis(
 
     For each gene pair (A, B) computes:
 
-    - **cancellation_error**: ``actual_bias - (bias_A + bias_B)`` — deviation
-      from the additive expectation (bias independence on lineage bias).
-    - **synergy_score**: Directionally corrected cancellation error.
-      Positive means synergistic (amplifies bias in the same direction).
+    - **cancellation_error**: ``actual_bias - (bias_A + bias_B)``, the signed
+      deviation from the additive expectation.
+    - **synergy_score**: ``abs(actual_bias) - abs(bias_A + bias_B)``, the same
+      comparison taken on magnitudes. Positive means the joint knockout moves
+      the bias further than the additive expectation, negative that it is
+      buffered relative to it. Symmetric in the two genes, so neither has to be
+      named the anchor.
 
     Parameters
     ----------
@@ -841,8 +844,10 @@ def compute_epistasis(
 
         expected_bias       = bias_A + bias_B
         cancellation_error  = actual_bias - expected_bias
-        bias_sign = 1 if bias_A > 0 else -1
-        synergy_score = cancellation_error * bias_sign
+        # Synergy, absolute-magnitude form: Syn = |d12| - |d1 + d2|. The earlier form multiplied
+        # the cancellation error by sgn(bias_A), which made the score depend on which gene was
+        # named first and collapsed it to zero when that gene had no single-knockout effect.
+        synergy_score = abs(actual_bias) - abs(expected_bias)
 
         if ery_genes and mye_genes:
             in_ery_A = gA in ery_genes

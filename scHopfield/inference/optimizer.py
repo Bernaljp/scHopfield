@@ -73,6 +73,8 @@ class ScaffoldOptimizer(nn.Module):
         bias_bias: float = 0.0,
         bias_penalty: str = 'l1',
         elastic_ratio: float = 0.5,
+        scaffold_penalty: str = 'elastic',
+        scaffold_elastic_ratio: float = 0.5,
         use_masked_linear: bool = False,
         pre_initialized_W: torch.Tensor = None,
         pre_initialized_I: torch.Tensor = None,
@@ -118,6 +120,8 @@ class ScaffoldOptimizer(nn.Module):
         self.bias_bias = bias_bias
         self.bias_penalty = bias_penalty
         self.elastic_ratio = elastic_ratio
+        self.scaffold_penalty = scaffold_penalty
+        self.scaffold_elastic_ratio = scaffold_elastic_ratio
         self.normalize_regularization = normalize_regularization
 
         # Hierarchical parent-anchor penalty: pull W toward the (coarse) parent's fitted W (L2 shrinkage).
@@ -217,6 +221,24 @@ class ScaffoldOptimizer(nn.Module):
             val = val / batch_size
         return val
 
+    def _scaffold_loss(self, mask_m, batch_size=None):
+        """Penalty on the interaction weights that fall outside the scaffold.
+
+        - ``'elastic'``: ``lambda * (r*||.||_1 + (1-r)*||.||_2^2)``, the standard elastic net,
+          matching the convention already used for the bias term.
+        - ``'legacy'``: ``lambda * (||.||_2 + ||.||_1)``, an L1 plus an *unsquared* L2. Kept so
+          that fits made before the elastic net was available stay reproducible.
+        """
+        Wm = self.W.weight * mask_m
+        if self.scaffold_penalty == 'elastic':
+            r = self.scaffold_elastic_ratio
+            val = r * Wm.abs().sum() + (1.0 - r) * Wm.pow(2).sum()
+        else:
+            val = Wm.norm(2) + Wm.norm(1)
+        val = self.scaffold_lambda * val
+        if self.normalize_regularization and batch_size:
+            val = val / batch_size
+        return val
     def _model_sigma(self, s, x):
         """The activation the forward pass actually uses (subclasses may recompute it from x)."""
         return s
@@ -393,9 +415,9 @@ class ScaffoldOptimizer(nn.Module):
                 # Normalize regularization losses by batch size if requested
                 batch_size = s_batch.shape[0]
                 if self.normalize_regularization:
-                    graph_constr_loss = self.scaffold_lambda * ((self.W.weight * mask_m).norm(2) + (self.W.weight * mask_m).norm(1)) / batch_size
+                    graph_constr_loss = self._scaffold_loss(mask_m, batch_size)
                 else:
-                    graph_constr_loss = self.scaffold_lambda * ((self.W.weight * mask_m).norm(2) + (self.W.weight * mask_m).norm(1))
+                    graph_constr_loss = self._scaffold_loss(mask_m)
                 bias_loss = self._bias_loss(batch_size)
 
                 total_loss = reconstruction_loss + graph_constr_loss + bias_loss
@@ -582,9 +604,9 @@ class HillScaffoldOptimizer(ScaffoldOptimizer):
                 reconstruction_loss = self.reconstruction_lambda * loss_fn(output, target)
                 bs = s_batch.shape[0]
                 if self.normalize_regularization:
-                    graph_constr_loss = self.scaffold_lambda * ((self.W.weight * mask_m).norm(2) + (self.W.weight * mask_m).norm(1)) / bs
+                    graph_constr_loss = self._scaffold_loss(mask_m, bs)
                 else:
-                    graph_constr_loss = self.scaffold_lambda * ((self.W.weight * mask_m).norm(2) + (self.W.weight * mask_m).norm(1))
+                    graph_constr_loss = self._scaffold_loss(mask_m)
                 bias_loss = self._bias_loss(bs)
                 total_loss = reconstruction_loss + graph_constr_loss + bias_loss + self.hill_anchor_loss()
                 total_loss.backward()

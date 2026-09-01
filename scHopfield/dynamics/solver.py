@@ -186,9 +186,14 @@ class ODESolver:
             Integration method:
             - 'euler': Simple Euler method with clipping (stable, recommended)
             - 'odeint': scipy.integrate.odeint (may diverge)
-            - 'RK45': scipy.integrate.solve_ivp with RK45
+            - 'RK45' and the other scipy names: scipy.integrate.solve_ivp. With
+              ``clip_each_step`` these run segment by segment between output times and
+              project the state after each segment, which is the adaptive-step counterpart
+              of the clipped Euler path.
         clip_each_step : bool, optional (default: True)
-            Whether to clip values at each step (prevents divergence)
+            Project the state onto the admissible box at each step, and re-impose the fixed
+            genes. This enforces the non-negative range; it is not a stability property of
+            the scheme.
 
         Returns
         -------
@@ -255,21 +260,42 @@ class ODESolver:
         method: str,
         clip_each_step: bool
     ) -> np.ndarray:
-        """Solve using scipy solve_ivp."""
-        sol = solve_ivp(
-            self.dynamics_ivp,
-            (t_span[0], t_span[-1]),
-            x0,
-            method=method,
-            t_eval=t_span,
-            dense_output=False
-        )
+        """Solve using scipy solve_ivp, optionally projecting between output steps.
 
-        trajectory = sol.y.T  # Transpose to (n_times, n_genes)
+        With ``clip_each_step`` the integration is run segment by segment between consecutive
+        entries of ``t_span``, and the state is projected onto the admissible box and the fixed
+        genes re-imposed at the end of each segment, so the state that seeds the next segment is
+        admissible. That is what makes this the adaptive-step counterpart of the clipped Euler
+        path: the constraint acts on the state being integrated, not only on the samples that
+        come back.
 
-        if clip_each_step:
-            trajectory = self._clip_trajectory(trajectory)
-        self._enforce_fixed_trajectory(trajectory)
+        Without it, a single solve runs over the whole interval and only the returned samples
+        are clipped, which reports an in-range trajectory even when the solve left the range.
+        """
+        if not clip_each_step:
+            sol = solve_ivp(self.dynamics_ivp, (t_span[0], t_span[-1]), x0,
+                            method=method, t_eval=t_span, dense_output=False)
+            trajectory = sol.y.T
+            self._enforce_fixed_trajectory(trajectory)
+            return trajectory
+
+        n_steps = len(t_span)
+        trajectory = np.zeros((n_steps, len(x0)), dtype=np.float32)
+        trajectory[0] = x0
+        x = np.asarray(x0, dtype=float).copy()
+        for i in range(1, n_steps):
+            sol = solve_ivp(self.dynamics_ivp, (float(t_span[i - 1]), float(t_span[i])), x,
+                            method=method, t_eval=[float(t_span[i])], dense_output=False)
+            if not sol.success or sol.y.shape[1] == 0:
+                # A failed segment is reported rather than silently carried forward as the
+                # previous state, which would look like a converged trajectory.
+                raise RuntimeError(
+                    f"{method} failed on segment {i} of {n_steps - 1} "
+                    f"(t={t_span[i - 1]:g} to {t_span[i]:g}): {sol.message}"
+                )
+            x = self._clip(sol.y[:, -1])
+            self._enforce_fixed(x)
+            trajectory[i] = x
 
         return trajectory
 

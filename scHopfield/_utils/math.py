@@ -6,12 +6,11 @@ from scipy.special import hyp2f1 as hyper
 from scipy.signal import convolve2d
 from scipy.optimize import least_squares
 
-# Hill exponent must be strictly greater than 1: the activation derivative
-# phi'(x) = n*phi(1-phi)/x stays finite at x=0 only for n >= 1, and the
-# degradation-energy integral (int_sig_act_inv, Methods Eq. 15) has a 1/(n-1)
-# factor that is singular at n = 1. We therefore clamp every fitted/optimized
-# exponent to n >= HILL_N_MIN > 1 so both are always finite.
-HILL_N_MIN = 1.001
+# Hill exponent floor. The activation derivative phi'(x) = n*phi(1-phi)/x stays finite at
+# x = 0 only for n >= 1. The closed-form degradation-energy integral carries a 1/(n-1)
+# factor that is singular at n = 1, but int_sig_act_inv evaluates the exact
+# Michaelis-Menten limit there instead, so n = 1 is admissible and the floor is exactly 1.
+HILL_N_MIN = 1.0
 
 
 def sigmoid(x, s, n):
@@ -311,8 +310,8 @@ def int_sig_act_inv(x, s, n, verbose=False):
 
     # The closed-form (Gauss hypergeometric) antiderivative carries a 1/(n-1) factor and
     # is singular at n = 1. Genes fitted (or loaded) at n = 1 use the exact Michaelis-Menten
-    # limit int_0^sigma phi^{-1}(z) dz = k(-sigma - ln(1 - sigma)). New fits are clamped to
-    # n >= HILL_N_MIN > 1 (see fit_sigmoid), so this branch only guards legacy/edge inputs.
+    # limit int_0^sigma phi^{-1}(z) dz = k(-sigma - ln(1 - sigma)) instead, which is why the
+    # fitted exponent may sit exactly on HILL_N_MIN = 1 (see fit_sigmoid) rather than above it.
     near1 = np.abs(n - 1.0) < 1e-6
     n_safe = np.where(near1, 1.0 + 1e-6, n)  # keep hyper() finite; overwritten for near1 below
 

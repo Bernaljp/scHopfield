@@ -4,8 +4,8 @@ the cross-dataset counterpart of one per-dataset analysis (the per-dataset figur
 
   a  energy-basin depth       -- interaction-energy depth per cell (within-dataset z), progenitor vs terminal
                                 (terminals sit in deeper basins in every dataset)
-  b  regulator recovery       -- rank-percentile of each system's curated lineage TFs among all genes (driver score)
-  c  identifiability          -- effective dimensionality of the expression manifold, as a percent of the modeled
+  b  regulator recovery       -- rank-percentile of each system's curated lineage TFs among the scaffold's regulators (driver score)
+  c  identifiability          -- effective dimensionality of the activation phi(X), as a percent of the modeled
                                 genes (small everywhere, so the [W|I] inverse problem is under-determined)
   d  regulatory concentration -- share of total TF out-strength held by the top ten regulators (hub-dominated)
   e  activation bimodality    -- fraction of genes with a two-component Hill, and its enrichment among lineage TFs
@@ -129,7 +129,14 @@ def collect(cache: str | None = None):
             "panel a, the progenitor versus terminal split")))
         att_prog = float(np.nanmean(att[prog])) if prog.any() else np.nan
         att_term = float(np.nanmean(att[~prog])) if (~prog).any() else np.nan
-        # b: rank-percentile of curated TFs among all genes (best of the lineage-pair driver CSVs)
+        # b: rank-percentile of curated TFs AMONG REGULATORS (best of the lineage-pair driver CSVs).
+        #    Ranking against all genes is degenerate under only_TFs=True: the scaffold admits only
+        #    transcription factors as sources, so 71 to 111 of the 606 to 2000 modeled genes carry any
+        #    outgoing strength and every other gene ties at zero. A curated factor then clears about 95
+        #    percent of the list mechanically, and the median percentile reads 99 rather than the 82 it
+        #    is among genes the score can discriminate between. The population is the scaffold's
+        #    transcription factors, which is fixed before fitting; in these seven fits it is exactly the
+        #    set with nonzero fitted out-strength.
         pcts = []
         for tf in _curated_tfs(ds):
             best = np.nan
@@ -137,16 +144,25 @@ def collect(cache: str | None = None):
                 p = f"{paths.REPORTS}/{ds}/data/driver_scores_{k}.csv"
                 if os.path.exists(p):
                     df = pd.read_csv(p, index_col=0)
-                    if tf in df.index:
-                        n = len(df)
-                        r = min(df.loc[tf, "rank_A"], df.loc[tf, "rank_B"])   # best rank across the two arms
-                        best = np.nanmax([best, 100.0 * (1 - (r - 1) / max(n - 1, 1))])
+                    if tf not in df.index:
+                        continue
+                    reg = df[["wout_A", "wout_B"]].max(axis=1) > 0
+                    if reg.sum() < 2 or not bool(reg.loc[tf]):
+                        continue
+                    for arm in ("A", "B"):
+                        sc = df.loc[reg, f"score_{arm}"]
+                        best = np.nanmax([best, 100.0 * float((sc < df.loc[tf, f"score_{arm}"]).mean())])
             if np.isfinite(best):
                 pcts.append(best)
-        # c: identifiability -- effective dimensionality (participation ratio) of the expression manifold,
-        #    as a fraction of the used genes. Small everywhere => the [W|I] inverse problem is heavily
-        #    under-determined in every system, which is what motivates the transcription-factor scaffold.
-        Xc = _to_dense(a, "Ms")[:, used]
+        # c: identifiability -- effective dimensionality (participation ratio) of the REGRESSION
+        #    DESIGN, as a fraction of the used genes. This is computed on the activation matrix
+        #    phi(X), not on the expression Ms: the least-squares problem for [W|I] is posed in the
+        #    activation basis, so the rank that governs its conditioning is phi(X)'s, and the Hill
+        #    map is applied gene by gene and is not rank preserving. The split-half diagnostic
+        #    already used phi(X); this panel used Ms, and the two now agree. Small everywhere =>
+        #    the inverse problem is heavily under-determined in every system, which is what
+        #    motivates the transcription-factor scaffold.
+        Xc = _to_dense(a, "sigmoid")[:, used]
         Xc = Xc - Xc.mean(0)
         s = np.linalg.svd(Xc, compute_uv=False, full_matrices=False)
         lam = s ** 2
@@ -221,7 +237,7 @@ def main():
     ax.bar(xs, [100 * R[d]["fit_corr"] for d in order], color=cols, edgecolor="0.3", linewidth=0.4, width=0.7)
     ax.set_xticks(xs); ax.set_xticklabels([LABEL[d] for d in order], fontsize=6.2)
     ax.set_ylabel("effective dim (% of genes)", fontsize=8.5)
-    ax.set_title("expression low-rank (GRN under-determined)", fontsize=8.3); ax.tick_params(axis="y", labelsize=7)
+    ax.set_title("regression design low-rank (GRN under-determined)", fontsize=8.3); ax.tick_params(axis="y", labelsize=7)
     label(ax, "c")
 
     # d: regulatory concentration (Gini of TF out-strength)
@@ -341,14 +357,18 @@ def main_submission(height_mm: float = 140.0, out: str | None = None):
     ax.set_xticklabels([])
 
     # c: identifiability, effective dimensionality as a percent of the modeled genes
-    ax = _stack_axis(1, "expression is low rank (the GRN fit is under-determined)", "c")
+    ax = _stack_axis(1, "the regression design is low rank (the GRN fit is under-determined)", "c")
     vals = [100 * R[d]["fit_corr"] for d in order]
     ax.bar(xs, vals, color=cols, edgecolor="0.3", linewidth=0.4, width=0.66)
     # The point of the panel is how small these are, which leaves the four smallest bars hard
     # to tell apart, so each one carries its value.
     for x, v in zip(xs, vals):
         ax.text(x, v + 0.06, f"{v:.2f}", ha="center", va="bottom", fontsize=FINE, color="0.35")
-    ax.set_ylim(0, 2.05); ax.set_yticks([0, 1, 2])
+    # Derived from the data, not hardcoded. The previous fixed 2.05 predated the change of this
+    # statistic to phi(X): two datasets now exceed it, and their value labels were being drawn
+    # above the axes and into panel b.
+    _top = max(vals) * 1.18
+    ax.set_ylim(0, _top); ax.set_yticks([t for t in (0, 1, 2, 3) if t <= _top])
     ax.set_ylabel("effective dim\n(% of genes)", fontsize=LAB, labelpad=2)
     ax.set_xticklabels([])
 

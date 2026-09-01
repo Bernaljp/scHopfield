@@ -737,8 +737,17 @@ def main():
     discovery = args.mode == "discovery"
     suf = f"_{args.variant}" if args.variant else ""
     cache = f"perturb_dynamics_discovery{suf}.pkl" if discovery else f"perturb_dynamics{suf}.pkl"
-    with open(f"{paths.REPORTS}/{ds}/data/{cache}", "rb") as fh:
+    cache_path = f"{paths.REPORTS}/{ds}/data/{cache}"
+    with open(cache_path, "rb") as fh:
         C = pickle.load(fh)
+
+    # The Jacobian block is added by a later stage of the compute, so a base cache written on
+    # its own loads fine and only panels d and e come out blank. Stop instead.
+    guards.require_cache_keys(
+        C, ["jac_response", "commit_push", "out_strength"], cache_path,
+        "panels d and e, the first-order knockout response and the predicted commitment push",
+        how=f"reproducibility/compute/_perturb_dynamics_compute.py --dataset {ds} "
+            f"--only jacobian" + (f" --variant {args.variant}" if args.variant else ""))
 
     if args.submission:
         if discovery:

@@ -25,7 +25,7 @@ def score_driver_tfs(
     Score transcription factors as lineage drivers from GRN structure.
 
     Combines three signals averaged over the specified lineage clusters:
-    - W-matrix row L2-norm (interaction strength)
+    - W-matrix column L2-norm (outgoing regulatory strength)
     - Out-degree centrality (regulatory influence)
     - Energy-gene correlation (association with energy landscape)
 
@@ -61,7 +61,7 @@ def score_driver_tfs(
         - ``lineage_bias``: score_A - score_B
         - ``rank_A``: rank by score_A (1 = highest)
         - ``rank_B``: rank by score_B (1 = highest)
-        - ``wnorm_A``, ``wnorm_B``: mean W-matrix row L2-norm per lineage
+        - ``wout_A``, ``wout_B``: mean W-matrix column L2-norm (out-strength) per lineage
         - ``deg_A``, ``deg_B``: mean out-degree centrality per lineage
         - ``ecorr_A``, ``ecorr_B``: mean absolute energy-gene correlation per lineage
 
@@ -88,40 +88,52 @@ def score_driver_tfs(
             return pd.Series(0.0, index=adata.var_names)
         return adata.var[cols].mean(axis=1)
 
-    def _mean_wnorm(cluster_list: List[str]) -> pd.Series:
+    def _mean_wout(cluster_list: List[str]) -> pd.Series:
+        """Mean outgoing regulatory strength per gene, over the lineage's clusters.
+
+        Under the W[target, regulator] convention, COLUMN g is the regulation gene g
+        exerts. Scoring the row instead measures regulation gene g receives, which is a
+        different quantity and not what a driver score wants: on the pancreas the row
+        norm ranked Malat1 first and returned long non-coding RNAs and ion channels,
+        while the column norm returns the lineage transcription factors. Under
+        only_TFs=True non-regulators carry no outgoing edges at all, so the column norm
+        also restricts the score to genes that can actually regulate.
+        """
         result = pd.Series(0.0, index=adata.var_names)
         count = 0
         for cl in cluster_list:
             key = f'W_{cl}'
             if key in adata.varp:
                 W = adata.varp[key]
-                result += pd.Series(np.linalg.norm(W, axis=1), index=adata.var_names)
+                result += pd.Series(np.linalg.norm(W, axis=0), index=adata.var_names)
                 count += 1
         if count > 0:
             result /= count
         return result
 
     # Compute per-lineage signals
-    wnorm_A  = _mean_wnorm(lineage_A_clusters)
-    wnorm_B  = _mean_wnorm(lineage_B_clusters)
+    wout_A   = _mean_wout(lineage_A_clusters)
+    wout_B   = _mean_wout(lineage_B_clusters)
     deg_A    = _mean_var_col('degree_centrality_out', lineage_A_clusters)
     deg_B    = _mean_var_col('degree_centrality_out', lineage_B_clusters)
     ecorr_A  = _mean_var_col('correlation_total', lineage_A_clusters).abs()
     ecorr_B  = _mean_var_col('correlation_total', lineage_B_clusters).abs()
 
     # Standardized composite: mean of z-scored signals so the three heterogeneous
-    # signals (W-norm, out-degree, energy correlation) share a comparable scale and
-    # contribute equally, instead of an unnormalized rank-sum.
-    score_A = (_z(wnorm_A) + _z(deg_A) + _z(ecorr_A)) / 3.0
-    score_B = (_z(wnorm_B) + _z(deg_B) + _z(ecorr_B)) / 3.0
+    # signals (out-strength, out-degree, energy correlation) share a comparable scale
+    # and contribute equally, instead of an unnormalized rank-sum. Out-strength weights
+    # each regulator by how strongly it acts; out-degree counts how many targets it
+    # reaches; the two are complementary and both outgoing.
+    score_A = (_z(wout_A) + _z(deg_A) + _z(ecorr_A)) / 3.0
+    score_B = (_z(wout_B) + _z(deg_B) + _z(ecorr_B)) / 3.0
     lineage_bias = score_A - score_B
 
     df = pd.DataFrame({
         'score_A':      score_A.values,
         'score_B':      score_B.values,
         'lineage_bias': lineage_bias.values,
-        'wnorm_A':      wnorm_A.values,
-        'wnorm_B':      wnorm_B.values,
+        'wout_A':       wout_A.values,
+        'wout_B':       wout_B.values,
         'deg_A':        deg_A.values,
         'deg_B':        deg_B.values,
         'ecorr_A':      ecorr_A.values,
@@ -552,15 +564,18 @@ def double_knockout_matrix(
 ) -> tuple:
     """Fate shift for every single and every pair drawn from ``genes``, and their synergy.
 
-    The synergy is what makes the pair worth measuring:
+    The synergy is what makes the pair worth measuring. It compares the magnitude of the joint
+    effect against the magnitude of the additive expectation:
 
     .. math::
-        s_{gh} = \\Delta_{gh} - (\\Delta_g + \\Delta_h)
+        s_{gh} = \\lvert \\Delta_{gh} \\rvert - \\lvert \\Delta_g + \\Delta_h \\rvert
 
     so a pair whose joint effect is exactly the sum of its parts scores zero. Positive means the
-    two knockouts reinforce each other beyond additivity, negative that they cancel. Every shift
-    is the decider-cell mean change in the A-versus-B split fraction, the same readout the single
-    knockout screen reports, so singles and doubles are directly comparable.
+    joint knockout displaces fate further than the additive expectation, negative that the joint
+    effect is buffered relative to it. The form is symmetric in the two genes and its sign does
+    not depend on which way the pair moves the decision, so no gene has to be named the anchor.
+    Every shift is the decider-cell mean change in the A-versus-B split fraction, the same readout
+    the single knockout screen reports, so singles and doubles are directly comparable.
 
     Parameters
     ----------
@@ -612,7 +627,10 @@ def double_knockout_matrix(
         synergy = {}
         for (g1, g2), fate in fate_double.items():
             d = decider_shift(fate, ax)
-            s = d - (single[g1] + single[g2])
+            # Synergy, absolute-magnitude form: Syn = |d12| - |d1 + d2|. Symmetric in the two
+            # genes, so the score does not depend on which is named first, and positive always
+            # means the joint knockout moves fate further than the additive expectation.
+            s = abs(d) - abs(single[g1] + single[g2])
             shift_m[idx[g1], idx[g2]] = shift_m[idx[g2], idx[g1]] = d
             syn_m[idx[g1], idx[g2]] = syn_m[idx[g2], idx[g1]] = s
             synergy[(g1, g2)] = s
