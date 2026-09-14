@@ -17,7 +17,7 @@ repository-code: "https://github.com/Bernaljp/scHopfield"
 url: "https://schopfield.readthedocs.io"
 license: MIT
 version: 1.1.0
-date-released: "2026-08-19"
+date-released: "2026-09-14"
 keywords:
   - single-cell
   - gene regulatory network
