@@ -448,6 +448,11 @@ def jacobian_knockout_response(
     names = list(np.asarray(adata.var_names)[genes_used])
     X = np.asarray(adata.layers[spliced_key])[:, genes_used].astype(float)
     clusters = adata.obs[cluster_key].astype(str).values
+    # The central difference steps each cell off its observed state, so both steps are evaluated
+    # in the cell's observed-state component; otherwise a step that crosses the midpoint between
+    # a gene's two thresholds would difference across the jump between its two Hills.
+    from .._utils.io import observed_regime
+    regime = observed_regime(adata, genes_used, spliced_key)
 
     # tie each named gene to the decision axis it is a driver of
     group_names = list(groups or {})
@@ -481,14 +486,15 @@ def jacobian_knockout_response(
         except Exception:
             continue
         Xc = X[sel]
+        Rc = None if regime is None else regime[sel]
         for g in targets:
             gi = names.index(g)
             x_plus = Xc.copy()
             x_plus[:, gi] += eps
             x_minus = Xc.copy()
             x_minus[:, gi] -= eps
-            jcol = (solver.dynamics_batch(x_plus, 0.0)
-                    - solver.dynamics_batch(x_minus, 0.0)) / (2 * eps)
+            jcol = (solver.dynamics_batch(x_plus, 0.0, regime=Rc)
+                    - solver.dynamics_batch(x_minus, 0.0, regime=Rc)) / (2 * eps)
             r = -jcol * Xc[:, gi][:, None]              # (n_cells_in_cluster, n_targets)
             resp_sum[g] += r.sum(0)
             resp_ct[g][str(cluster)] = r.mean(0)

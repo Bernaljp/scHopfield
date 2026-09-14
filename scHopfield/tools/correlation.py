@@ -7,7 +7,7 @@ from typing import Optional
 from anndata import AnnData
 import hoggorm as ho
 
-from .._utils.io import get_matrix, to_numpy, get_genes_used, get_hill_params
+from .._utils.io import get_matrix, to_numpy, get_genes_used, get_hill_params, assign_regime
 
 
 def energy_gene_correlation(
@@ -198,8 +198,10 @@ def future_celltype_correlation(
 
         _t2 = None if threshold2 is None else threshold2[None, :]
         _e2 = None if exponent2 is None else exponent2[None, :]
-        sig_k1 = sigmoid_regime(counts_k1, threshold[None, :], exponent[None, :], _t2, _e2)
-        sig_k2 = sigmoid_regime(counts_k2, threshold[None, :], exponent[None, :], _t2, _e2)
+        sig_k1 = sigmoid_regime(counts_k1, threshold[None, :], exponent[None, :], _t2, _e2,
+                                regime=assign_regime(adata, counts_k1, genes))
+        sig_k2 = sigmoid_regime(counts_k2, threshold[None, :], exponent[None, :], _t2, _e2,
+                                regime=assign_regime(adata, counts_k2, genes))
 
         W_k1 = adata.varp[f'W_{k1}']
         W_k2 = adata.varp[f'W_{k2}']

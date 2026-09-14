@@ -1,30 +1,30 @@
 {
  "paul15": {
-  "cos_celltype": 0.7166838139682191,
-  "cos_global": 0.5783936830071692
+  "cos_celltype": 0.7145146885894413,
+  "cos_global": 0.5823827325927957
  },
  "paul15_coarse": {
-  "cos_celltype": 0.6944852243270518,
-  "cos_global": 0.57882873649184
+  "cos_celltype": 0.6930854274249191,
+  "cos_global": 0.582557054001014
  },
  "dynamo_hematopoiesis": {
-  "cos_celltype": 0.6531230966259051,
-  "cos_global": 0.5146184022360614
+  "cos_celltype": 0.6635132132769652,
+  "cos_global": 0.5244334707293593
  },
  "pancreas": {
-  "cos_celltype": 0.9610866643309466,
-  "cos_global": 0.9281053616306736
+  "cos_celltype": 0.9616635878122282,
+  "cos_global": 0.9252698184698973
  },
  "murine_nc": {
-  "cos_celltype": 0.7912329464049856,
-  "cos_global": 0.7046495383292783
+  "cos_celltype": 0.790122689343774,
+  "cos_global": 0.7024934424824889
  },
  "schwann": {
-  "cos_celltype": 0.7136281750843716,
-  "cos_global": 0.5691479220516183
+  "cos_celltype": 0.7250918479375169,
+  "cos_global": 0.5808649791124817
  },
  "human_limb": {
-  "cos_celltype": 0.6752086938311601,
-  "cos_global": 0.5770591013812166
+  "cos_celltype": 0.6772983103430329,
+  "cos_global": 0.581447464184138
  }
 }

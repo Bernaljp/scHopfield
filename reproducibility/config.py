@@ -214,6 +214,11 @@ PROGENITORS = {
 # still override with an explicit "bimodal_hill": False in its DATASETS entry. (Promoted 2026-07-26; the
 # single-Hill fits are backed up as adata_analyzed_singlehill.h5ad.)
 BIMODAL_HILL = True
+# The activation is fitted by maximum likelihood: each gene's expression is modeled as a log-logistic
+# distribution (whose CDF is the Hill function), or a mixture of two where the gene is bimodal, and each
+# cell is assigned to a component by maximum posterior. Named here rather than inherited, so the paper's
+# configuration does not move with a package default. 'ecdf' is the earlier least-squares fit.
+HILL_METHOD = "mle"
 FIT_KWARGS = dict(
     n_epochs=600, batch_size=128, learning_rate=0.1,
     reconstruction_regularization=100, bias_regularization=1, bias_penalty="l1",

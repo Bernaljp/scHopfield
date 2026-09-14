@@ -176,9 +176,12 @@ def _calculate_flow_hopfield(
         if issparse(X_perturbed):
             X_perturbed = X_perturbed.toarray()
 
+        # the perturbed state is evaluated in each cell's component at its observed state
+        from .._utils.io import observed_regime
         velocity = compute_velocity(
             adata, X=X_perturbed, cluster_key=cluster_key,
-            use_cluster_specific=use_cluster_specific
+            use_cluster_specific=use_cluster_specific,
+            regime=observed_regime(adata, genes, original_key)
         )
         default_key = f'perturbed_velocity_flow_{basis}'
 
@@ -207,9 +210,11 @@ def _calculate_flow_hopfield(
         if issparse(X_custom):
             X_custom = X_custom.toarray()
 
+        from .._utils.io import observed_regime
         velocity = compute_velocity(
             adata, X=X_custom, cluster_key=cluster_key,
-            use_cluster_specific=use_cluster_specific
+            use_cluster_specific=use_cluster_specific,
+            regime=observed_regime(adata, genes, original_key)
         )
         default_key = f'{source}_flow_{basis}'
 

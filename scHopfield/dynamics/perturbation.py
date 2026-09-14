@@ -33,7 +33,10 @@ def _propagate_signal(
     exponent: np.ndarray,
     dt: float = 1.0,
     x_min: float = 0.0,
-    x_max: Optional[np.ndarray] = None
+    x_max: Optional[np.ndarray] = None,
+    threshold2: Optional[np.ndarray] = None,
+    exponent2: Optional[np.ndarray] = None,
+    regime: Optional[np.ndarray] = None,
 ) -> np.ndarray:
     """
     Propagate signal through the GRN for one step.
@@ -70,12 +73,17 @@ def _propagate_signal(
     np.ndarray
         Updated expression matrix after one propagation step
     """
+    # Both states are evaluated in each cell's component at its original state, so the change
+    # in activation is the change along one Hill and never a jump between the two.
+    reg = None if regime is None else regime[:, source_indices]
+
     # Compute sigmoid of current expression for source genes
     sig_current = sigmoid_regime(
         X_current[:, source_indices],
         threshold[source_indices], exponent[source_indices],
         None if threshold2 is None else threshold2[source_indices],
         None if exponent2 is None else exponent2[source_indices],
+        regime=reg,
     )
 
     # Compute sigmoid of original expression for source genes
@@ -84,6 +92,7 @@ def _propagate_signal(
         threshold[source_indices], exponent[source_indices],
         None if threshold2 is None else threshold2[source_indices],
         None if exponent2 is None else exponent2[source_indices],
+        regime=reg,
     )
 
     # Compute delta sigmoid: sigmoid(x^current) - sigmoid(x^original)
@@ -235,8 +244,10 @@ def simulate_perturbation(
     spliced_key = adata.uns.get('scHopfield', {}).get('spliced_key', 'Ms')
     base_expression = to_numpy(get_matrix(adata, spliced_key, genes=genes))
 
-    # Get sigmoid parameters
+    # Get sigmoid parameters, and each cell's component at its observed state
     threshold, exponent, threshold2, exponent2 = get_hill_params(adata, genes)
+    from .._utils.io import observed_regime
+    regime_all = observed_regime(adata, genes, spliced_key)
 
     # Compute expression bounds for stability
     x_min, x_max = _compute_x_bounds(base_expression, x_max_percentile, multiplier=2.0)
@@ -306,7 +317,10 @@ def simulate_perturbation(
                 exponent=exponent,
                 dt=dt,
                 x_min=x_min,
-                x_max=x_max
+                x_max=x_max,
+                threshold2=threshold2,
+                exponent2=exponent2,
+                regime=None if regime_all is None else regime_all[cluster_mask],
             )
 
             # Keep perturbed genes fixed at their perturbed values (unless residual dynamics allowed)
@@ -1212,6 +1226,10 @@ def perturbation_cascade(
     clusters = adata.obs[cluster_key].astype(str).values
     cluster_names = list(pd.unique(clusters))
     dt = tmax / n_segments
+    # Every segment restarts from the previous segment's state, so the component each cell is
+    # evaluated in is read once here, from the observed state, and held for the whole horizon.
+    from .._utils.io import observed_regime
+    regime = observed_regime(adata, genes_used, spliced_key)
 
     if verbose:
         print(f"[cascade] wild-type reference (tmax={tmax})", flush=True)
@@ -1220,7 +1238,7 @@ def perturbation_cascade(
     for _ in range(n_segments):
         current_wt = simulate_shift_ode(current_wt, {}, cluster_key=cluster_key, dt=float(dt),
                                         n_steps=n_steps, use_cluster_specific_GRN=True,
-                                        device=device)
+                                        device=device, regime=regime)
         current_wt.layers[spliced_key] = np.asarray(current_wt.layers['simulated_count'])
         wt_states.append(np.asarray(current_wt.layers[spliced_key])[:, genes_used].copy())
 
@@ -1236,7 +1254,8 @@ def perturbation_cascade(
         for step in range(1, n_segments + 1):
             current = simulate_shift_ode(current, {gene: 0.0}, cluster_key=cluster_key,
                                          dt=float(dt), n_steps=n_steps,
-                                         use_cluster_specific_GRN=True, device=device)
+                                         use_cluster_specific_GRN=True, device=device,
+                                         regime=regime)
             current.layers[spliced_key] = np.asarray(current.layers['simulated_count'])
             per_cell = np.abs(np.asarray(current.layers[spliced_key])[:, genes_used]
                               - wt_states[step - 1])[:, keep].mean(1)

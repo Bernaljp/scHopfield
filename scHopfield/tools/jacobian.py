@@ -7,7 +7,7 @@ from typing import Optional
 from anndata import AnnData
 from tqdm import tqdm
 
-from .._utils.io import get_matrix, to_numpy, get_genes_used, get_hill_params
+from .._utils.io import get_matrix, to_numpy, get_genes_used, get_hill_params, assign_regime
 from .._utils.math import sigmoid, d_sigmoid_regime
 
 
@@ -135,6 +135,7 @@ def compute_jacobians(
             cell_data, threshold[None, :], exponent[None, :],
             None if threshold2 is None else threshold2[None, :],
             None if exponent2 is None else exponent2[None, :],
+            regime=assign_regime(adata, cell_data, genes),
         ).astype(np.float32)
 
         for s in range(0, len(cluster_indices), chunk):
@@ -441,6 +442,7 @@ def compute_jacobian_elements(
                 cell_data.cpu().numpy(), threshold[None, :], exponent[None, :],
                 None if threshold2 is None else threshold2[None, :],
                 None if exponent2 is None else exponent2[None, :],
+                regime=assign_regime(adata, cell_data.cpu().numpy(), genes),
             ),
             device=device_obj,
             dtype=torch.float32
@@ -545,6 +547,7 @@ def compute_rotational_part(
                 cell_data.cpu().numpy(), threshold[None, :], exponent[None, :],
                 None if threshold2 is None else threshold2[None, :],
                 None if exponent2 is None else exponent2[None, :],
+                regime=assign_regime(adata, cell_data.cpu().numpy(), genes),
             ),
             device=device_obj,
             dtype=torch.float32

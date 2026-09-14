@@ -57,6 +57,9 @@ BACKBONES = ["linear", "bifurcating", "cycle"]
 # far, is the point: a benchmark that reads a default is a benchmark that silently
 # changes the next time a default is revised.
 SIGMOID_KWARGS = dict(
+    method="ecdf",    # the recorded result was fitted by least squares to the empirical CDF; the package
+                      # default is now maximum likelihood, so the recipe names its method to stay reproducible
+
     n_max=8.0,        # canonical is 20.0; the benchmark was fitted at the ceiling of 8
     bimodal=False,    # canonical is True; the benchmark used a single-component Hill
 )

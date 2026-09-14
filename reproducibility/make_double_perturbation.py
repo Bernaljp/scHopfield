@@ -93,6 +93,20 @@ TIERS = {
                                   "joint epistasis untested"),
         ("Egr1", "Vdr"): ("T3", "Egr1 beta identity (Wang 2020); Vdr adult islet only (Zeitz 2003), no fate role"),
         ("Foxo3", "Vdr"): ("T3", "neither has an established role in the alpha-versus-beta decision"),
+        # Added 2026-09-14 for the pairs the rebuilt screen nominates. Literature pass and Crossref
+        # verification in analyses/narsis_round3/fig6_new_pair_tiers.md (research repo); house rule
+        # applied there: adult beta-cell function, insulin secretion and diabetes are not a fate role.
+        ("Crem", "Klf10"): ("T3", "Crem/ICER represses insulin transactivation in adult beta cells (Inada 2004), "
+                                  "no specification role; Klf10 adult islet only (Wu 2015); joint untested"),
+        ("Prox1", "Vdr"): ("T3", "Prox1 controls secondary-transition endocrine production (Wang 2005); "
+                                 "Vdr adult islet only (Zeitz 2003), no allocation role; joint untested"),
+        ("Arx", "Vdr"): ("T3", "Arx established alpha determinant opposing Pax4 (Collombat 2003); "
+                               "Vdr adult islet only (Zeitz 2003), no allocation role; joint untested"),
+        ("Hmgn3", "Xbp1"): ("T3", "Xbp1 maintains beta identity and represses beta-to-alpha transdifferentiation "
+                                  "(Lee 2022); Hmgn3 has an alpha-cell phenotype its own authors show is not "
+                                  "alpha-cell intrinsic (Kurahashi 2010), so no allocation role"),
+        ("Hmgn3", "Vdr"): ("T3", "neither has an established role in the alpha-versus-beta decision "
+                                 "(Kurahashi 2010; Zeitz 2003)"),
     },
 }
 TIER_COLOR = {"T1": PALETTE["green"], "T2": PALETTE["orange"], "T3": PALETTE["vermillion"], "?": "0.6"}

@@ -101,7 +101,9 @@ def model_velocity(adata: AnnData, cluster_key: str, genes_used=None,
         Several genes held at once, as ``{gene: level}``. A joint knockout cannot be expressed
         through the single-gene ``ko_gene`` clamp, and this is what the combinatorial readouts
         use. Merged on top of ``ko_gene``, so the two may be combined. Genes outside the fitted
-        selection are ignored, exactly as an unmatched ``ko_gene`` is.
+        selection are ignored, exactly as an unmatched ``ko_gene`` is. A held gene with two Hill
+        components is evaluated in the component of each cell's observed state, so a clamp moves
+        the cell along its own Hill and never onto the other one.
     spliced_key : str, default "Ms"
         Layer holding the expression state.
 
@@ -118,6 +120,8 @@ def model_velocity(adata: AnnData, cluster_key: str, genes_used=None,
     names = np.asarray(adata.var_names.values)[genes_used]
     V = np.zeros_like(X)
     clusters = adata.obs[cluster_key].astype(str).values
+    from .._utils.io import observed_regime
+    regime = observed_regime(adata, genes_used, spliced_key)
 
     held: Dict[str, float] = {}
     if ko_gene is not None:
@@ -136,7 +140,7 @@ def model_velocity(adata: AnnData, cluster_key: str, genes_used=None,
         Xc = X[sel].copy()
         for gi, lvl in fixed:
             Xc[:, gi] = lvl
-        V[sel] = solver.dynamics_batch(Xc, 0.0)
+        V[sel] = solver.dynamics_batch(Xc, 0.0, regime=None if regime is None else regime[sel])
     return X, V, names
 
 
@@ -784,18 +788,20 @@ def dose_fate_bias(adata: AnnData, cluster_key: str, lineage_pairs: Sequence[Lin
                    ) -> Dict[Tuple[str, str], Dict[str, pd.DataFrame]]:
     """Fate-split shift as a function of dose, from knockout through overexpression.
 
-    Each gene is held at a fraction of its own natural maximum, taken as the ``percentile`` th
-    percentile of its observed expression, so a dose is comparable across genes on very different
-    scales. Dose zero reproduces the knockout value, which makes :func:`pairwise_fate_bias` the
-    dose-zero slice of this sweep.
+    Each gene is held, in every cell, at a multiple of its ``percentile`` th percentile of observed
+    expression, so a dose is comparable across genes on very different scales. One level is
+    imposed on all cells, so no dose is the unperturbed state; dose one is the percentile level
+    itself. Dose zero is the knockout in the field. It agrees with :func:`pairwise_fate_bias` in
+    sign and ordering but not exactly, because this sweep neutralizes the gene in the kernel by
+    holding its coordinate at wild type rather than by dropping it.
 
     Parameters
     ----------
     fractions : sequence of float, optional
-        Multiples of the natural maximum. Defaults to
+        Multiples of the percentile level. Defaults to
         ``[0.0, 0.25, 0.5, 0.75, 1.0, 1.5, 2.0]``, spanning knockout to twofold overexpression.
     percentile : float, default 99.0
-        Percentile of observed expression defining each gene's natural maximum. A gene whose
+        Percentile of observed expression defining each gene's reference level. A gene whose
         percentile is zero or which is not measured falls back to a unit maximum.
 
     Returns

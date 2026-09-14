@@ -384,7 +384,17 @@ def ordinal(n: int):
     return str(n) + suffix
 
 
-def sigmoid_regime(x, k1, n1, k2=None, n2=None):
+def _resolve_regime(x, k1, n1, k2, n2, regime, a, tau=None):
+    """The component each entry is evaluated in: given, posterior under the mixture, or nearest threshold."""
+    if regime is not None:
+        return np.asarray(regime)
+    if a is not None:
+        from .hill_mle import posterior_regime
+        return posterior_regime(x, k1, n1, k2, n2, a, tau)
+    return hill_regime(x, k1, k2)
+
+
+def sigmoid_regime(x, k1, n1, k2=None, n2=None, regime=None, a=None, tau=None):
     """Regime-switched two-component Hill activation.
 
     This is the activation the model is FITTED with when ``bimodal=True``: each cell is
@@ -396,17 +406,29 @@ def sigmoid_regime(x, k1, n1, k2=None, n2=None):
     alone. Using ``sigmoid`` downstream evaluates a different vector field from the one
     ``W``, ``gamma`` and ``I`` were fitted to, which is silent and was the defect this
     function exists to remove.
+
+    ``regime``, when given, is the component each entry is evaluated in (1 selects component 2),
+    broadcastable to ``x`` and fixed in advance instead of read from ``x``. Anything that moves a
+    cell away from its observed state (an integration, a clamp, a finite difference) passes the
+    regime of that observed state, so the cell keeps its mode and its field stays smooth in ``x``.
+    Without it the nearest-threshold rule is applied to ``x`` itself, which is correct only at the
+    observed state: the rule is a cut halfway between the two thresholds, and a cell crossing it
+    would jump from one Hill onto the other.
+
+    ``a``, the mixture weight of component 1, selects the maximum-posterior rule of the fitted
+    mixture when no ``regime`` is given (the rule a maximum-likelihood fit uses); without it the
+    nearest-threshold rule applies, as for objects fitted by the least-squares method.
     """
     x = np.asarray(x, dtype=float)
     s1 = sigmoid(x, k1, n1)
     if k2 is None:
         return np.nan_to_num(s1)
-    reg = hill_regime(x, k1, k2)
+    reg = _resolve_regime(x, k1, n1, k2, n2, regime, a, tau)
     s2 = sigmoid(x, k2, n2)
     return np.nan_to_num(np.where(reg == 1, s2, s1))
 
 
-def d_sigmoid_regime(x, k1, n1, k2=None, n2=None):
+def d_sigmoid_regime(x, k1, n1, k2=None, n2=None, regime=None, a=None, tau=None):
     """Derivative of :func:`sigmoid_regime` with respect to x.
 
     Piecewise in the regime assignment, so within a regime it is the ordinary Hill
@@ -417,6 +439,6 @@ def d_sigmoid_regime(x, k1, n1, k2=None, n2=None):
     d1 = d_sigmoid(x, k1, n1)
     if k2 is None:
         return np.nan_to_num(d1)
-    reg = hill_regime(x, k1, k2)
+    reg = _resolve_regime(x, k1, n1, k2, n2, regime, a, tau)
     d2 = d_sigmoid(x, k2, n2)
     return np.nan_to_num(np.where(reg == 1, d2, d1))

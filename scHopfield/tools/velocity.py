@@ -4,7 +4,7 @@ import numpy as np
 from typing import Optional, Union
 from anndata import AnnData
 
-from .._utils.io import get_matrix, to_numpy, get_genes_used, ensure_sigmoid_layer
+from .._utils.io import get_matrix, to_numpy, get_genes_used, ensure_sigmoid_layer, assign_regime
 from .._utils.math import sigmoid, sigmoid_regime
 
 
@@ -125,9 +125,14 @@ def compute_velocity(
     cluster_key: str = 'cell_type',
     use_cluster_specific: bool = True,
     spliced_key: str = 'Ms',
+    regime: Optional[np.ndarray] = None,
 ) -> np.ndarray:
     """
     Compute Hopfield velocity at given expression state.
+
+    ``regime`` is the Hill component of each row of ``X`` for every gene, held fixed; pass the
+    observed-state assignment when ``X`` is a moved state. Without it, each row is assigned from
+    its own values under the object's rule.
 
     v = W @ sigmoid(X) - gamma * X + I
 
@@ -249,7 +254,13 @@ def compute_velocity(
 
         # Compute velocity: v = W @ sigmoid(X) - gamma * X + I
         X_clust = X[clust_mask]
-        sig_X = sigmoid_regime(X_clust, threshold, exponent, threshold2, exponent2)
+        if threshold2 is None:
+            reg_clust = None
+        elif regime is not None:
+            reg_clust = np.asarray(regime)[clust_mask]
+        else:
+            reg_clust = assign_regime(adata, X_clust, genes_mask)
+        sig_X = sigmoid_regime(X_clust, threshold, exponent, threshold2, exponent2, regime=reg_clust)
         v_clust = (sig_X @ W.T) - (gamma * X_clust) + I_vec
 
         # Store results
@@ -304,6 +315,8 @@ def compute_velocity_delta(
         clusters = ['all']
 
     delta_velocity = np.zeros_like(X_orig)
+    # Both states are evaluated in each cell's component at its original state.
+    R = assign_regime(adata, X_orig, genes_mask)
 
     for cluster in clusters:
         if cluster == 'all':
@@ -315,8 +328,9 @@ def compute_velocity_delta(
             continue
 
         # Compute velocity at original and perturbed states
-        v_orig = compute_velocity(adata, X=X_orig[mask], cluster=cluster)
-        v_pert = compute_velocity(adata, X=X_pert[mask], cluster=cluster)
+        Rm = None if R is None else R[mask]
+        v_orig = compute_velocity(adata, X=X_orig[mask], cluster=cluster, regime=Rm)
+        v_pert = compute_velocity(adata, X=X_pert[mask], cluster=cluster, regime=Rm)
 
         delta_velocity[mask] = v_pert - v_orig
 

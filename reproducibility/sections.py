@@ -1074,7 +1074,7 @@ def _perturb_section(adata, name, ck, report, cfg, A, B, An, Bn, tag):
                                            cluster_key=ck, verbose=False)
             ax.plot(dr.level_frac, dr.lineage_bias, "-o", ms=4, label=g)
         ax.axhline(0, color="k", lw=0.6); ax.axvline(1, color="grey", ls="--", lw=0.8)
-        ax.set(xlabel="dose (fraction of natural max)", ylabel=f"lineage bias (+{An}/-{Bn})",
+        ax.set(xlabel="clamp level (multiple of 99th-percentile expression)", ylabel=f"lineage bias (+{An}/-{Bn})",
                title=f"{name}: dose-response"); ax.legend(fontsize=8)
         return fig
     if dose_genes:

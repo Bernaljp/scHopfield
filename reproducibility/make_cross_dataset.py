@@ -162,12 +162,25 @@ def collect(cache: str | None = None):
         #    already used phi(X); this panel used Ms, and the two now agree. Small everywhere =>
         #    the inverse problem is heavily under-determined in every system, which is what
         #    motivates the transcription-factor scaffold.
-        Xc = _to_dense(a, "sigmoid")[:, used]
-        Xc = Xc - Xc.mean(0)
-        s = np.linalg.svd(Xc, compute_uv=False, full_matrices=False)
-        lam = s ** 2
-        pr = float((lam.sum() ** 2) / (lam ** 2).sum()) if lam.sum() > 0 else np.nan
-        fit_corr = pr / int(used.sum())            # effective-dim fraction (kept var name for the row dict)
+        #    Both matrices are measured, because whether the nonlinearity preserves the low rank is
+        #    the question rather than an assumption. A gene-wise map need not preserve rank in
+        #    either direction: it can raise it by bending cells off a shared subspace, or lower it
+        #    by saturating many cells onto the same plateau. Reporting only one hides which happened.
+        #
+        #    Note this is a participation ratio, an *effective* dimensionality, not the algebraic
+        #    rank. Measurement noise makes essentially every singular value nonzero, so the true
+        #    rank of either matrix is full and uninformative; the participation ratio instead asks
+        #    how many directions carry the variance, and equals the rank only when all nonzero
+        #    singular values are equal.
+        def _eff_dim(M):
+            Mc = M - M.mean(0)
+            lam = np.linalg.svd(Mc, compute_uv=False, full_matrices=False) ** 2
+            return float((lam.sum() ** 2) / (lam ** 2).sum()) if lam.sum() > 0 else np.nan
+        n_used = int(used.sum())
+        pr_act = _eff_dim(_to_dense(a, "sigmoid")[:, used])   # phi(X), the regression design
+        pr_expr = _eff_dim(_to_dense(a, "Ms")[:, used])       # expression, the raw manifold
+        fit_corr = pr_act / n_used                 # effective-dim fraction (kept var name for the row dict)
+        eff_dim_expr = pr_expr / n_used
         # d: regulatory concentration AMONG regulators -- share of total out-strength held by the top-10 TFs
         #    (Gini of all genes would be trivially ~1 under only_TFs, since non-TFs have zero out-strength).
         W = np.abs(np.asarray(a.varp["W_all"].todense() if hasattr(a.varp["W_all"], "todense") else a.varp["W_all"]))
@@ -181,9 +194,11 @@ def collect(cache: str | None = None):
         lin = [g for g in _curated_tfs(ds) if g in a.var_names and used[a.var_names.get_loc(g)]]
         frac_lin = float(np.mean([fl[a.var_names.get_loc(g)] for g in lin])) if lin else np.nan
         rows[ds] = dict(att_prog=att_prog, att_term=att_term, pcts=pcts, fit_corr=fit_corr,
+                        eff_dim_expr=eff_dim_expr,
                         gini=gini, frac_all=frac_all, frac_lin=frac_lin)
         print(f"[{ds}] attr prog {att_prog:.2f}->term {att_term:.2f} | reg pct med "
-              f"{np.median(pcts) if pcts else float('nan'):.0f} | fitcorr {fit_corr:.2f} | gini {gini:.2f} | "
+              f"{np.median(pcts) if pcts else float('nan'):.0f} | effdim phi {100*fit_corr:.2f}% "
+              f"expr {100*eff_dim_expr:.2f}% | gini {gini:.2f} | "
               f"bimod {frac_all:.2f} (lin {frac_lin:.2f})", flush=True)
     if cache:
         os.makedirs(os.path.dirname(cache), exist_ok=True)
@@ -292,7 +307,7 @@ def main_submission(height_mm: float = 140.0, out: str | None = None):
 
     No panel is dropped and no color changes; only the geometry and the type sizes differ.
     """
-    from submission_style import figure_for, panel_letter, save as save_spec
+    from submission_style import figure_for, panel_letter, save as save_spec, TYPE_FLOOR
 
     R = collect(cache=CACHE)
     order = DATASETS
@@ -358,18 +373,36 @@ def main_submission(height_mm: float = 140.0, out: str | None = None):
 
     # c: identifiability, effective dimensionality as a percent of the modeled genes
     ax = _stack_axis(1, "the regression design is low rank (the GRN fit is under-determined)", "c")
-    vals = [100 * R[d]["fit_corr"] for d in order]
-    ax.bar(xs, vals, color=cols, edgecolor="0.3", linewidth=0.4, width=0.66)
-    # The point of the panel is how small these are, which leaves the four smallest bars hard
-    # to tell apart, so each one carries its value.
-    for x, v in zip(xs, vals):
-        ax.text(x, v + 0.06, f"{v:.2f}", ha="center", va="bottom", fontsize=FINE, color="0.35")
-    # Derived from the data, not hardcoded. The previous fixed 2.05 predated the change of this
-    # statistic to phi(X): two datasets now exceed it, and their value labels were being drawn
-    # above the axes and into panel b.
-    _top = max(vals) * 1.18
+    # Both matrices are shown, because the claim has two steps and only the second one licenses
+    # the scaffold. Expression concentrates its variance in few directions; whether the design the
+    # regression is actually posed in inherits that is a separate question, since a gene-wise Hill
+    # map preserves rank in neither direction. It raises the effective dimensionality in every
+    # dataset here, and the design is still low rank, so the conclusion holds and is measured
+    # rather than assumed.
+    expr = [100 * R[d]["eff_dim_expr"] for d in order]
+    act = [100 * R[d]["fit_corr"] for d in order]
+    _w = 0.36
+    ax.bar(xs - _w / 2, expr, _w, color="0.72", edgecolor="0.3", linewidth=0.4,
+           label=r"expression $X$")
+    ax.bar(xs + _w / 2, act, _w, color=cols, edgecolor="0.3", linewidth=0.4,
+           label=r"activation $\varphi(X)$")
+    # The point of the panel is how small these are, which leaves the smallest bars hard to tell
+    # apart, so each one carries its value.
+    # Horizontal, at the top of each bar, set at the 5 pt type floor. Two four-character labels per
+    # dataset fit only just: bar centres are 0.36 data units apart, which is about 14 pt of page at
+    # this panel width, against roughly 12 pt for "0.00" at 5 pt type. 5.0 is submission_style's
+    # floor, which is Nature's own minimum, so this is as small as the type may legally go.
+    for x, v in zip(xs - _w / 2, expr):
+        ax.text(x, v + 0.035, f"{v:.2f}", ha="center", va="bottom", fontsize=TYPE_FLOOR,
+                color="0.45")
+    for x, v in zip(xs + _w / 2, act):
+        ax.text(x, v + 0.035, f"{v:.2f}", ha="center", va="bottom", fontsize=TYPE_FLOOR,
+                color="0.35")
+    _top = max(act + expr) * 1.16
     ax.set_ylim(0, _top); ax.set_yticks([t for t in (0, 1, 2, 3) if t <= _top])
     ax.set_ylabel("effective dim\n(% of genes)", fontsize=LAB, labelpad=2)
+    ax.legend(fontsize=FINE - 0.4, frameon=False, loc="upper left", handlelength=1.1,
+              borderpad=0.1, labelspacing=0.25, handletextpad=0.4)
     ax.set_xticklabels([])
 
     # d: regulatory concentration, share of out-strength held by the top ten TFs

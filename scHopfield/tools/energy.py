@@ -5,6 +5,7 @@ from typing import Optional
 from anndata import AnnData
 
 from .._utils.math import sigmoid, int_sig_act_inv, hill_regime
+from .._utils.io import assign_regime
 from .._utils.io import get_matrix, get_genes_used, ensure_sigmoid_layer, to_numpy
 
 
@@ -194,7 +195,7 @@ def _degradation_energy(
     if bimodal:
         k2 = adata.var['sigmoid_threshold2'].values[genes]
         n2 = adata.var['sigmoid_exponent2'].values[genes]
-        reg = hill_regime(xg, threshold[None, :], k2[None, :])
+        reg = assign_regime(adata, xg, genes)
         if x is not None:
             sig = np.nan_to_num(np.where(
                 reg == 1, sigmoid(xg, k2[None, :], n2[None, :]),

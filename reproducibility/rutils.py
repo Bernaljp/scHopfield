@@ -29,7 +29,7 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
 import scHopfield as sch
-from config import PSEUDOTIME_RATE_TARGET, DATASETS, N_GENES, FIT_KWARGS, HILL_N_MAX, BIMODAL_HILL
+from config import PSEUDOTIME_RATE_TARGET, DATASETS, N_GENES, FIT_KWARGS, HILL_N_MAX, BIMODAL_HILL, HILL_METHOD
 
 ROOT = paths.REPORTS
 
@@ -192,7 +192,8 @@ def prepare_and_fit(name, device="cuda", force=False, mode=None, tag="", bimodal
     # ---- sigmoids (raised exponent ceiling + multi-start refine handle sharp/double
     #      sigmoid genes) ----
     use_bimodal = cfg.get("bimodal_hill", BIMODAL_HILL) if bimodal is None else bimodal
-    sch.pp.fit_all_sigmoids(sub, spliced_key="Ms", n_max=HILL_N_MAX, bimodal=use_bimodal)
+    sch.pp.fit_all_sigmoids(sub, spliced_key="Ms", n_max=HILL_N_MAX, bimodal=use_bimodal,
+                            method=HILL_METHOD, device=device)
     sch.pp.compute_sigmoid(sub, spliced_key="Ms")
 
     # ---- scaffold + GRN fit ----

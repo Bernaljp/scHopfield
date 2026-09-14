@@ -296,10 +296,12 @@ DOSE_FS = dict(ms=4, lw=None, side=7, axlab=8, ylab=8, title=9, legend=7, tick=N
 
 def draw_fate_dose(ax, C, An, Bn, genes, tf_color, fs=None):
     """Fate split-fraction shift vs dose (panel f). For each gene, the mean shift in the A-vs-B fate
-    split fraction as the gene is held from 0 (knockout) through its natural level (=1) to
-    overexpression; dose=0 is exactly the panel-e KO value, so panel e is the dose-0 slice of this
-    panel. This is the fate-based replacement for the projected-cosine dose-response. Half-planes
-    shaded by the sign of the shift; the dashed vertical line marks dose=1 (natural, unperturbed).
+    split fraction as the gene is clamped, in every cell, to a multiple of its 99th-percentile
+    expression, from 0 (knockout) through 1 (the 99th-percentile level) to 2. No dose is the
+    unperturbed state, because one level is imposed on all cells. Dose 0 agrees with the panel-e
+    knockout in sign and ordering but not exactly, since the sweep neutralizes the gene by hold and
+    the knockout panel by drop. This is the fate-based replacement for the projected-cosine dose-response. Half-planes
+    shaded by the sign of the shift; the dashed vertical line marks the 99th-percentile level (dose 1).
     ``fs`` overrides the mark and type sizes (DOSE_FS = the poster defaults)."""
     f = dict(DOSE_FS); f.update(fs or {})
     dd = C.get("fate_dose", {}).get((An, Bn), {})
@@ -317,7 +319,7 @@ def draw_fate_dose(ax, C, An, Bn, genes, tf_color, fs=None):
             fontsize=f["side"], color=GRP["A"], style="italic")
     ax.text(0.015, 0.03, f"toward {Bn}", transform=ax.transAxes, ha="left", va="bottom",
             fontsize=f["side"], color=GRP["B"], style="italic")
-    ax.set_xlabel("expression (fraction of natural max; 1 = unperturbed)", fontsize=f["axlab"])
+    ax.set_xlabel("clamp level (multiple of 99th-percentile expression)", fontsize=f["axlab"])
     ax.set_ylabel("fate shift", fontsize=f["ylab"])
     ax.set_title(f"{An} vs {Bn}", fontsize=f["title"])
     if f["tick"]:
