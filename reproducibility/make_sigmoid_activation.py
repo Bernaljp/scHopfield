@@ -4,13 +4,14 @@ The Hopfield model's nonlinearity phi_i(x_i) is fit per gene from the expression
 figure shows that (i) a single Hill misfits switch-like genes, (ii) a two-component Hill captures them
 without over-firing on unimodal genes, and (iii) the two components correspond to the low/high
 (progenitor/terminal) expression regimes, so the per-cell regime split tracks cell type. The activation
-is fit ONCE per gene over all cells (no per-cell-type parameters); each cell then uses the Hill component
-its own expression is closer to.
+is fit ONCE per gene over all cells by maximum likelihood (the Hill function is the CDF of a log-logistic
+distribution); each cell is then assigned to one component by maximum posterior under the fitted mixture
+and evaluated in that component alone.
 
 Panels:
-  a  mechanism: single Hill vs the two-component mixture, with the per-cell regime crossover.
+  a  mechanism: the two components, their mixture, the posterior assignment and the activation as evaluated.
   b  example gene fits: empirical CDF + single-Hill + two-component fit (bimodal switch genes + a unimodal one).
-  c  fit-quality gain: single-Hill vs bimodal MSE per gene (unimodal genes fall back to the diagonal).
+  c  fit-quality gain: single-Hill vs two-component Kolmogorov-Smirnov distance per gene.
   d  the bimodal-gene population: mixing weight and the two thresholds (k1 vs k2).
   e  two-regime map: cells colored by Hill component for representative bimodal marker genes.
   f  regime/cell-type correlation: fraction of each cell type in the high-expression component.
@@ -47,7 +48,8 @@ from paper_plot_style import use_style, save, PALETTE            # noqa: E402
 import anndata as ad                                             # noqa: E402
 from sections import basis_of, get_colors                        # noqa: E402
 from scHopfield import sigmoid                                    # noqa: E402
-from scHopfield.preprocessing import hill_regime, fit_sigmoid, fit_sigmoid_bimodal  # noqa: E402
+from scHopfield._utils.io import assign_regime                  # noqa: E402
+from scHopfield._utils.hill_mle import posterior_regime         # noqa: E402
 
 OUT = paths.FIGURES
 SUB_OUT = os.path.join(paths.FIGURES_SPEC, "ExtendedDataFig2.pdf")
@@ -107,6 +109,26 @@ LINEAGE_BY_DATASET = {
 }
 LINEAGE = []       # the resolved set for this run, filled by main() before anything draws
 
+# Negative control for the two-component gate, computed at build time so the note cannot drift from the
+# gate: genes each drawn from ONE log-logistic distribution (a true single Hill, whose CDF is the Hill
+# function), fitted exactly as the data are. (flagged, of) once run; None skips the note.
+NEGATIVE_CONTROL_FLAGGED = None
+NEGATIVE_CONTROL_GENES = 20
+
+
+def negative_control(n_genes=NEGATIVE_CONTROL_GENES, n_cells=2000, seed=0):
+    """Number of simulated single-Hill genes the two-component gate accepts, and how many were fitted."""
+    from scHopfield.preprocessing import fit_all_sigmoids
+    rng = np.random.default_rng(seed)
+    cols = []
+    for _ in range(n_genes):
+        k = rng.uniform(0.5, 5.0); n = rng.uniform(1.5, 8.0); u = rng.uniform(0.005, 0.995, n_cells)
+        cols.append(k * (u / (1 - u)) ** (1.0 / n))
+    Y = np.stack(cols, 1).astype(np.float32)
+    a = ad.AnnData(Y.copy()); a.layers["Ms"] = Y.copy()
+    fit_all_sigmoids(a, spliced_key="Ms", bimodal=True, method="mle", device="cpu")
+    return int((a.var["sigmoid_mix"].values < 1 - 1e-9).sum()), n_genes
+
 
 def _to_dense(a, key):
     L = a.layers[key]
@@ -131,26 +153,34 @@ def draw_mechanism(ax, ab, gene):
     x = _to_dense(ab, ab.uns.get("scHopfield", {}).get("spliced_key", "Ms"))[:, gi]
     xmax = float(np.nanpercentile(x[np.isfinite(x)], 99.5)) or max(k1, k2) * 2
     xs = np.linspace(0, xmax, 400)
-    lo, hi = (k1, k2) if k1 <= k2 else (k2, k1)
-    cross = 0.5 * (lo + hi)                                       # nearest-component crossover
-    ax.axvspan(0, cross, color=C1, alpha=0.06); ax.axvspan(cross, xmax, color=C2, alpha=0.06)
-    ax.plot(xs, sigmoid(xs, k1, n1), color=C1, lw=2.0, label="component 1 (low regime)")
-    ax.plot(xs, sigmoid(xs, k2, n2), color=C2, lw=2.0, label="component 2 (high regime)")
+    # Shade by the component a cell at that expression is assigned to, under the object's own rule
+    # (maximum posterior for a likelihood fit). The assignment is a partition of the expression axis.
+    reg = assign_regime(ab, np.maximum(xs, 1e-9)[:, None], [gi])[:, 0]
+    edges = np.flatnonzero(np.diff(reg))
+    bounds = [0.0] + [0.5 * (xs[e] + xs[e + 1]) for e in edges] + [xmax]
+    for lo_, hi_, r_ in zip(bounds[:-1], bounds[1:], [reg[0]] + [reg[e + 1] for e in edges]):
+        ax.axvspan(lo_, hi_, color=C2 if r_ else C1, alpha=0.06)
+    cross = bounds[1] if len(bounds) > 2 else 0.5 * (k1 + k2)
+    ax.plot(xs, sigmoid(xs, k1, n1), color=C1, lw=2.0, label="component 1")
+    ax.plot(xs, sigmoid(xs, k2, n2), color=C2, lw=2.0, label="component 2")
     ax.plot(xs, a_ * sigmoid(xs, k1, n1) + (1 - a_) * sigmoid(xs, k2, n2), color=CFIT, lw=1.3, ls="--",
-            label="fitted CDF mixture")
+            label="mixture (CDF)")
+    # What the model evaluates: each cell's own component, so the activation drops at the boundary.
+    ax.plot(xs, np.where(reg == 1, sigmoid(xs, k2, n2), sigmoid(xs, k1, n1)), color="k", lw=0.9,
+            label="as evaluated")
     # on the journal page the rule stops short of the note, which now hangs inside the axes
     ax.axvline(cross, color="0.35", lw=0.9, ls=":", **({"ymax": 0.85} if SUB else {}))
-    # cells below x* are assigned to component 1, above to component 2 (hill_regime nearest-threshold rule)
+    # cells on either side of x* are assigned to different components by maximum posterior
     # the note sits above the curves; on the journal page it hangs INSIDE the axes instead,
     # where the two lines cannot crowd the title
-    ax.text(cross, 1.12 if SUB else 1.03, "component crossover\n$x^*=(k_1+k_2)/2$",
+    ax.text(cross, 1.12 if SUB else 1.03, "posterior boundary\n$a f_1(x^*)=(1-a) f_2(x^*)$",
             fontsize=S["mech_note"], ha="center", va="top" if SUB else "bottom", color="0.3")
     ax.set_xlabel(f"{gene} expression", fontsize=S["mech_lab"])
     ax.set_ylabel("activation  $\\varphi(x)$", fontsize=S["mech_lab"])
     ax.set_ylim(-0.02, 1.14); ax.set_xlim(0, xmax)
     # bottom-right gap: below component 2's late rise, with the blue plateau and dashed mixture overhead
-    ax.legend(fontsize=S["mech_leg"], loc="lower right", bbox_to_anchor=(0.99, 0.02), frameon=False,
-              **_TIGHT_LEG)
+    ax.legend(fontsize=S["mech_leg"], loc="upper center", bbox_to_anchor=(0.5, -0.24), ncol=2,
+              frameon=False, columnspacing=1.0, **_TIGHT_LEG)
     ax.set_title("two-component activation", fontsize=S["mech_title"])
     ax.tick_params(labelsize=S["mech_tick"])
 
@@ -158,7 +188,7 @@ def draw_mechanism(ax, ab, gene):
 # --------------------------------------------------------------------------- #
 # b: example gene CDF fits
 # --------------------------------------------------------------------------- #
-def draw_example_fits(fig, gs_cell, ab, genes, min_th=0.05):
+def draw_example_fits(fig, gs_cell, ab, asingle, genes, min_th=0.05):
     sub = gs_cell.subgridspec(1, len(genes), wspace=0.42)
     axes = []
     x_all = _to_dense(ab, ab.uns.get("scHopfield", {}).get("spliced_key", "Ms"))
@@ -171,15 +201,20 @@ def draw_example_fits(fig, gs_cell, ab, genes, min_th=0.05):
         if val.size < 8:
             ax.set_axis_off(); continue
         y = np.linspace(0, 1, val.size)
-        k1, n1, off, mse_s = fit_sigmoid(val)
-        k1b, n1b, k2b, n2b, ab_, offb, mse_b, isbi = fit_sigmoid_bimodal(val)
+        si = asingle.var_names.get_loc(g)
+        k1 = float(asingle.var["sigmoid_threshold"].values[si]); n1 = float(asingle.var["sigmoid_exponent"].values[si])
+        ks_s = float(asingle.var["sigmoid_ks"].values[si])
+        k1b = float(ab.var["sigmoid_threshold"].values[gi]); n1b = float(ab.var["sigmoid_exponent"].values[gi])
+        k2b = float(ab.var["sigmoid_threshold2"].values[gi]); n2b = float(ab.var["sigmoid_exponent2"].values[gi])
+        ab_ = float(ab.var["sigmoid_mix"].values[gi]); ks_b = float(ab.var["sigmoid_ks"].values[gi])
+        isbi = ab_ < 1 - 1e-9
         xs = np.linspace(val.min(), val.max(), 300)
         ax.plot(val, y, color="0.35", lw=0, marker="o", ms=1.3, alpha=0.5, label="empirical CDF")
         ax.plot(xs, sigmoid(xs, k1, n1), color=C1, lw=1.6, label="single Hill")
         ax.plot(xs, ab_ * sigmoid(xs, k1b, n1b) + (1 - ab_) * sigmoid(xs, k2b, n2b),
                 color=CFIT, lw=1.6, ls="--", label="two-component")
         tag = "bimodal" if isbi else "unimodal"
-        ax.set_title(f"{g}  ({tag})\nMSE {mse_s:.1e}$\\to${mse_b:.1e}", fontsize=S["ex_title"])
+        ax.set_title(f"{g}  ({tag})\nKS {ks_s:.3f}$\\to${ks_b:.3f}", fontsize=S["ex_title"])
         ax.set_xlabel("expression", fontsize=S["ex_lab"]); ax.tick_params(labelsize=S["ex_tick"])
         if j == 0:
             ax.set_ylabel("cumulative fraction", fontsize=S["ex_lab"])
@@ -194,25 +229,30 @@ def draw_mse_gain(ax, asingle, ab):
     genes = [g for g in ab.var_names if g in asingle.var_names]
     gi_b = [ab.var_names.get_loc(g) for g in genes]
     gi_s = [asingle.var_names.get_loc(g) for g in genes]
-    mse_s = asingle.var["sigmoid_mse"].values[gi_s].astype(float)
-    mse_b = ab.var["sigmoid_mse"].values[gi_b].astype(float)
+    # Kolmogorov-Smirnov distance of each fitted CDF to the empirical CDF: a scale-free fit measure that
+    # neither fit optimizes, where the squared error would favor the least-squares fit by construction.
+    mse_s = asingle.var["sigmoid_ks"].values[gi_s].astype(float)
+    mse_b = ab.var["sigmoid_ks"].values[gi_b].astype(float)
     fl = _flagged(ab)[gi_b]
     eps = 1e-6
-    ax.scatter(mse_s[~fl] + eps, mse_b[~fl] + eps, s=5, c=CGREY, alpha=0.4, linewidths=0,
+    ax.scatter(mse_s[~fl], mse_b[~fl], s=5, c=CGREY, alpha=0.4, linewidths=0,
                label=f"unimodal ({int((~fl).sum())})")
-    ax.scatter(mse_s[fl] + eps, mse_b[fl] + eps, s=8, c=CFIT, alpha=0.75, linewidths=0,
+    ax.scatter(mse_s[fl], mse_b[fl], s=8, c=CFIT, alpha=0.75, linewidths=0,
                label=f"bimodal ({int(fl.sum())})")
-    lim = [eps, max(mse_s.max(), mse_b.max()) * 1.3]
+    both = np.concatenate([mse_s, mse_b]); both = both[np.isfinite(both) & (both > 0)]
+    lim = [float(both.min()) * 0.7, float(both.max()) * 1.4]
     ax.plot(lim, lim, color="0.4", lw=0.8, ls="--")
     ax.set_xscale("log"); ax.set_yscale("log"); ax.set_xlim(*lim); ax.set_ylim(*lim)
-    ax.set_xlabel("single-Hill MSE", fontsize=S["mse_lab"])
-    ax.set_ylabel("two-component MSE", fontsize=S["mse_lab"])
+    ax.set_xlabel("single-Hill KS distance", fontsize=S["mse_lab"])
+    ax.set_ylabel("two-component KS distance", fontsize=S["mse_lab"])
     med_gain = 100 * (1 - np.median(mse_b[fl] / np.clip(mse_s[fl], eps, None)))
-    title = (f"fit gain on bimodal genes\n(median $-${med_gain:.0f}% MSE)" if SUB
-             else f"fit gain on bimodal genes (median $-${med_gain:.0f}% MSE)")
+    title = (f"fit gain, bimodal genes (median $-${med_gain:.0f}% KS)" if SUB
+             else f"fit gain on bimodal genes (median $-${med_gain:.0f}% KS distance)")
     ax.set_title(title, fontsize=S["mse_title"])
-    ax.text(0.03, 0.97, "specificity: single-Hill\ntoggle control flags 0 genes",
-            transform=ax.transAxes, fontsize=S["mse_note"], va="top", color="0.3")
+    if NEGATIVE_CONTROL_FLAGGED is not None:
+        flagged, of = NEGATIVE_CONTROL_FLAGGED
+        ax.text(0.03, 0.97, f"specificity: {flagged} of {of} simulated\nsingle-Hill genes flagged",
+                transform=ax.transAxes, fontsize=S["mse_note"], va="top", color="0.3")
     ax.legend(fontsize=S["mse_leg"], loc="lower right", frameon=False, **_TIGHT_LEG)
     ax.tick_params(labelsize=S["mse_tick"])
 
@@ -291,7 +331,7 @@ def draw_param_ratio(fig, gs_cell, ab, n_max_rows=20):
 def draw_regime_umaps(fig, gs_cell, ab, basis, genes, umap_wspace=0.10, dot=3, cb_w=0.006,
                       cb_gap=0.008, cb_orientation="vertical"):
     """Panel e: per-gene BINARY regime map that also carries the two thresholds' ratio. Each cell is hard-
-    assigned to its nearer Hill component (hill_regime), so every UMAP has exactly TWO colors. The high-
+    assigned to one Hill component under the object's rule (maximum posterior), so every UMAP has exactly TWO colors. The high-
     threshold component is fixed at 1 (the same color in every gene); the low-threshold component is colored
     by k_min/k_max, which differs per gene. So the shared color marks the high regime, the other color
     reports how separated that gene's two switch points are, and one colorbar compares the ratio across
@@ -319,7 +359,7 @@ def draw_regime_umaps(fig, gs_cell, ab, basis, genes, umap_wspace=0.10, dot=3, c
         gi = ab.var_names.get_loc(g)
         x = X[:, gi].astype(float)
         k1 = float(ab.var["sigmoid_threshold"].values[gi]); k2 = float(ab.var["sigmoid_threshold2"].values[gi])
-        reg = hill_regime(x, k1, k2)                 # 0 -> component 1 (k1), 1 -> component 2 (k2)
+        reg = assign_regime(ab, x[:, None], [gi])[:, 0]   # 0 -> component 1 (k1), 1 -> component 2 (k2)
         high_mask = (reg == 1) if abs(k2) >= abs(k1) else (reg == 0)   # cells in the high-threshold component
         rcol = RCMAP(norm(_ratio(g)))                # the low component's single ratio color for this gene
         ax.scatter(emb[~high_mask, 0], emb[~high_mask, 1], color=rcol, s=dot, linewidths=0,
@@ -363,7 +403,7 @@ def draw_regime_celltype(fig, gs_cell, ab, ck, order, top_n=16):
     for g in fl_genes:
         gi = ab.var_names.get_loc(g)
         k1 = float(ab.var["sigmoid_threshold"].values[gi]); k2 = float(ab.var["sigmoid_threshold2"].values[gi])
-        reg = hill_regime(x_all[:, gi], k1, k2)
+        reg = assign_regime(ab, x_all[:, [gi]], [gi])[:, 0]
         frac = np.array([reg[cl == c].mean() if (cl == c).any() else np.nan for c in order])
         rows.append(frac); spread.append(np.nanmax(frac) - np.nanmin(frac))
     spread = np.array(spread)
@@ -422,7 +462,7 @@ def draw_safety(fig, gs_cell, asingle, ab, ck, order, colors, wspace=0.42):
     ax0.plot(lim, lim, color="0.4", lw=0.8, ls="--")
     ax0.set_xlabel("single-Hill total energy", fontsize=S["saf_lab"])
     ax0.set_ylabel("bimodal total energy", fontsize=S["saf_lab"])
-    ax0.set_title(f"per-cell energy preserved (r={r:.2f})", fontsize=S["saf_title"])
+    ax0.set_title(f"per-cell energy, two fits (r={r:.2f})", fontsize=S["saf_title"])
     ax0.tick_params(labelsize=S["saf_tick"], **_TIGHT_TICK)
     # h2: per-cell-type leading real eigenvalue single vs bimodal
     ax1 = fig.add_subplot(sub[0, 1])
@@ -436,7 +476,7 @@ def draw_safety(fig, gs_cell, asingle, ab, ck, order, colors, wspace=0.42):
     ax1.set_xticks(xp); ax1.set_xticklabels(order, rotation=60, ha="right", fontsize=S["saf_xtick"])
     ax1.set_ylabel("leading eig (Re)", fontsize=S["saf_lab"])
     ax1.tick_params(axis="y", labelsize=S["saf_tick"]); ax1.tick_params(**_TIGHT_TICK)
-    ax1.set_title("stability ordering preserved", fontsize=S["saf_title"])
+    ax1.set_title("leading eigenvalue by cell type", fontsize=S["saf_title"])
     ax1.legend(fontsize=S["saf_leg"], frameon=False, **_TIGHT_LEG)
     return ax0
 
@@ -468,10 +508,10 @@ def layout_submission(fig, D):
     r1 = fig.add_gridspec(1, 2, top=t, bottom=b, left=L, right=0.978,
                           width_ratios=[1.0, 1.60], wspace=0.30)
     ax_a = fig.add_subplot(r1[0, 0]); draw_mechanism(ax_a, ab, D["schematic_gene"])
-    ax_b = draw_example_fits(fig, r1[0, 1], ab, D["ex_genes"])
+    ax_b = draw_example_fits(fig, r1[0, 1], ab, asingle, D["ex_genes"])
 
     # row 2: c (MSE gain) | d (mixing weight + the two-component parameter ratio)
-    t, b = _band(60.0, 32.0)
+    t, b = _band(64.0, 29.0)
     r2 = fig.add_gridspec(1, 2, top=t, bottom=b, left=L, right=0.905,
                           width_ratios=[1.0, 1.60], wspace=0.34)
     ax_c = fig.add_subplot(r2[0, 0]); draw_mse_gain(ax_c, asingle, ab)
@@ -493,7 +533,7 @@ def layout_submission(fig, D):
     ax_h = draw_safety(fig, r4[0, 1], asingle, ab, ck, order, colors, wspace=0.50)
 
     # dy_mm clears each panel's own title: 7.5 mm over a two-line title, 3.5 mm over one line.
-    return [(ax_a, "a", 3.5), (ax_b, "b", 7.5), (ax_c, "c", 7.5), (ax_d, "d", 3.5),
+    return [(ax_a, "a", 3.5), (ax_b, "b", 7.5), (ax_c, "c", 3.5), (ax_d, "d", 3.5),
             (ax_e, "e", 3.5), (ax_f, "f", 7.5), (ax_g, "g", 7.5), (ax_h, "h", 3.5)]
 
 
@@ -542,7 +582,9 @@ def main():
         return next((p for p in cands if os.path.exists(p)), cands[-1])
     base = f"{paths.REPORTS}/{ds}/data"
     # bimodal fit: the explicit tagged cache, or the canonical adata once bimodal is promoted.
-    p_bi = _pick(f"{base}/adata_analyzed_bimodal.h5ad", f"{base}/adata_analyzed.h5ad")
+    # The canonical object is the two-component fit. The tagged adata_analyzed_bimodal.h5ad cache predates
+    # the promotion and was fitted by the earlier least-squares method, so it is never preferred.
+    p_bi = f"{base}/adata_analyzed.h5ad"
     # single-Hill fit for the comparison panels (c, h): the backup made when bimodal became canonical,
     # else the canonical adata (pre-promotion it is still single-Hill). Once bimodal IS canonical that
     # fallback lands on the same file as the bimodal arm, and panels c and h then compare a fit with
@@ -556,19 +598,29 @@ def main():
              f"{base}/adata_analyzed_singlehill.h5ad"))
     ab = ad.read_h5ad(p_bi)
     asingle = ad.read_h5ad(p_single)
+    # Panels b and c compare the two fits by Kolmogorov-Smirnov distance, which only a maximum-likelihood
+    # fit records. Stop on an object fitted the earlier way instead of drawing a comparison across methods.
+    for label_, obj, path_ in [("two-component", ab, p_bi), ("single-Hill", asingle, p_single)]:
+        if obj.uns.get("scHopfield", {}).get("sigmoid_method") != "mle" or "sigmoid_ks" not in obj.var:
+            raise SystemExit(f"Extended Data Fig. 2: the {label_} fit at {path_} was not fitted by maximum "
+                             f"likelihood; refit it with rutils.prepare_and_fit(..., force=True)")
+    global NEGATIVE_CONTROL_FLAGGED
+    NEGATIVE_CONTROL_FLAGGED = negative_control()
+    print(f"negative control: {NEGATIVE_CONTROL_FLAGGED[0]} of {NEGATIVE_CONTROL_FLAGGED[1]} "
+          f"simulated single-Hill genes flagged two-component", flush=True)
     basis = basis_of(ab); colors = get_colors(ab, ck)
     present = [c for c in ab.obs[ck].astype(str).unique()]
     order = [c for c in (cfg.get("order") or present) if c in present]
 
-    # pick example + regime-map genes: top bimodal genes by MSE improvement, that are lineage markers if possible
+    # pick example + regime-map genes: top bimodal genes by KS improvement, that are lineage markers if possible
     fl = _flagged(ab)
     fl_genes = list(ab.var_names[fl])
     gain = {}
     for g in fl_genes:
         gi_b = ab.var_names.get_loc(g)
         if g in asingle.var_names:
-            ms = float(asingle.var["sigmoid_mse"].values[asingle.var_names.get_loc(g)])
-            mb = float(ab.var["sigmoid_mse"].values[gi_b])
+            ms = float(asingle.var["sigmoid_ks"].values[asingle.var_names.get_loc(g)])
+            mb = float(ab.var["sigmoid_ks"].values[gi_b])
             gain[g] = ms - mb
     ranked = sorted(gain, key=lambda g: -gain[g])
     lineage_bi = [g for g in LINEAGE if g in fl_genes]
@@ -601,7 +653,7 @@ def main():
     # row 1: a (schematic) | b (example fits)
     r1 = fig.add_gridspec(1, 2, top=0.955, bottom=0.775, left=L, right=R, width_ratios=[1.0, 1.5], wspace=0.24)
     ax_a = fig.add_subplot(r1[0, 0]); draw_mechanism(ax_a, ab, schematic_gene)
-    ax_b = draw_example_fits(fig, r1[0, 1], ab, ex_genes)
+    ax_b = draw_example_fits(fig, r1[0, 1], ab, asingle, ex_genes)
 
     # row 2: c (MSE gain) | d (population: mixing weight + parameter-ratio heatmap)
     r2 = fig.add_gridspec(1, 2, top=0.725, bottom=0.545, left=L, right=R, width_ratios=[1.0, 1.5], wspace=0.24)

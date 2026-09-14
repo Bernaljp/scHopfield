@@ -112,6 +112,26 @@ def test_round_trip_reproduces_the_activation_exactly(fitted, tmp_path):
     np.testing.assert_array_equal(b.layers["sigmoid"], fitted.layers["sigmoid"])
 
 
+def test_save_model_persists_the_component_assignment(fitted, tmp_path):
+    """Same defect shape as the second component, one layer up.
+
+    Under the maximum-likelihood fit the component a cell is evaluated in comes from the
+    posterior, with ``sigmoid_active_min`` as the activity threshold below which a cell is
+    assigned to the first component. That column is part of the activation, not a
+    diagnostic: a checkpoint without it silently reassigns every low-expression cell of
+    every bimodal gene, and the energies and Jacobians built on it move with no warning.
+    """
+    from scHopfield._utils.io import observed_regime, regime_rule
+
+    b = _reload(fitted, tmp_path)
+    assert regime_rule(b) == regime_rule(fitted) == "posterior"
+    assert "sigmoid_active_min" in b.var, "the assignment threshold did not survive the round trip"
+    np.testing.assert_array_equal(b.var["sigmoid_active_min"].values,
+                                  fitted.var["sigmoid_active_min"].values)
+    np.testing.assert_array_equal(observed_regime(b, spliced_key="Ms"),
+                                  observed_regime(fitted, spliced_key="Ms"))
+
+
 # --------------------------------------------------------------------------------------
 # a checkpoint written before the fix degrades loudly, not silently
 # --------------------------------------------------------------------------------------

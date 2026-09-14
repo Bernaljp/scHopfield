@@ -9,9 +9,12 @@ from anndata import AnnData
 
 
 # adata.var columns written by fit_all_sigmoids (gene-level, not per-cluster).
-# All seven sigmoid columns are written by either fit mode: a single-Hill fit sets the
+# All eleven sigmoid columns are written by either fit mode: a single-Hill fit sets the
 # second component equal to the first and the mixing weight to 1, so persisting the whole
 # set is what lets compute_sigmoid rebuild the activation the model was actually fit with.
+# 'sigmoid_active_min' is not a diagnostic. Under the maximum-likelihood fit it is the
+# activity threshold below which a cell is assigned to the first component, so a checkpoint
+# that omits it reassigns the low-expression cells of every bimodal gene when it is loaded.
 _VAR_BASE_KEYS = [
     'scHopfield_used',
     'sigmoid_threshold',
@@ -21,6 +24,10 @@ _VAR_BASE_KEYS = [
     'sigmoid_mix',
     'sigmoid_offset',
     'sigmoid_mse',
+    'sigmoid_nll',
+    'sigmoid_ks',
+    'sigmoid_bc',
+    'sigmoid_active_min',
 ]
 
 # The second Hill component: absent from files written before it was persisted
@@ -28,7 +35,7 @@ _SIGMOID_BIMODAL_KEYS = {'sigmoid_mix', 'sigmoid_threshold2', 'sigmoid_exponent2
 
 # Primitive-valued keys in uns['scHopfield'] to persist
 _UNS_META_KEYS = ['spliced_key', 'velocity_key', 'degradation_key', 'cluster_key',
-                  'sigmoid_bimodal']
+                  'sigmoid_bimodal', 'sigmoid_method', 'sigmoid_assignment']
 
 
 def _is_fitted(adata: AnnData) -> bool:

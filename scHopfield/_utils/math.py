@@ -6,12 +6,11 @@ from scipy.special import hyp2f1 as hyper
 from scipy.signal import convolve2d
 from scipy.optimize import least_squares
 
-# Hill exponent must be strictly greater than 1: the activation derivative
-# phi'(x) = n*phi(1-phi)/x stays finite at x=0 only for n >= 1, and the
-# degradation-energy integral (int_sig_act_inv, Methods Eq. 15) has a 1/(n-1)
-# factor that is singular at n = 1. We therefore clamp every fitted/optimized
-# exponent to n >= HILL_N_MIN > 1 so both are always finite.
-HILL_N_MIN = 1.001
+# Hill exponent floor. The activation derivative phi'(x) = n*phi(1-phi)/x stays finite at
+# x = 0 only for n >= 1. The closed-form degradation-energy integral carries a 1/(n-1)
+# factor that is singular at n = 1, but int_sig_act_inv evaluates the exact
+# Michaelis-Menten limit there instead, so n = 1 is admissible and the floor is exactly 1.
+HILL_N_MIN = 1.0
 
 
 def sigmoid(x, s, n):
@@ -311,8 +310,8 @@ def int_sig_act_inv(x, s, n, verbose=False):
 
     # The closed-form (Gauss hypergeometric) antiderivative carries a 1/(n-1) factor and
     # is singular at n = 1. Genes fitted (or loaded) at n = 1 use the exact Michaelis-Menten
-    # limit int_0^sigma phi^{-1}(z) dz = k(-sigma - ln(1 - sigma)). New fits are clamped to
-    # n >= HILL_N_MIN > 1 (see fit_sigmoid), so this branch only guards legacy/edge inputs.
+    # limit int_0^sigma phi^{-1}(z) dz = k(-sigma - ln(1 - sigma)) instead, which is why the
+    # fitted exponent may sit exactly on HILL_N_MIN = 1 (see fit_sigmoid) rather than above it.
     near1 = np.abs(n - 1.0) < 1e-6
     n_safe = np.where(near1, 1.0 + 1e-6, n)  # keep hyper() finite; overwritten for near1 below
 
@@ -383,3 +382,63 @@ def ordinal(n: int):
     else:
         suffix = ['th', 'st', 'nd', 'rd', 'th'][min(n % 10, 4)]
     return str(n) + suffix
+
+
+def _resolve_regime(x, k1, n1, k2, n2, regime, a, tau=None):
+    """The component each entry is evaluated in: given, posterior under the mixture, or nearest threshold."""
+    if regime is not None:
+        return np.asarray(regime)
+    if a is not None:
+        from .hill_mle import posterior_regime
+        return posterior_regime(x, k1, n1, k2, n2, a, tau)
+    return hill_regime(x, k1, k2)
+
+
+def sigmoid_regime(x, k1, n1, k2=None, n2=None, regime=None, a=None, tau=None):
+    """Regime-switched two-component Hill activation.
+
+    This is the activation the model is FITTED with when ``bimodal=True``: each cell is
+    assigned to the nearer of the gene's two Hill components and evaluated under that
+    component. Passing ``k2=None`` (or a single-Hill fit) falls back to the ordinary Hill,
+    so this is safe to call unconditionally.
+
+    Every consumer of the fitted field must use this rather than the primary component
+    alone. Using ``sigmoid`` downstream evaluates a different vector field from the one
+    ``W``, ``gamma`` and ``I`` were fitted to, which is silent and was the defect this
+    function exists to remove.
+
+    ``regime``, when given, is the component each entry is evaluated in (1 selects component 2),
+    broadcastable to ``x`` and fixed in advance instead of read from ``x``. Anything that moves a
+    cell away from its observed state (an integration, a clamp, a finite difference) passes the
+    regime of that observed state, so the cell keeps its mode and its field stays smooth in ``x``.
+    Without it the nearest-threshold rule is applied to ``x`` itself, which is correct only at the
+    observed state: the rule is a cut halfway between the two thresholds, and a cell crossing it
+    would jump from one Hill onto the other.
+
+    ``a``, the mixture weight of component 1, selects the maximum-posterior rule of the fitted
+    mixture when no ``regime`` is given (the rule a maximum-likelihood fit uses); without it the
+    nearest-threshold rule applies, as for objects fitted by the least-squares method.
+    """
+    x = np.asarray(x, dtype=float)
+    s1 = sigmoid(x, k1, n1)
+    if k2 is None:
+        return np.nan_to_num(s1)
+    reg = _resolve_regime(x, k1, n1, k2, n2, regime, a, tau)
+    s2 = sigmoid(x, k2, n2)
+    return np.nan_to_num(np.where(reg == 1, s2, s1))
+
+
+def d_sigmoid_regime(x, k1, n1, k2=None, n2=None, regime=None, a=None, tau=None):
+    """Derivative of :func:`sigmoid_regime` with respect to x.
+
+    Piecewise in the regime assignment, so within a regime it is the ordinary Hill
+    derivative ``n * phi * (1 - phi) / x``. The regime boundary is a measure-zero set of
+    states and is not smoothed; the derivative there is taken from the assigned regime.
+    """
+    x = np.asarray(x, dtype=float)
+    d1 = d_sigmoid(x, k1, n1)
+    if k2 is None:
+        return np.nan_to_num(d1)
+    reg = _resolve_regime(x, k1, n1, k2, n2, regime, a, tau)
+    d2 = d_sigmoid(x, k2, n2)
+    return np.nan_to_num(np.where(reg == 1, d2, d1))

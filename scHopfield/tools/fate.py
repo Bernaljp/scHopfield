@@ -101,7 +101,9 @@ def model_velocity(adata: AnnData, cluster_key: str, genes_used=None,
         Several genes held at once, as ``{gene: level}``. A joint knockout cannot be expressed
         through the single-gene ``ko_gene`` clamp, and this is what the combinatorial readouts
         use. Merged on top of ``ko_gene``, so the two may be combined. Genes outside the fitted
-        selection are ignored, exactly as an unmatched ``ko_gene`` is.
+        selection are ignored, exactly as an unmatched ``ko_gene`` is. A held gene with two Hill
+        components is evaluated in the component of each cell's observed state, so a clamp moves
+        the cell along its own Hill and never onto the other one.
     spliced_key : str, default "Ms"
         Layer holding the expression state.
 
@@ -118,6 +120,8 @@ def model_velocity(adata: AnnData, cluster_key: str, genes_used=None,
     names = np.asarray(adata.var_names.values)[genes_used]
     V = np.zeros_like(X)
     clusters = adata.obs[cluster_key].astype(str).values
+    from .._utils.io import observed_regime
+    regime = observed_regime(adata, genes_used, spliced_key)
 
     held: Dict[str, float] = {}
     if ko_gene is not None:
@@ -136,7 +140,7 @@ def model_velocity(adata: AnnData, cluster_key: str, genes_used=None,
         Xc = X[sel].copy()
         for gi, lvl in fixed:
             Xc[:, gi] = lvl
-        V[sel] = solver.dynamics_batch(Xc, 0.0)
+        V[sel] = solver.dynamics_batch(Xc, 0.0, regime=None if regime is None else regime[sel])
     return X, V, names
 
 
@@ -387,7 +391,7 @@ def fate_shift(adata, cluster_key, A, B, ko_genes, basis=None, n_neighbors=30, s
 
 
 def permutation_null_floor(X, V_wt, displacement, knn_idx, term_sets, a_cols, b_cols,
-                           n=30, seed=0, sigma=0.05, transitional=None, clusters=None,
+                           n=500, seed=0, sigma=0.05, transitional=None, clusters=None,
                            percentile=95.0):
     """Per-gene noise floor for a fate shift, from a magnitude-preserving permutation null.
 
@@ -412,8 +416,10 @@ def permutation_null_floor(X, V_wt, displacement, knn_idx, term_sets, a_cols, b_
         The predicted knockout displacement to permute, in the same space.
     term_sets, a_cols, b_cols
         Absorbing sets and the column indices of the two arms, as in :func:`fate_shift`.
-    n : int, default 30
-        Number of permutation draws.
+    n : int, default 500
+        Number of permutation draws. The 95th percentile of a small sample sits below the
+        percentile of the distribution it is drawn from, so a low draw count places the floor too
+        low and resolves knockouts that a converged floor rejects.
     seed : int, default 0
         Fixed by default so every gene, and every method being compared, is scored against the same
         permutations. That matching is deliberate; it also makes the per-gene floors statistically
@@ -436,8 +442,8 @@ def permutation_null_floor(X, V_wt, displacement, knn_idx, term_sets, a_cols, b_
     absence of spatial structure, not for the per-cell scale of the perturbation.
 
     This is a calibration threshold, not a p-value: no tail probability is computed and no
-    multiplicity correction is applied across a panel. With ``n=30`` the 95th percentile
-    interpolates between the second and third largest absolute null shift.
+    multiplicity correction is applied across a panel. With ``n=500`` the 95th percentile
+    interpolates between the twenty-fifth and twenty-sixth largest absolute null shift.
     """
     rng = np.random.default_rng(seed)
     fate_wt, _ = fate_probabilities(fate_transition_matrix(X, V_wt, knn_idx, sigma), term_sets)
@@ -782,18 +788,20 @@ def dose_fate_bias(adata: AnnData, cluster_key: str, lineage_pairs: Sequence[Lin
                    ) -> Dict[Tuple[str, str], Dict[str, pd.DataFrame]]:
     """Fate-split shift as a function of dose, from knockout through overexpression.
 
-    Each gene is held at a fraction of its own natural maximum, taken as the ``percentile`` th
-    percentile of its observed expression, so a dose is comparable across genes on very different
-    scales. Dose zero reproduces the knockout value, which makes :func:`pairwise_fate_bias` the
-    dose-zero slice of this sweep.
+    Each gene is held, in every cell, at a multiple of its ``percentile`` th percentile of observed
+    expression, so a dose is comparable across genes on very different scales. One level is
+    imposed on all cells, so no dose is the unperturbed state; dose one is the percentile level
+    itself. Dose zero is the knockout in the field. It agrees with :func:`pairwise_fate_bias` in
+    sign and ordering but not exactly, because this sweep neutralizes the gene in the kernel by
+    holding its coordinate at wild type rather than by dropping it.
 
     Parameters
     ----------
     fractions : sequence of float, optional
-        Multiples of the natural maximum. Defaults to
+        Multiples of the percentile level. Defaults to
         ``[0.0, 0.25, 0.5, 0.75, 1.0, 1.5, 2.0]``, spanning knockout to twofold overexpression.
     percentile : float, default 99.0
-        Percentile of observed expression defining each gene's natural maximum. A gene whose
+        Percentile of observed expression defining each gene's reference level. A gene whose
         percentile is zero or which is not measured falls back to a unit maximum.
 
     Returns

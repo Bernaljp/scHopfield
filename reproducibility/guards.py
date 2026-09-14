@@ -5,7 +5,7 @@ with a message naming the missing thing and how to produce it, or it can degrade
 that is still true and say on stderr that it did. What it must never do is draw the panel
 anyway, because a panel that draws is read as a result.
 
-Three shapes of silent degradation were found in this tree, and this module names one
+Four shapes of silent degradation were found in this tree, and this module names one
 guard for each:
 
 ``require_file``
@@ -24,8 +24,15 @@ guard for each:
     empty default. The panel then draws a zero, or a blank, under a caption that asserts
     something about genes the registry was supposed to name.
 
+``require_cache_keys``
+    A cache file that exists and loads, but is missing a key a panel reads through
+    ``dict.get(key, {})``. The default swallows the absence and the panel draws empty
+    under a caption that asserts a result. This is the shape that emptied panels d and e
+    of the perturbation figure on all seven datasets: a staged compute wrote the base
+    cache and the stage that adds the Jacobian block was never re-run over it.
+
 ``warn_once``
-    The fourth outcome, for a degradation that stays true: a different rendering of the
+    The fifth outcome, for a degradation that stays true: a different rendering of the
     same quantity. Said on stderr once per process, following the same convention as
     ``scHopfield.pl``'s TikZ fallback.
 """
@@ -69,6 +76,39 @@ def require_file(path: str, what: str, how: str) -> str:
         f"{what} is missing.\n"
         f"  wanted: {path}\n"
         f"  produce it with: {how}"
+    )
+
+
+def require_cache_keys(cache, keys, path: str, what: str, how: str):
+    """Return ``cache``, or stop naming the keys it is missing and how to add them.
+
+    A missing key is not the same as a missing file. The cache opens, most panels draw,
+    and only the ones reading the absent key come out blank, so the failure is invisible
+    in every check that asks whether the input exists.
+
+    Parameters
+    ----------
+    cache
+        The loaded cache, any mapping.
+    keys
+        The keys the caller is about to read. A key present but empty counts as missing,
+        since an empty mapping draws exactly as an absent one does.
+    path
+        Where the cache was read from, so the message names the file to repair.
+    what
+        What the keys are for, in the figure's own terms.
+    how
+        The command that adds them.
+    """
+    absent = [k for k in keys
+              if k not in cache or (hasattr(cache[k], "__len__") and len(cache[k]) == 0)]
+    if not absent:
+        return cache
+    raise KeyError(
+        f"{what} is missing from the cache.\n"
+        f"  wanted keys: {', '.join(absent)}\n"
+        f"  in: {path}\n"
+        f"  produce them with: {how}"
     )
 
 

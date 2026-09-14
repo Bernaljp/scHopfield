@@ -5,7 +5,7 @@ from typing import Union, List, Optional
 from anndata import AnnData
 
 from .._utils.math import fit_sigmoid, fit_sigmoid_bimodal, sigmoid, hill_regime, HILL_N_MIN
-from .._utils.io import get_matrix, parse_genes, to_numpy
+from .._utils.io import get_matrix, parse_genes, to_numpy, assign_regime
 
 # The second Hill component of the two-component activation. fit_all_sigmoids writes these
 # in either mode (a single-component fit sets component 2 equal to component 1 and the
@@ -22,6 +22,12 @@ def fit_all_sigmoids(
     n_max: float = 20.0,
     refine: bool = True,
     bimodal: bool = True,
+    method: str = 'mle',
+    bimodality_min: float = 0.555,
+    min_k_ratio: float = 2.0,
+    min_weight: float = 0.1,
+    bimodality_scale: str = 'log',
+    device: Optional[str] = None,
     copy: bool = False
 ) -> Optional[AnnData]:
     """
@@ -48,8 +54,24 @@ def fit_all_sigmoids(
     refine : bool, optional (default: True)
         Refine each closed-form fit with a bounded nonlinear least-squares step.
     bimodal : bool, optional (default: True)
-        Fit a two-component Hill mixture per gene and keep it where it improves on the
-        single Hill, rather than fitting a single Hill only.
+        Fit a two-component Hill mixture per gene and keep it where the gene is bimodal,
+        rather than fitting a single Hill only.
+    method : {'mle', 'ecdf'}, optional (default: 'mle')
+        ``'mle'`` fits the Hill as a log-logistic distribution by maximum likelihood, from two
+        starts, and assigns each cell to a component by maximum posterior. A gene takes two
+        components when its bimodality coefficient exceeds ``bimodality_min``, its thresholds
+        differ at least ``min_k_ratio``-fold, its smaller weight is at least ``min_weight`` and the
+        mixture lowers the Bayesian information criterion. ``'ecdf'`` is the earlier least-squares
+        fit to the empirical CDF with the nearest-threshold assignment, kept so objects fitted that
+        way can be reproduced.
+    bimodality_min, min_k_ratio, min_weight : float, optional
+        Acceptance thresholds of the two-component fit under ``method='mle'``. The default 0.555 is
+        the bimodality coefficient of a uniform distribution, the conventional reference above which
+        a sample is read as bimodal.
+    bimodality_scale : {'log', 'raw'}, optional (default: 'log')
+        Scale on which the bimodality coefficient is computed under ``method='mle'``.
+    device : str, optional
+        Device for the batched maximum-likelihood fit; defaults to CUDA when available.
     copy : bool, optional (default: False)
         If True, return a copy instead of modifying in-place
 
@@ -79,6 +101,12 @@ def fit_all_sigmoids(
     # Record which activation this fit produced, so a later compute_sigmoid can tell a
     # genuinely single-Hill model from a bimodal one whose second component went missing.
     adata.uns['scHopfield']['sigmoid_bimodal'] = bool(bimodal)
+    if method not in ('mle', 'ecdf'):
+        raise ValueError(f"method must be 'mle' or 'ecdf', not {method!r}")
+    adata.uns['scHopfield']['sigmoid_method'] = method
+    # The component a cell is evaluated in follows the fit: maximum posterior under a likelihood
+    # fit, nearest threshold under the least-squares fit, which is how those objects were built.
+    adata.uns['scHopfield']['sigmoid_assignment'] = 'posterior' if method == 'mle' else 'nearest'
 
     # Parse genes
     gene_indices = parse_genes(adata, genes)
@@ -94,7 +122,17 @@ def fit_all_sigmoids(
     # regimes get a two-component Hill (a*H(k1,n1)+(1-a)*H(k2,n2)); the second component
     # and mixing weight are stored so compute_sigmoid / the energy can use the
     # regime-specific Hill per cell (single-Hill genes have mix=1, component2=component1).
-    if bimodal:
+    if method == 'mle':
+        from .._utils.hill_mle import fit_hill_mle_gated
+        r = fit_hill_mle_gated(list(x), min_th=min_th, n_min=n_min, n_max=n_max, bimodal=bimodal,
+                               bimodality_min=bimodality_min, min_k_ratio=min_k_ratio,
+                               min_weight=min_weight, bimodality_scale=bimodality_scale,
+                               device=device)
+        cols = dict(sigmoid_threshold=r['k1'], sigmoid_exponent=r['n1'],
+                    sigmoid_threshold2=r['k2'], sigmoid_exponent2=r['n2'], sigmoid_mix=r['a'],
+                    sigmoid_offset=r['offset'], sigmoid_mse=r['mse'], sigmoid_nll=r['nll'],
+                    sigmoid_ks=r['ks'], sigmoid_bc=r['bc'], sigmoid_active_min=r['tau'])
+    elif bimodal:
         res = [fit_sigmoid_bimodal(g, min_th=min_th, n_min=n_min, n_max=n_max) for g in x]
         # (k1, n1, k2, n2, a, offset, mse, is_bimodal)
         k1 = np.array([r[0] for r in res]); n1 = np.array([r[1] for r in res])
@@ -116,7 +154,9 @@ def fit_all_sigmoids(
     for col, default in [('sigmoid_threshold', 0.0), ('sigmoid_exponent', 0.0),
                          ('sigmoid_offset', 0.0), ('sigmoid_mse', 0.0),
                          ('sigmoid_threshold2', 0.0), ('sigmoid_exponent2', 0.0),
-                         ('sigmoid_mix', 1.0)]:
+                         ('sigmoid_mix', 1.0), ('sigmoid_nll', np.nan),
+                         ('sigmoid_ks', np.nan), ('sigmoid_bc', np.nan),
+                         ('sigmoid_active_min', 0.0)]:
         if col not in adata.var:
             adata.var[col] = default
     # component 2 defaults to component 1 (mix=1 -> pure single Hill) for single fits
@@ -193,14 +233,15 @@ def compute_sigmoid(
             "sch.pp.fit_all_sigmoids(adata, bimodal=True) on the expression data."
         )
 
-    # Compute sigmoid. For bimodal (double-sigmoid) genes, assign each cell to the closer
-    # Hill component and use that regime's activation; single-Hill genes (mix=1, or no
+    # Compute sigmoid. For two-component genes, assign each cell to one Hill component under the
+    # object's own rule (maximum posterior for a likelihood fit, nearest threshold for a
+    # least-squares fit) and use that component's activation; single-Hill genes (mix=1, or no
     # bimodal columns) fall through to the ordinary single Hill.
     if 'sigmoid_mix' in adata.var.columns and \
             (adata.var['sigmoid_mix'].values[gene_indices] < 1 - 1e-9).any():
         k2 = adata.var['sigmoid_threshold2'].values[gene_indices]
         n2 = adata.var['sigmoid_exponent2'].values[gene_indices]
-        reg = hill_regime(x, threshold[None, :], k2[None, :])
+        reg = assign_regime(adata, x, gene_indices)
         sig1 = sigmoid(x, threshold[None, :], exponent[None, :])
         sig2 = sigmoid(x, k2[None, :], n2[None, :])
         sig = np.nan_to_num(np.where(reg == 1, sig2, sig1))

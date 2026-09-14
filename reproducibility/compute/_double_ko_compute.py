@@ -342,7 +342,10 @@ def compute_screen(adata, ck, lps, ds, basis, reg, n_partner=N_PARTNER, n_matrix
             shiftM[idx[g], idx[g]] = single[g]                          # diagonal = single KO
         for (g1, g2) in itertools.combinations(genes, 2):
             d = dshift(fate[tuple(sorted((g1, g2)))], ax)
-            s = d - (single[g1] + single[g2])
+            # Synergy, absolute-magnitude form: Syn = |d12| - |d1 + d2|. Symmetric in the two
+            # genes and independent of which way the pair pushes lineage bias; matches
+            # sch.tl.double_knockout_matrix, which supplies the panel-a synergy above.
+            s = abs(d) - abs(single[g1] + single[g2])
             i, j = idx[g1], idx[g2]
             shiftM[max(i, j), min(i, j)] = d                            # lower = fate shift
             synM[min(i, j), max(i, j)] = s                              # upper = synergy

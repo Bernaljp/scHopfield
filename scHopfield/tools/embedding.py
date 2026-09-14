@@ -5,8 +5,8 @@ import numpy as np
 import pickle
 from anndata import AnnData
 
-from .._utils.math import soften, sigmoid, int_sig_act_inv
-from .._utils.io import get_matrix, to_numpy, get_genes_used
+from .._utils.math import soften, sigmoid, sigmoid_regime, int_sig_act_inv
+from .._utils.io import get_matrix, to_numpy, get_genes_used, get_hill_params, assign_regime
 
 
 def compute_umap(
@@ -132,15 +132,18 @@ def energy_embedding(
     adata.varm['highD_grid'] = highD_grid
     
     # Compute energies on grid
-    threshold = adata.var['sigmoid_threshold'].values[genes]
-    exponent = adata.var['sigmoid_exponent'].values[genes]
+    threshold, exponent, threshold2, exponent2 = get_hill_params(adata, genes)
     
     for i, cluster in enumerate(clusters):
         start_idx = i * resolution**2
         end_idx = (i + 1) * resolution**2
         x_grid = highD_grid[start_idx:end_idx]
         
-        sig_grid = sigmoid(x_grid, threshold[None, :], exponent[None, :])
+        # grid states belong to no cell, so each is assigned under the object's own rule
+        sig_grid = sigmoid_regime(x_grid, threshold[None, :], exponent[None, :],
+                                  None if threshold2 is None else threshold2[None, :],
+                                  None if exponent2 is None else exponent2[None, :],
+                                  regime=assign_regime(adata, x_grid, genes))
         
         W = adata.varp[f'W_{cluster}']
         bias_vector = adata.var[f'I_{cluster}'].values[genes]

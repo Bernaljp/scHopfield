@@ -5,8 +5,8 @@ from scipy.integrate import odeint, solve_ivp
 from typing import Optional
 from anndata import AnnData
 
-from .._utils.math import sigmoid
-from .._utils.io import get_genes_used
+from .._utils.math import sigmoid, sigmoid_regime
+from .._utils.io import get_genes_used, get_hill_params
 
 
 class ODESolver:
@@ -27,10 +27,14 @@ class ODESolver:
         gamma: np.ndarray,
         threshold: np.ndarray,
         exponent: np.ndarray,
+        threshold2: Optional[np.ndarray] = None,
+        exponent2: Optional[np.ndarray] = None,
         x_min: float = 0.0,
         x_max: Optional[np.ndarray] = None,
         fixed_indices: Optional[np.ndarray] = None,
-        fixed_values: Optional[np.ndarray] = None
+        fixed_values: Optional[np.ndarray] = None,
+        mix: Optional[np.ndarray] = None,
+        active_min: Optional[np.ndarray] = None
     ):
         """
         Initialize ODE solver.
@@ -61,6 +65,15 @@ class ODESolver:
         self.gamma = gamma
         self.threshold = threshold
         self.exponent = exponent
+        # Second Hill component, or None for a single-Hill fit. Which component a cell uses is
+        # passed per call as ``regime`` (its observed-state assignment), so a cell keeps its mode
+        # along a trajectory rather than switching when its expression crosses the midpoint.
+        self.threshold2 = threshold2
+        self.exponent2 = exponent2
+        # Mixture weight of component 1 when the object assigns components by maximum posterior;
+        # None keeps the nearest-threshold rule. Used only where no fixed regime is passed.
+        self.mix = mix
+        self.active_min = active_min
         self.x_min = x_min
         self.x_max = x_max
         self.fixed_indices = fixed_indices
@@ -106,12 +119,13 @@ class ODESolver:
         if self.fixed_indices is not None and len(self.fixed_indices) > 0:
             traj[:, self.fixed_indices] = self.fixed_values
 
-    def dynamics(self, x: np.ndarray, t: float) -> np.ndarray:
-        """Compute dx/dt with soft boundary enforcement."""
+    def dynamics(self, x: np.ndarray, t: float, regime: Optional[np.ndarray] = None) -> np.ndarray:
+        """Compute dx/dt with soft boundary enforcement, in each gene's fixed ``regime`` if given."""
         # Clip x to valid range before computing dynamics
         x_clipped = self._clip(x.copy())
 
-        sig = sigmoid(x_clipped, self.threshold, self.exponent)
+        sig = sigmoid_regime(x_clipped, self.threshold, self.exponent,
+                             self.threshold2, self.exponent2, regime=regime, a=self.mix, tau=self.active_min)
         dxdt = self.W @ sig - self.gamma * x_clipped + self.I
 
         # Soft boundary: if x is at lower bound, don't let it go more negative
@@ -129,21 +143,23 @@ class ODESolver:
 
         return dxdt
 
-    def dynamics_ivp(self, t: float, x: np.ndarray) -> np.ndarray:
+    def dynamics_ivp(self, t: float, x: np.ndarray, regime: Optional[np.ndarray] = None) -> np.ndarray:
         """Compute dx/dt for solve_ivp (arguments reversed)."""
-        return self.dynamics(x, t)
+        return self.dynamics(x, t, regime)
 
-    def dynamics_batch(self, X: np.ndarray, t: float) -> np.ndarray:
+    def dynamics_batch(self, X: np.ndarray, t: float, regime: Optional[np.ndarray] = None) -> np.ndarray:
         """Compute dx/dt for a batch of states (n_cells, n_genes).
 
         Vectorized equivalent of dynamics(). Uses sig @ W.T instead of W @ sig
-        to handle the 2-D case correctly.
+        to handle the 2-D case correctly. ``regime`` is the per-cell component assignment,
+        shape (n_cells, n_genes), held fixed instead of read from ``X``.
         """
         X_clipped = np.maximum(X, self.x_min)
         if self.x_max is not None:
             X_clipped = np.minimum(X_clipped, self.x_max)
 
-        sig = sigmoid(X_clipped, self.threshold, self.exponent)  # (n_cells, n_genes)
+        sig = sigmoid_regime(X_clipped, self.threshold, self.exponent,
+                             self.threshold2, self.exponent2, regime=regime, a=self.mix, tau=self.active_min)  # (n_cells, n_genes)
         dxdt = sig @ self.W.T - self.gamma * X_clipped + self.I  # (n_cells, n_genes)
 
         at_lower = X <= self.x_min
@@ -163,7 +179,8 @@ class ODESolver:
         x0: np.ndarray,
         t_span: np.ndarray,
         method: str = 'euler',
-        clip_each_step: bool = True
+        clip_each_step: bool = True,
+        regime: Optional[np.ndarray] = None
     ) -> np.ndarray:
         """
         Solve ODE from initial condition x0.
@@ -178,9 +195,18 @@ class ODESolver:
             Integration method:
             - 'euler': Simple Euler method with clipping (stable, recommended)
             - 'odeint': scipy.integrate.odeint (may diverge)
-            - 'RK45': scipy.integrate.solve_ivp with RK45
+            - 'RK45' and the other scipy names: scipy.integrate.solve_ivp. With
+              ``clip_each_step`` these run segment by segment between output times and
+              project the state after each segment, which is the adaptive-step counterpart
+              of the clipped Euler path.
         clip_each_step : bool, optional (default: True)
-            Whether to clip values at each step (prevents divergence)
+            Project the state onto the admissible box at each step, and re-impose the fixed
+            genes. This enforces the non-negative range; it is not a stability property of
+            the scheme.
+        regime : np.ndarray, optional
+            Component assignment per gene (1 selects component 2), held fixed for the whole
+            trajectory. Pass the cell's observed-state assignment; if omitted, the
+            nearest-threshold rule is read from the current state at every evaluation.
 
         Returns
         -------
@@ -192,15 +218,15 @@ class ODESolver:
         self._enforce_fixed(x0)
 
         if method == 'euler':
-            return self._solve_euler(x0, t_span, clip_each_step)
+            return self._solve_euler(x0, t_span, clip_each_step, regime)
         elif method == 'odeint':
-            trajectory = odeint(self.dynamics, x0, t_span)
+            trajectory = odeint(self.dynamics, x0, t_span, args=(regime,))
             if clip_each_step:
                 trajectory = self._clip_trajectory(trajectory)
             self._enforce_fixed_trajectory(trajectory)
             return trajectory
         elif method in ['RK45', 'RK23', 'DOP853', 'Radau', 'BDF', 'LSODA']:
-            return self._solve_ivp(x0, t_span, method, clip_each_step)
+            return self._solve_ivp(x0, t_span, method, clip_each_step, regime)
         else:
             raise ValueError(f"Unknown method: {method}. Use 'euler', 'odeint', or scipy method names.")
 
@@ -208,7 +234,8 @@ class ODESolver:
         self,
         x0: np.ndarray,
         t_span: np.ndarray,
-        clip_each_step: bool = True
+        clip_each_step: bool = True,
+        regime: Optional[np.ndarray] = None
     ) -> np.ndarray:
         """
         Solve ODE using Euler method with clipping at each step.
@@ -226,7 +253,7 @@ class ODESolver:
             dt = t_span[i] - t_span[i-1]
 
             # Compute derivative
-            dxdt = self.dynamics(x, t_span[i-1])
+            dxdt = self.dynamics(x, t_span[i-1], regime)
 
             # Euler step
             x = x + dt * dxdt
@@ -245,23 +272,46 @@ class ODESolver:
         x0: np.ndarray,
         t_span: np.ndarray,
         method: str,
-        clip_each_step: bool
+        clip_each_step: bool,
+        regime: Optional[np.ndarray] = None
     ) -> np.ndarray:
-        """Solve using scipy solve_ivp."""
-        sol = solve_ivp(
-            self.dynamics_ivp,
-            (t_span[0], t_span[-1]),
-            x0,
-            method=method,
-            t_eval=t_span,
-            dense_output=False
-        )
+        """Solve using scipy solve_ivp, optionally projecting between output steps.
 
-        trajectory = sol.y.T  # Transpose to (n_times, n_genes)
+        With ``clip_each_step`` the integration is run segment by segment between consecutive
+        entries of ``t_span``, and the state is projected onto the admissible box and the fixed
+        genes re-imposed at the end of each segment, so the state that seeds the next segment is
+        admissible. That is what makes this the adaptive-step counterpart of the clipped Euler
+        path: the constraint acts on the state being integrated, not only on the samples that
+        come back.
 
-        if clip_each_step:
-            trajectory = self._clip_trajectory(trajectory)
-        self._enforce_fixed_trajectory(trajectory)
+        Without it, a single solve runs over the whole interval and only the returned samples
+        are clipped, which reports an in-range trajectory even when the solve left the range.
+        """
+        if not clip_each_step:
+            sol = solve_ivp(self.dynamics_ivp, (t_span[0], t_span[-1]), x0,
+                            method=method, t_eval=t_span, dense_output=False, args=(regime,))
+            trajectory = sol.y.T
+            self._enforce_fixed_trajectory(trajectory)
+            return trajectory
+
+        n_steps = len(t_span)
+        trajectory = np.zeros((n_steps, len(x0)), dtype=np.float32)
+        trajectory[0] = x0
+        x = np.asarray(x0, dtype=float).copy()
+        for i in range(1, n_steps):
+            sol = solve_ivp(self.dynamics_ivp, (float(t_span[i - 1]), float(t_span[i])), x,
+                            method=method, t_eval=[float(t_span[i])], dense_output=False,
+                            args=(regime,))
+            if not sol.success or sol.y.shape[1] == 0:
+                # A failed segment is reported rather than silently carried forward as the
+                # previous state, which would look like a converged trajectory.
+                raise RuntimeError(
+                    f"{method} failed on segment {i} of {n_steps - 1} "
+                    f"(t={t_span[i - 1]:g} to {t_span[i]:g}): {sol.message}"
+                )
+            x = self._clip(sol.y[:, -1])
+            self._enforce_fixed(x)
+            trajectory[i] = x
 
         return trajectory
 
@@ -306,8 +356,13 @@ def create_solver(
     gamma_key = f'gamma_{cluster}'
     gamma = adata.var[gamma_key].values[genes] if gamma_key in adata.var else adata.var[degradation_key].values[genes]
 
-    threshold = adata.var['sigmoid_threshold'].values[genes]
-    exponent = adata.var['sigmoid_exponent'].values[genes]
+    threshold, exponent, threshold2, exponent2, mix = get_hill_params(adata, genes, with_mix=True)
+    from .._utils.io import regime_rule
+    active_min = None
+    if regime_rule(adata) != 'posterior':
+        mix = None
+    elif 'sigmoid_active_min' in adata.var.columns:
+        active_min = adata.var['sigmoid_active_min'].values[genes].astype(float)
 
     # Compute upper bounds from data
     if x_max_percentile is not None:
@@ -318,4 +373,6 @@ def create_solver(
     else:
         x_max = None
 
-    return ODESolver(W, bias_vector, gamma, threshold, exponent, x_min=0.0, x_max=x_max)
+    return ODESolver(W, bias_vector, gamma, threshold, exponent,
+                     threshold2, exponent2, x_min=0.0, x_max=x_max, mix=mix,
+                     active_min=active_min)

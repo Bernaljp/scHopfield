@@ -107,8 +107,11 @@ N_NEIGHBORS = 30                  # only used when an object carries no neighbor
 #: where no gene reaches the ceiling, but it binds on mouse hematopoiesis and moves that
 #: arm from an effective rank of 5.97 to 5.81 at zero neighbors and 7.10 to 6.92 at 0.4.
 #: Checking one dataset is not enough to call this parameter inert.
-SIGMOID_FIT = dict(spliced_key="Ms", min_th=0.05, n_min=1.001, n_max=20.0,
-                   refine=False, bimodal=False)
+SIGMOID_FIT = dict(
+    # The recorded diagnostic was fitted by least squares to the empirical CDF. The package default is
+    # now maximum likelihood, so the recipe names its method to stay reproducible.
+    method="ecdf",
+    spliced_key="Ms", min_th=0.05, n_min=1.001, n_max=20.0, refine=False, bimodal=False)
 
 # Dataset name in the output JSON -> the config.py entry whose path it reads.
 # Panel g labels these by biological system, so the four are one per system.

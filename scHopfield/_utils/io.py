@@ -198,3 +198,72 @@ def get_cluster_genes(adata, cluster_key, order=None):
         clusters = [c for c in order if c in clusters]
 
     return genes, gene_names, clusters
+
+
+def regime_rule(adata):
+    """How the object assigns cells to Hill components: ``'posterior'`` or ``'nearest'``.
+
+    A maximum-likelihood fit records ``'posterior'``. Objects fitted by the least-squares method, or
+    built by hand, carry no record and keep the nearest-threshold rule they were fitted with.
+    """
+    return adata.uns.get('scHopfield', {}).get('sigmoid_assignment', 'nearest')
+
+
+def assign_regime(adata, X, genes=None):
+    """Hill component of each entry of ``X`` (cells by genes) under the object's own rule.
+
+    Returns an ``int8`` array in which 1 selects component 2, or ``None`` for a single-Hill fit.
+    """
+    from .math import hill_regime
+    from .hill_mle import posterior_regime
+    k1, n1, k2, n2, a = get_hill_params(adata, genes, with_mix=True)
+    if k2 is None:
+        return None
+    X = np.asarray(X, dtype=float)
+    k1, n1, k2, n2, a = (np.asarray(z, dtype=float)[None, :] for z in (k1, n1, k2, n2, a))
+    if regime_rule(adata) == 'posterior':
+        tau = None
+        if 'sigmoid_active_min' in adata.var.columns:
+            idx = slice(None) if genes is None else genes
+            tau = adata.var['sigmoid_active_min'].values[idx].astype(float)[None, :]
+        return posterior_regime(X, k1, n1, k2, n2, a, tau)
+    return hill_regime(X, k1, k2)
+
+
+def observed_regime(adata, genes=None, spliced_key='Ms'):
+    """Hill component of every cell for every gene, read once from the observed state.
+
+    Returns an ``int8`` array ``(n_cells, n_genes)`` in which 1 selects component 2, or ``None``
+    for a single-Hill fit. The assignment follows the object's own rule (:func:`regime_rule`). It is
+    the regime every evaluation away from the observed state should hold fixed, so that a cell keeps
+    the mode it was assigned to when an integration, a clamp or a finite difference moves it.
+    """
+    if get_hill_params(adata, genes)[2] is None:
+        return None
+    X = to_numpy(get_matrix(adata, spliced_key, genes=genes))
+    return assign_regime(adata, X, genes)
+
+
+def get_hill_params(adata, genes=None, with_mix=False):
+    """Return ``(k1, n1, k2, n2)`` for the requested genes.
+
+    ``k2`` and ``n2`` are ``None`` when the object was fitted single-Hill, or when no gene
+    in the selection was accepted as two-component, so callers can pass the result straight
+    into :func:`scHopfield._utils.math.sigmoid_regime` without branching. ``with_mix`` appends the
+    mixture weight of component 1 (``None`` with the other two), which the posterior rule needs.
+
+    Single-Hill genes inside a bimodal fit are stored with ``mix = 1`` and component 2
+    copied from component 1, so they are already inert under the regime switch.
+    """
+    idx = slice(None) if genes is None else genes
+    k1 = adata.var['sigmoid_threshold'].values[idx]
+    n1 = adata.var['sigmoid_exponent'].values[idx]
+    single = (k1, n1, None, None, None) if with_mix else (k1, n1, None, None)
+    if 'sigmoid_mix' not in adata.var.columns:
+        return single
+    mix = adata.var['sigmoid_mix'].values[idx]
+    if not bool((mix < 1 - 1e-9).any()):
+        return single
+    out = (k1, n1, adata.var['sigmoid_threshold2'].values[idx],
+           adata.var['sigmoid_exponent2'].values[idx])
+    return out + (mix,) if with_mix else out

@@ -1,6 +1,35 @@
 Changelog
 =========
 
+Version 1.1.0 (2026-09-14)
+--------------------------
+
+The activation is fitted by maximum likelihood, and every evaluation of the fitted
+field uses the Hill component each cell was assigned to. Fitted results differ from
+1.0.x on any dataset with bimodal genes.
+
+- ``fit_all_sigmoids`` takes ``method``, defaulting to ``'mle'``: the two-component
+  Hill is fitted to expression by maximum likelihood, from two starts, with the
+  parameters bounded and one start initialized from a Gaussian mixture on log
+  expression. ``method='ecdf'`` is the earlier least-squares fit to the empirical
+  distribution function, kept so that objects fitted that way can be reproduced.
+- A gene takes two components only when it passes an acceptance gate: Sarle's
+  bimodality coefficient on log expression above ``bimodality_min``, thresholds
+  differing at least ``min_k_ratio``-fold, a smaller weight of at least
+  ``min_weight``, and a mixture that lowers the Bayesian information criterion.
+- Each cell is assigned to a component by maximum posterior, and that assignment is
+  fixed at the cell's observed state. Integration, Jacobians, knockouts, energies,
+  velocity and flow all evaluate a cell in the component it was assigned, rather than
+  re-deciding at each point they visit, so a trajectory cannot change which branch of
+  the activation it is governed by while it moves. Below ``sigmoid_active_min``, where
+  the mixture has no data to speak from, a cell takes the first component.
+- ``fit_all_sigmoids`` writes ``sigmoid_nll``, ``sigmoid_ks``, ``sigmoid_bc`` and
+  ``sigmoid_active_min``, and records ``sigmoid_method`` and ``sigmoid_assignment`` in
+  ``uns['scHopfield']``.
+- ``save_model`` persists those columns. ``sigmoid_active_min`` is part of the
+  activation rather than a diagnostic, so a checkpoint without it reassigned the
+  low-expression cells of every bimodal gene on load, with nothing said.
+
 Version 1.0.1 (2026-08-19)
 --------------------------
 

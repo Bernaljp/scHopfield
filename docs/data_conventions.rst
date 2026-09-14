@@ -41,7 +41,20 @@ All three are present whichever way the fit ran. A single-component fit sets the
 second component equal to the first and ``sigmoid_mix`` to 1, which is exactly a
 single Hill curve, so code that ignores these columns is unaffected.
 
-``save_model`` persists all seven of these columns and ``load_model`` restores
+The default estimator is maximum likelihood (``method='mle'``), which fits the
+mixture to each gene's expression directly rather than to its empirical
+distribution function, and writes four further columns:
+
+- ``sigmoid_nll`` - Negative log likelihood of the accepted fit
+- ``sigmoid_ks`` - Kolmogorov-Smirnov distance between the fit and the data
+- ``sigmoid_bc`` - Sarle's bimodality coefficient, computed on log expression
+- ``sigmoid_active_min`` - Activity threshold below which a cell is assigned to the
+  first component
+
+The first three are diagnostics. ``sigmoid_active_min`` is not: it decides which
+component a low-expression cell is evaluated in, so it is part of the activation.
+
+``save_model`` persists all eleven of these columns and ``load_model`` restores
 them, so an activation rebuilt from a checkpoint is the one the model was fitted
 with. Two things guard the case where it is not. A checkpoint written before the
 second component was persisted carries the first one alone, and ``load_model``

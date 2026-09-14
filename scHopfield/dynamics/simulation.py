@@ -215,6 +215,7 @@ def _simulate_cluster_gpu(
     t_span: np.ndarray,
     method: str,
     device: str,
+    regime: Optional[np.ndarray] = None,
 ) -> np.ndarray:
     """
     Integrate all cells in a cluster simultaneously on the GPU.
@@ -257,6 +258,22 @@ def _simulate_cluster_gpu(
     gamma_t     = torch.tensor(solver.gamma,     dtype=dtype, device=device)
     threshold_t = torch.tensor(solver.threshold, dtype=dtype, device=device)
     exponent_t  = torch.tensor(solver.exponent,  dtype=dtype, device=device)
+    # Second Hill component, carried from the solver so the batched integrator evaluates the
+    # same regime-switched field as the scipy path and as the fit.
+    _has2 = getattr(solver, 'threshold2', None) is not None
+    threshold2_t = torch.tensor(solver.threshold2, dtype=dtype, device=device) if _has2 else None
+    exponent2_t  = torch.tensor(solver.exponent2,  dtype=dtype, device=device) if _has2 else None
+    # Each cell's component, fixed at its starting state for the whole integration. A caller that
+    # passes none gets the assignment of the starting state under the solver's rule.
+    if _has2 and regime is None:
+        from .._utils.math import _resolve_regime
+        regime = _resolve_regime(np.maximum(X_cluster, x_min_v), solver.threshold[None, :],
+                                 solver.exponent[None, :], solver.threshold2[None, :],
+                                 solver.exponent2[None, :], None,
+                                 None if getattr(solver, 'mix', None) is None else solver.mix[None, :],
+                                 None if getattr(solver, 'active_min', None) is None else solver.active_min[None, :])
+    regime_t = (torch.tensor(np.asarray(regime, dtype=bool), device=device)
+                if (_has2 and regime is not None) else None)
 
     x_max_t = (
         torch.tensor(solver.x_max, dtype=dtype, device=device)
@@ -287,8 +304,17 @@ def _simulate_cluster_gpu(
 
         x_pos = x_c.clamp(min=1e-12)          # avoid 0^n for fractional n
         xn    = x_pos ** exponent_t            # (n_cells, n_genes)
-        sn    = threshold_t ** exponent_t      # (n_genes,) — broadcast
-        sig   = xn / (xn + sn)                # Hill sigmoid
+        sn    = threshold_t ** exponent_t      # (n_genes,) - broadcast
+        sig   = xn / (xn + sn)                # Hill sigmoid, component 1
+        if threshold2_t is not None:
+            xn2 = x_pos ** exponent2_t
+            sn2 = threshold2_t ** exponent2_t
+            sig2 = xn2 / (xn2 + sn2)
+            # The cell's fixed component when given; otherwise the nearest-threshold rule of
+            # hill_regime, read from the current state.
+            in_reg2 = regime_t if regime_t is not None else \
+                (x_c - threshold2_t).abs() < (x_c - threshold_t).abs()
+            sig = torch.where(in_reg2, sig2, sig)
 
         dxdt = sig @ W_t.T - gamma_t * x_c + I_t  # (n_cells, n_genes)
 
@@ -357,6 +383,7 @@ def simulate_shift_ode(
     residual_gene_dynamics: bool = False,
     n_jobs: int = -1,
     device: Optional[str] = None,
+    regime: Optional[np.ndarray] = None,
     verbose: bool = False
 ) -> 'AnnData':
     """
@@ -413,6 +440,11 @@ def simulate_shift_ode(
         - 'cuda': force GPU, raising if CUDA is unavailable.
         - 'cpu': always use the CPU path (scipy/joblib).
 
+    regime : np.ndarray, optional
+        Hill component of every cell for every fitted gene, shape (n_cells, n_genes), held fixed
+        for the whole integration. Defaults to the assignment of the starting state, so each cell
+        keeps the mode it starts in. A caller that advances a trajectory in segments passes the
+        assignment of the original observed state, which the later segments no longer carry.
     verbose : bool, optional (default: False)
         Print simulation progress.
 
@@ -456,6 +488,12 @@ def simulate_shift_ode(
 
     # Get initial states
     X_orig = to_numpy(get_matrix(adata_out, spliced_key, genes=genes_mask))
+    # Two-component genes: a cell is evaluated in the component of its starting state throughout,
+    # so its field is smooth in x and it does not jump onto the other Hill when its expression
+    # crosses the midpoint between the two thresholds.
+    if regime is None:
+        from .._utils.io import observed_regime
+        regime = observed_regime(adata_out, genes_mask, spliced_key)
     X_sim = np.zeros_like(X_orig)
     V_sim = np.zeros_like(X_orig)
 
@@ -497,7 +535,8 @@ def simulate_shift_ode(
             X_cluster = X_orig[cell_indices]
             try:
                 X_sim[cell_indices] = _simulate_cluster_gpu(
-                    X_cluster, solver, t_span, method, torch_device
+                    X_cluster, solver, t_span, method, torch_device,
+                    regime=None if regime is None else regime[cell_indices],
                 )
                 torch.cuda.empty_cache()  # release allocator cache after each cluster
             except torch.cuda.OutOfMemoryError:
@@ -512,20 +551,23 @@ def simulate_shift_ode(
 
         if not use_gpu:
             # ── CPU path: cell-by-cell with joblib threads ───────────────────
-            def _simulate_cell(x0_row):
+            def _simulate_cell(job):
+                x0_row, reg_row = job
                 x0 = np.maximum(x0_row, 0)
                 if len(all_indices) > 0:
                     x0[all_indices] = all_values
-                return solver.solve(x0, t_span, method=method, clip_each_step=True)[-1]
+                return solver.solve(x0, t_span, method=method, clip_each_step=True,
+                                    regime=reg_row)[-1]
 
             desc   = f"Cells in {cluster if cluster else 'global'}"
-            x0_list = [X_orig[idx].copy()
+            x0_list = [(X_orig[idx].copy(), None if regime is None else regime[idx])
                        for idx in (tqdm(cell_indices, desc=desc) if verbose else cell_indices)]
             results = _run_jobs(_simulate_cell, x0_list, n_jobs)
             X_sim[cell_indices] = np.array(results)
 
         # Velocity at final state (CPU numpy, vectorised over cells)
-        V_sim[cell_indices] = solver.dynamics_batch(X_sim[cell_indices], 0.0)
+        V_sim[cell_indices] = solver.dynamics_batch(
+            X_sim[cell_indices], 0.0, regime=None if regime is None else regime[cell_indices])
 
 
     # Calculate shift (delta_X)

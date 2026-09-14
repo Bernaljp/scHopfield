@@ -18,8 +18,8 @@ from typing import Dict, Optional, Union, List, Tuple
 from anndata import AnnData
 from tqdm.auto import tqdm
 
-from .._utils.math import sigmoid
-from .._utils.io import get_matrix, to_numpy, get_genes_used
+from .._utils.math import sigmoid, sigmoid_regime
+from .._utils.io import get_matrix, to_numpy, get_genes_used, get_hill_params
 from ._utils import _parse_perturb_genes, _get_W_matrix, _compute_x_bounds, _update_scHopfield_uns
 from ..tools.perturbation_analysis import compute_perturbation_flow_bias, compute_cluster_effects
 
@@ -33,7 +33,10 @@ def _propagate_signal(
     exponent: np.ndarray,
     dt: float = 1.0,
     x_min: float = 0.0,
-    x_max: Optional[np.ndarray] = None
+    x_max: Optional[np.ndarray] = None,
+    threshold2: Optional[np.ndarray] = None,
+    exponent2: Optional[np.ndarray] = None,
+    regime: Optional[np.ndarray] = None,
 ) -> np.ndarray:
     """
     Propagate signal through the GRN for one step.
@@ -70,18 +73,26 @@ def _propagate_signal(
     np.ndarray
         Updated expression matrix after one propagation step
     """
+    # Both states are evaluated in each cell's component at its original state, so the change
+    # in activation is the change along one Hill and never a jump between the two.
+    reg = None if regime is None else regime[:, source_indices]
+
     # Compute sigmoid of current expression for source genes
-    sig_current = sigmoid(
+    sig_current = sigmoid_regime(
         X_current[:, source_indices],
-        threshold[source_indices],
-        exponent[source_indices]
+        threshold[source_indices], exponent[source_indices],
+        None if threshold2 is None else threshold2[source_indices],
+        None if exponent2 is None else exponent2[source_indices],
+        regime=reg,
     )
 
     # Compute sigmoid of original expression for source genes
-    sig_original = sigmoid(
+    sig_original = sigmoid_regime(
         X_original[:, source_indices],
-        threshold[source_indices],
-        exponent[source_indices]
+        threshold[source_indices], exponent[source_indices],
+        None if threshold2 is None else threshold2[source_indices],
+        None if exponent2 is None else exponent2[source_indices],
+        regime=reg,
     )
 
     # Compute delta sigmoid: sigmoid(x^current) - sigmoid(x^original)
@@ -233,9 +244,10 @@ def simulate_perturbation(
     spliced_key = adata.uns.get('scHopfield', {}).get('spliced_key', 'Ms')
     base_expression = to_numpy(get_matrix(adata, spliced_key, genes=genes))
 
-    # Get sigmoid parameters
-    threshold = adata.var['sigmoid_threshold'].values[genes]
-    exponent = adata.var['sigmoid_exponent'].values[genes]
+    # Get sigmoid parameters, and each cell's component at its observed state
+    threshold, exponent, threshold2, exponent2 = get_hill_params(adata, genes)
+    from .._utils.io import observed_regime
+    regime_all = observed_regime(adata, genes, spliced_key)
 
     # Compute expression bounds for stability
     x_min, x_max = _compute_x_bounds(base_expression, x_max_percentile, multiplier=2.0)
@@ -305,7 +317,10 @@ def simulate_perturbation(
                 exponent=exponent,
                 dt=dt,
                 x_min=x_min,
-                x_max=x_max
+                x_max=x_max,
+                threshold2=threshold2,
+                exponent2=exponent2,
+                regime=None if regime_all is None else regime_all[cluster_mask],
             )
 
             # Keep perturbed genes fixed at their perturbed values (unless residual dynamics allowed)
@@ -786,10 +801,13 @@ def compute_epistasis(
 
     For each gene pair (A, B) computes:
 
-    - **cancellation_error**: ``actual_bias - (bias_A + bias_B)`` — deviation
-      from the additive expectation (bias independence on lineage bias).
-    - **synergy_score**: Directionally corrected cancellation error.
-      Positive means synergistic (amplifies bias in the same direction).
+    - **cancellation_error**: ``actual_bias - (bias_A + bias_B)``, the signed
+      deviation from the additive expectation.
+    - **synergy_score**: ``abs(actual_bias) - abs(bias_A + bias_B)``, the same
+      comparison taken on magnitudes. Positive means the joint knockout moves
+      the bias further than the additive expectation, negative that it is
+      buffered relative to it. Symmetric in the two genes, so neither has to be
+      named the anchor.
 
     Parameters
     ----------
@@ -840,8 +858,10 @@ def compute_epistasis(
 
         expected_bias       = bias_A + bias_B
         cancellation_error  = actual_bias - expected_bias
-        bias_sign = 1 if bias_A > 0 else -1
-        synergy_score = cancellation_error * bias_sign
+        # Synergy, absolute-magnitude form: Syn = |d12| - |d1 + d2|. The earlier form multiplied
+        # the cancellation error by sgn(bias_A), which made the score depend on which gene was
+        # named first and collapsed it to zero when that gene had no single-knockout effect.
+        synergy_score = abs(actual_bias) - abs(expected_bias)
 
         if ery_genes and mye_genes:
             in_ery_A = gA in ery_genes
@@ -1206,6 +1226,10 @@ def perturbation_cascade(
     clusters = adata.obs[cluster_key].astype(str).values
     cluster_names = list(pd.unique(clusters))
     dt = tmax / n_segments
+    # Every segment restarts from the previous segment's state, so the component each cell is
+    # evaluated in is read once here, from the observed state, and held for the whole horizon.
+    from .._utils.io import observed_regime
+    regime = observed_regime(adata, genes_used, spliced_key)
 
     if verbose:
         print(f"[cascade] wild-type reference (tmax={tmax})", flush=True)
@@ -1214,7 +1238,7 @@ def perturbation_cascade(
     for _ in range(n_segments):
         current_wt = simulate_shift_ode(current_wt, {}, cluster_key=cluster_key, dt=float(dt),
                                         n_steps=n_steps, use_cluster_specific_GRN=True,
-                                        device=device)
+                                        device=device, regime=regime)
         current_wt.layers[spliced_key] = np.asarray(current_wt.layers['simulated_count'])
         wt_states.append(np.asarray(current_wt.layers[spliced_key])[:, genes_used].copy())
 
@@ -1230,7 +1254,8 @@ def perturbation_cascade(
         for step in range(1, n_segments + 1):
             current = simulate_shift_ode(current, {gene: 0.0}, cluster_key=cluster_key,
                                          dt=float(dt), n_steps=n_steps,
-                                         use_cluster_specific_GRN=True, device=device)
+                                         use_cluster_specific_GRN=True, device=device,
+                                         regime=regime)
             current.layers[spliced_key] = np.asarray(current.layers['simulated_count'])
             per_cell = np.abs(np.asarray(current.layers[spliced_key])[:, genes_used]
                               - wt_states[step - 1])[:, keep].mean(1)
