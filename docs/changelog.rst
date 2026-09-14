@@ -1,6 +1,23 @@
 Changelog
 =========
 
+Version 1.2.0 (2026-09-14)
+--------------------------
+
+The dose sweep is anchored on each cell's own state, so a dose of one perturbs nothing.
+
+- ``dose_fate_bias`` takes ``mode``, defaulting to ``'hybrid'``: at or below dose one each cell is
+  held at a multiple of its own observed expression, and above it each cell moves linearly to the
+  gene's 99th percentile, reaching it at dose two. Dose zero is the knockout, dose one is the
+  unperturbed state exactly, and a dose above one raises every cell, including cells expressing
+  almost none of the gene, while a cell already above the percentile is left where it is. The level
+  is continuous at dose one and non-decreasing in dose for every cell.
+- ``mode='relative'`` scales each cell's own level throughout, so a dose above one cannot switch on
+  a gene a cell does not express. ``mode='absolute'`` is the previous behavior, every cell clamped
+  to a multiple of the gene's 99th percentile, under which no dose is the unperturbed state.
+- The clamp accepts a per-cell level, so ``model_velocity``, ``perturbed_fate`` and the readouts
+  built on them can hold a gene at a different level in each cell rather than one level everywhere.
+
 Version 1.1.0 (2026-09-14)
 --------------------------
 

@@ -123,11 +123,12 @@ def model_velocity(adata: AnnData, cluster_key: str, genes_used=None,
     from .._utils.io import observed_regime
     regime = observed_regime(adata, genes_used, spliced_key)
 
-    held: Dict[str, float] = {}
+    held: Dict[str, Union[float, np.ndarray]] = {}
     if ko_gene is not None:
-        held[ko_gene] = float(ko_level)
+        held[ko_gene] = float(ko_level) if np.isscalar(ko_level) else np.asarray(ko_level, float)
     if clamp:
-        held.update({g: float(lvl) for g, lvl in clamp.items()})
+        held.update({g: (float(lvl) if np.isscalar(lvl) else np.asarray(lvl, float))
+                     for g, lvl in clamp.items()})
     name_list = list(names)
     fixed = [(name_list.index(g), lvl) for g, lvl in held.items() if g in name_list]
 
@@ -139,7 +140,9 @@ def model_velocity(adata: AnnData, cluster_key: str, genes_used=None,
             continue
         Xc = X[sel].copy()
         for gi, lvl in fixed:
-            Xc[:, gi] = lvl
+            # a scalar clamps every cell to one level; a per-cell vector clamps each cell to its
+            # own, which is what a dose relative to observed expression needs
+            Xc[:, gi] = lvl if np.isscalar(lvl) else np.asarray(lvl, float)[sel]
         V[sel] = solver.dynamics_batch(Xc, 0.0, regime=None if regime is None else regime[sel])
     return X, V, names
 
@@ -551,8 +554,13 @@ def _held_levels(genes: Union[str, Sequence[str]],
         lvl = [0.0] * len(gene_list)
     elif np.isscalar(levels):
         lvl = [float(levels)] * len(gene_list)
+    elif np.ndim(levels) == 1 and len(gene_list) == 1 and np.size(levels) != 1:
+        # one per-cell level vector for one gene: a dose that follows each cell's own state,
+        # not a list of per-gene levels. Without this branch it is iterated elementwise and
+        # read as one gene per cell.
+        lvl = [np.asarray(levels, dtype=float)]
     else:
-        lvl = [float(v) for v in levels]
+        lvl = [v if not np.isscalar(v) else float(v) for v in levels]
     return dict(zip(gene_list, lvl))
 
 
@@ -781,6 +789,7 @@ def per_cell_fate_shift(adata: AnnData, cluster_key: str, lineage_pairs: Sequenc
 def dose_fate_bias(adata: AnnData, cluster_key: str, lineage_pairs: Sequence[LineagePair],
                    genes: Sequence[str], fractions: Optional[Sequence[float]] = None,
                    spliced_key: str = "Ms", percentile: float = 99.0,
+                   mode: str = "hybrid",
                    basis: Optional[str] = None, n_neighbors: int = 30, sigma: float = 0.05,
                    frac: float = 0.3,
                    transitional: Optional[Mapping[Tuple[str, str], Sequence[str]]] = None,
@@ -801,8 +810,27 @@ def dose_fate_bias(adata: AnnData, cluster_key: str, lineage_pairs: Sequence[Lin
         Multiples of the percentile level. Defaults to
         ``[0.0, 0.25, 0.5, 0.75, 1.0, 1.5, 2.0]``, spanning knockout to twofold overexpression.
     percentile : float, default 99.0
-        Percentile of observed expression defining each gene's reference level. A gene whose
-        percentile is zero or which is not measured falls back to a unit maximum.
+        Percentile of observed expression defining each gene's reference level, when
+        ``relative`` is False. A gene whose percentile is zero or which is not measured falls
+        back to a unit maximum.
+    mode : {'hybrid', 'relative', 'absolute'}, default 'hybrid'
+        How a dose is turned into the level each cell is held at, writing :math:`x_i` for the
+        cell's observed expression and :math:`x^{*}` for the gene's ``percentile`` th percentile.
+
+        ``'absolute'`` holds every cell at :math:`\theta x^{*}`. Doses are comparable across
+        genes and a high dose can switch on a gene a cell does not express, but no dose is the
+        unperturbed state: at :math:`\theta = 1` every cell sits at the percentile level.
+
+        ``'relative'`` holds each cell at :math:`\theta x_i`, so :math:`\theta = 1` is the
+        unperturbed state exactly and :math:`\theta = 0` is still the knockout. A dose above one
+        cannot switch on a gene a cell does not express.
+
+        ``'hybrid'`` is the relative arm below one and interpolates to the common level above it,
+        :math:`x_i + (\theta - 1)\max(x^{*} - x_i, 0)`, so :math:`\theta = 1` is unperturbed,
+        :math:`\theta = 0` is the knockout, and :math:`\theta = 2` raises every cell to the
+        percentile level including those expressing almost none. It is continuous at one and
+        non-decreasing in :math:`\theta` for every cell; a cell already above :math:`x^{*}` is
+        left where it is rather than pushed down.
 
     Returns
     -------
@@ -819,12 +847,20 @@ def dose_fate_bias(adata: AnnData, cluster_key: str, lineage_pairs: Sequence[Lin
     axes = lineage_pair_axes(scaf, lineage_pairs, transitional)
 
     rec: Dict[Tuple[str, str], Dict[str, list]] = {(An, Bn): {} for A, B, An, Bn in lineage_pairs}
+    if mode not in ("absolute", "relative", "hybrid"):
+        raise ValueError(f"mode must be 'absolute', 'relative' or 'hybrid', not {mode!r}")
     for gene in gene_list:
-        natural = float(np.percentile(expr[:, var_names.index(gene)], percentile)) \
-            if gene in var_names else 1.0
-        natural = natural if natural > 0 else 1.0
+        col = expr[:, var_names.index(gene)].astype(float)
+        ref = float(np.percentile(col, percentile))
+        ref = ref if ref > 0 else 1.0
         for fr in fractions:
-            fate = perturbed_fate(adata, cluster_key, scaf, gene, fr * natural)
+            if mode == "absolute":
+                level = fr * ref
+            elif mode == "relative":
+                level = fr * col
+            else:
+                level = fr * col if fr <= 1.0 else col + (fr - 1.0) * np.maximum(ref - col, 0.0)
+            fate = perturbed_fate(adata, cluster_key, scaf, gene, level)
             for A, B, An, Bn in lineage_pairs:
                 ax = axes[(An, Bn)]
                 bias = float((split_fraction(fate, ax["Ac"], ax["Bc"])
