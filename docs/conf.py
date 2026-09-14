@@ -18,8 +18,8 @@ author = "Juan Pablo Bernal Tamayo"
 # rebuild in a later year cannot make the docs disagree with the license.
 copyright = f"2026, {author}"
 
-release = "1.1.0"
-version = "1.1.0"
+release = "1.2.0"
+version = "1.2.0"
 
 # -- General configuration ---------------------------------------------------
 
