@@ -193,6 +193,7 @@ class ODESolver:
             Time points
         method : str, optional (default: 'euler')
             Integration method:
+
             - 'euler': Simple Euler method with clipping (stable, recommended)
             - 'odeint': scipy.integrate.odeint (may diverge)
             - 'RK45' and the other scipy names: scipy.integrate.solve_ivp. With
