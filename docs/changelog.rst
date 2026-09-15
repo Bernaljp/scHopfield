@@ -1,7 +1,7 @@
 Changelog
 =========
 
-Version 1.2.0 (2026-09-14)
+Version 1.2.0 (2026-09-15)
 --------------------------
 
 The dose sweep is anchored on each cell's own state, so a dose of one perturbs nothing.
